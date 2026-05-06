@@ -21,7 +21,7 @@ class SuccessProvider(ProviderAdapter):
             provider=self.name,
             success=True,
             status_code=200,
-            html="<html><body>ok</body></html>",
+            html="<html><body><h1>Example Product</h1><p>This is a real product page with enough content to pass validation checks.</p></body></html>",
             route="success",
         )
 
@@ -125,6 +125,49 @@ async def test_preferred_provider_tried_first(tmp_dir):
     result = await gw.scrape(ScrapeRequest("https://example.com/page"), use_cache=False)
     assert result.success
     assert call_order[0] == "success"
+
+
+class CloudflareProvider(ProviderAdapter):
+    """Returns 200 OK but with a Cloudflare challenge page."""
+
+    name = "cloudflare_trap"
+    cost_rank = 1
+    capabilities = frozenset({"html"})
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html="<html><body>Checking your browser before accessing the site. Ray ID: abc123</body></html>"
+            + "x" * 200,
+            route="cloudflare_trap",
+        )
+
+
+async def test_validator_rejects_block_page_and_escalates(tmp_dir):
+    gw = ScrapeGateway(
+        providers=[CloudflareProvider(), SuccessProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+    assert result.success
+    assert result.provider == "success"
+    assert result.content_validated is True
+
+
+async def test_validator_marks_block_type(tmp_dir):
+    gw = ScrapeGateway(
+        providers=[CloudflareProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+    assert not result.success
+    assert result.block_type == "cloudflare"
+    assert result.content_validated is False
 
 
 async def test_no_providers_returns_error(tmp_dir):
