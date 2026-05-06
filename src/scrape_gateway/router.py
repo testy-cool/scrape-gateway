@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import time
 from collections.abc import Iterable
 
 from markdownify import markdownify as md
@@ -10,6 +12,10 @@ from .memory import DomainMemory
 from .models import ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
 from .validators import validate_content
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr)
 
 PROVIDER_CLASSES: dict[str, str] = {
     "raw_http": "RawHttpProvider",
@@ -84,9 +90,12 @@ class ScrapeGateway:
         )
 
     async def scrape(self, request: ScrapeRequest, use_cache: bool = True) -> ScrapeResult:
+        _log(f"\nscrape {request.url}")
+
         if use_cache:
             html = self.cache.get_html(request.url)
             if html:
+                _log("  [cache] HIT")
                 return ScrapeResult(
                     url=request.url,
                     provider="cache",
@@ -97,15 +106,21 @@ class ScrapeGateway:
                     route="cache",
                     metadata={"cache_hit": True},
                 )
+            _log("  [cache] MISS")
 
         ordered = self._ordered_providers(request)
+        skipped = []
         last_result: ScrapeResult | None = None
         for provider in ordered:
             if not provider.can_handle(request):
+                skipped.append(f"{provider.name}(no capability)")
                 continue
             if self.memory.should_skip_provider(request.url, provider.name):
+                skipped.append(f"{provider.name}(bad history)")
                 continue
+            start = time.perf_counter()
             result = await provider.scrape(request)
+            elapsed = time.perf_counter() - start
             if result.success:
                 validation = validate_content(result.html)
                 result.content_validated = validation.passed
@@ -114,6 +129,7 @@ class ScrapeGateway:
                 if not validation.passed:
                     result.success = False
                     self.memory.remember_failure(request.url, provider.name, validation.block_type)
+                    _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✗ {validation.block_type or 'failed'}")
                     last_result = result
                     continue
                 if result.html and not result.markdown:
@@ -127,9 +143,17 @@ class ScrapeGateway:
                     request.premium,
                     tier=result.route,
                 )
+                _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✓ pass")
                 return result
+            reason = result.failure_reason.value if result.failure_reason else result.error or "failed"
+            _log(f"  [{provider.name}] {result.status_code or 'ERR'} {elapsed:.1f}s → ✗ {reason}")
             self.memory.remember_failure(request.url, provider.name)
             last_result = result
+
+        if skipped:
+            _log(f"  [skip] {', '.join(skipped)}")
+        if not last_result:
+            _log("  [result] no provider could handle request")
         return last_result or ScrapeResult(
             request.url, "none", False, error="No provider could handle request"
         )
@@ -141,8 +165,14 @@ class ScrapeGateway:
             pref_name, pref_tier = pref
             pref_cost = next((p.cost_rank for p in providers if p.name == pref_name), None)
             if pref_cost is not None:
+                skipped_names = [p.name for p in providers if p.cost_rank < pref_cost]
                 providers = [p for p in providers if p.cost_rank >= pref_cost]
                 providers = sorted(providers, key=lambda p: 0 if p.name == pref_name else 1)
+                tier_info = f" ({pref_tier})" if pref_tier else ""
+                skip_info = f", skip {'/'.join(skipped_names)}" if skipped_names else ""
+                _log(f"  [memory] prefer {pref_name}{tier_info}{skip_info}")
             if pref_tier:
                 request.metadata["start_tier"] = pref_tier
+        else:
+            _log("  [memory] no history")
         return providers
