@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 
 import httpx
@@ -16,9 +17,12 @@ class RawHttpProvider(ProviderAdapter):
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         start = time.perf_counter()
+        proxy_url = os.getenv("SCRAPE_PROXY_URL")
         try:
             async with httpx.AsyncClient(
-                timeout=request.timeout_seconds, follow_redirects=True
+                timeout=request.timeout_seconds,
+                follow_redirects=True,
+                proxy=proxy_url,
             ) as client:
                 response = await client.get(request.url, headers=request.headers)
             failure = classify_failure(response.status_code, response.text)

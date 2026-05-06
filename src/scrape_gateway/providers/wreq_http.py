@@ -29,13 +29,21 @@ class WreqProvider(ProviderAdapter):
                 failure_reason=FailureReason.PROVIDER_ERROR,
             )
 
+        import os
+
         start = time.perf_counter()
         try:
-            client = Client(
-                emulation=Emulation.random(),
-                redirect=Policy.limited(10),
-                timeout=timedelta(seconds=request.timeout_seconds),
-            )
+            proxy_url = os.getenv("SCRAPE_PROXY_URL")
+            kwargs: dict = {
+                "emulation": Emulation.random(),
+                "redirect": Policy.limited(10),
+                "timeout": timedelta(seconds=request.timeout_seconds),
+            }
+            if proxy_url:
+                from wreq import Proxy
+
+                kwargs["proxies"] = [Proxy(url=proxy_url)]
+            client = Client(**kwargs)
             response = await client.get(request.url, headers=request.headers or None)
             status_code = response.status.as_int()
             body = await response.text()
