@@ -8,7 +8,7 @@ def test_remember_and_recall():
     with tempfile.TemporaryDirectory() as tmp:
         mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
         mem.remember_success("https://www.example.com/page", "scrapingbee", "us", True, False)
-        assert mem.preferred_provider("https://www.example.com/other") == "scrapingbee"
+        assert mem.preferred_provider("https://www.example.com/other") == ("scrapingbee", None)
 
 
 def test_no_memory():
@@ -81,7 +81,7 @@ def test_prefers_provider_with_better_record():
         mem.remember_success("https://example.com/a", "raw_http", None, False, False)
         for _ in range(5):
             mem.remember_success("https://example.com/b", "scrapedrive", "us", False, False)
-        assert mem.preferred_provider("https://example.com") == "scrapedrive"
+        assert mem.preferred_provider("https://example.com") == ("scrapedrive", None)
 
 
 def test_blocks_penalized_harder():
@@ -92,7 +92,32 @@ def test_blocks_penalized_harder():
         mem.remember_success("https://example.com/c", "scrapedrive", "us", False, False)
         # raw_http: 1 success - (0 failures + 1 block * 3) = -2
         # scrapedrive: 1 success - 0 = 1
-        assert mem.preferred_provider("https://example.com") == "scrapedrive"
+        assert mem.preferred_provider("https://example.com") == ("scrapedrive", None)
+
+
+def test_preferred_provider_returns_tier():
+    with tempfile.TemporaryDirectory() as tmp:
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
+        mem.remember_success(
+            "https://example.com/a", "scrapedrive", "us", False, True, tier="scrapedrive:advanced"
+        )
+        result = mem.preferred_provider("https://example.com")
+        assert result == ("scrapedrive", "scrapedrive:advanced")
+
+
+def test_preferred_provider_returns_none_tuple_when_no_tier():
+    with tempfile.TemporaryDirectory() as tmp:
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
+        mem.remember_success("https://example.com/a", "raw_http", None, False, False)
+        result = mem.preferred_provider("https://example.com")
+        assert result == ("raw_http", None)
+
+
+def test_preferred_provider_returns_none_when_no_history():
+    with tempfile.TemporaryDirectory() as tmp:
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
+        result = mem.preferred_provider("https://unknown.com")
+        assert result is None
 
 
 def test_stores_tier_info():

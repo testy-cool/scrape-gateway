@@ -135,7 +135,8 @@ class ScrapeGateway:
         )
 
     def _ordered_providers(self, request: ScrapeRequest) -> list[ProviderAdapter]:
-        preferred = self.memory.preferred_provider(request.url)
+        pref = self.memory.preferred_provider(request.url)
+        preferred = pref[0] if pref else None
         providers = sorted(self.providers, key=lambda p: p.cost_rank)
         if preferred:
             providers = sorted(providers, key=lambda p: 0 if p.name == preferred else 1)

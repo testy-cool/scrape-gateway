@@ -98,7 +98,7 @@ async def test_remembers_successful_provider(tmp_dir):
         memory=mem,
     )
     await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
-    assert mem.preferred_provider("https://example.com/other") == "success"
+    assert mem.preferred_provider("https://example.com/other") == ("success", "success")
 
 
 async def test_preferred_provider_tried_first(tmp_dir):

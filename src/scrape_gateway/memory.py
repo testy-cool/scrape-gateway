@@ -117,11 +117,11 @@ class DomainMemory:
             )
         self.conn.commit()
 
-    def preferred_provider(self, url: str) -> str | None:
+    def preferred_provider(self, url: str) -> tuple[str, str | None] | None:
         domain = self.domain_for_url(url)
         row = self.conn.execute(
             """
-            select provider from domain_provider_stats
+            select provider, last_success_tier from domain_provider_stats
             where domain = ? and success_count > 0
             order by
               success_count - (failure_count + block_count * 3) desc,
@@ -130,7 +130,9 @@ class DomainMemory:
             """,
             (domain,),
         ).fetchone()
-        return row["provider"] if row else None
+        if not row:
+            return None
+        return (row["provider"], row["last_success_tier"])
 
     def provider_stats(self, url: str) -> list[dict]:
         domain = self.domain_for_url(url)
