@@ -11,3 +11,5 @@ dist/
 build/
 *.sqlite
 *.sqlite3
+CLAUDE.md
+.claude/
