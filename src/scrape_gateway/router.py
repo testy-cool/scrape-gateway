@@ -8,6 +8,7 @@ from .cache import ArtifactCache
 from .memory import DomainMemory
 from .models import ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
+from .validators import validate_content
 
 
 def _default_providers() -> list[ProviderAdapter]:
@@ -59,9 +60,19 @@ class ScrapeGateway:
         for provider in ordered:
             if not provider.can_handle(request):
                 continue
+            if self.memory.should_skip_provider(request.url, provider.name):
+                continue
             result = await provider.scrape(request)
-            last_result = result
             if result.success:
+                validation = validate_content(result.html)
+                result.content_validated = validation.passed
+                result.block_type = validation.block_type
+                result.validation_detail = validation.detail
+                if not validation.passed:
+                    result.success = False
+                    self.memory.remember_failure(request.url, provider.name, validation.block_type)
+                    last_result = result
+                    continue
                 if result.html and not result.markdown:
                     result.markdown = md(result.html)
                 self.cache.save(result)
@@ -71,8 +82,11 @@ class ScrapeGateway:
                     request.country,
                     request.render_js,
                     request.premium,
+                    tier=result.route,
                 )
                 return result
+            self.memory.remember_failure(request.url, provider.name)
+            last_result = result
         return last_result or ScrapeResult(
             request.url, "none", False, error="No provider could handle request"
         )

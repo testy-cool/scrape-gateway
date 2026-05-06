@@ -9,49 +9,70 @@ from ..errors import classify_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
+SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
+
+
+def _tier_for_request(request: ScrapeRequest) -> str:
+    if request.premium:
+        return "hyperdrive"
+    if request.country:
+        return "advanced"
+    return "standard"
+
 
 class ScrapeDriveProvider(ProviderAdapter):
-    """ScrapeDrive adapter.
-
-    Endpoint/params need verification against actual ScrapeDrive docs.
-    """
-
     name = "scrapedrive"
     cost_rank = 25
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
-        self.base_url = (
-            base_url or os.getenv("SCRAPEDRIVE_BASE_URL") or "https://api.scrapedrive.com/v1/scrape"
-        ).rstrip("/")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if not self.api_key:
             return ScrapeResult(request.url, self.name, False, error="Missing SCRAPEDRIVE_API_KEY")
-        payload = {
+
+        tier = _tier_for_request(request)
+        params: dict[str, str] = {
+            "api_key": self.api_key,
             "url": request.url,
-            "country": request.country,
-            "render_js": request.render_js,
-            "premium": request.premium,
-            "screenshot": request.screenshot,
-            "formats": ["html", "markdown"] + (["screenshot"] if request.screenshot else []),
+            "scrape_tier": tier,
+            "render_js": "true" if request.render_js else "false",
+            "device_type": "desktop",
+            "block_resources": "true",
+            "result_type": "html",
         }
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if request.country and tier != "standard":
+            params["country_code"] = request.country.upper()
+        if request.screenshot:
+            params["screenshot"] = "true"
+        if tier == "hyperdrive":
+            params["block_resources"] = "false"
+            params["wait_browser"] = "networkidle"
+            params["render_js"] = "true"
+
+        timeout = 180.0 if tier == "hyperdrive" else 120.0
         start = time.perf_counter()
         try:
-            async with httpx.AsyncClient(
-                timeout=request.timeout_seconds, follow_redirects=True
-            ) as client:
-                response = await client.post(self.base_url, json=payload, headers=headers)
-            data = None
-            try:
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                response = await client.get(SYNC_BASE, params=params)
+
+            content_type = response.headers.get("content-type", "")
+            if "application/json" in content_type:
                 data = response.json()
-            except ValueError:
-                pass
-            html = data.get("html") if isinstance(data, dict) else response.text
-            markdown = data.get("markdown") if isinstance(data, dict) else None
+                html = data.get("html") or data.get("body") or data.get("content", "")
+                markdown = data.get("markdown")
+            else:
+                html = response.text
+                data = None
+                markdown = None
+
+            screenshot_url = response.headers.get("x-sdrive-screenshot-url") or (
+                data.get("screenshot_url") if isinstance(data, dict) else None
+            )
+
             failure = classify_failure(response.status_code, html)
+            cost = {"standard": 1, "advanced": 5, "hyperdrive": 25}.get(tier, 1)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
@@ -60,10 +81,14 @@ class ScrapeDriveProvider(ProviderAdapter):
                 html=html,
                 markdown=markdown,
                 failure_reason=failure,
-                cost_units=1,
+                cost_units=cost,
                 latency_ms=int((time.perf_counter() - start) * 1000),
-                route="scrapedrive",
-                metadata={"raw_json": data} if isinstance(data, dict) else {},
+                route=f"scrapedrive:{tier}",
+                metadata={
+                    "tier": tier,
+                    "screenshot_url": screenshot_url,
+                    **({"raw_json": data} if isinstance(data, dict) else {}),
+                },
             )
         except httpx.TimeoutException as exc:
             return ScrapeResult(

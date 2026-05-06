@@ -46,6 +46,9 @@ class ScrapeResult:
     cost_units: float = 0
     latency_ms: int | None = None
     route: str | None = None
+    content_validated: bool | None = None
+    block_type: str | None = None
+    validation_detail: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
