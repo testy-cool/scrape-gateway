@@ -103,7 +103,7 @@ async def test_remembers_successful_provider(tmp_dir):
 
 async def test_preferred_provider_tried_first(tmp_dir):
     mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
-    mem.remember_success("https://example.com", "success", None, False, False)
+    mem.remember_success("https://example.com", "success", None, False, False, tier="success")
 
     call_order = []
 
@@ -112,13 +112,20 @@ async def test_preferred_provider_tried_first(tmp_dir):
             call_order.append(self.name)
             return await super().scrape(request)
 
-    class TrackingFail(FailProvider):
+    class ExpensiveFail(ProviderAdapter):
+        name = "expensive_fail"
+        cost_rank = 50
+        capabilities = frozenset({"html"})
+
         async def scrape(self, request):
             call_order.append(self.name)
-            return await super().scrape(request)
+            return ScrapeResult(
+                url=request.url, provider=self.name, success=False, status_code=500,
+                failure_reason=FailureReason.HTTP_5XX,
+            )
 
     gw = ScrapeGateway(
-        providers=[TrackingFail(), TrackingSuccess()],
+        providers=[ExpensiveFail(), TrackingSuccess()],
         cache=ArtifactCache(root=tmp_dir / "cache"),
         memory=mem,
     )
@@ -179,3 +186,46 @@ async def test_no_providers_returns_error(tmp_dir):
     result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
     assert not result.success
     assert result.provider == "none"
+
+
+class CheapProvider(ProviderAdapter):
+    name = "cheap"
+    cost_rank = 1
+    capabilities = frozenset({"html"})
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html="<html><body><h1>Cheap</h1><p>This is cheap provider content with enough chars to pass validation.</p></body></html>",
+            route="cheap",
+        )
+
+
+async def test_skips_providers_cheaper_than_preferred(tmp_dir):
+    mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
+    mem.remember_success("https://example.com", "success", None, False, False, tier="success")
+
+    call_order = []
+
+    class TrackingCheap(CheapProvider):
+        async def scrape(self, request):
+            call_order.append(self.name)
+            return await super().scrape(request)
+
+    class TrackingSuccess(SuccessProvider):
+        async def scrape(self, request):
+            call_order.append(self.name)
+            return await super().scrape(request)
+
+    gw = ScrapeGateway(
+        providers=[TrackingCheap(), TrackingSuccess()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=mem,
+    )
+    result = await gw.scrape(ScrapeRequest("https://example.com/page"), use_cache=False)
+    assert result.success
+    assert result.provider == "success"
+    assert "cheap" not in call_order
