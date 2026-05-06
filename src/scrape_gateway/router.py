@@ -13,6 +13,8 @@ from .validators import validate_content
 
 PROVIDER_CLASSES: dict[str, str] = {
     "raw_http": "RawHttpProvider",
+    "wreq": "WreqProvider",
+    "curl_cffi": "CurlCffiProvider",
     "scrapedrive": "ScrapeDriveProvider",
     "scrape_do": "ScrapeDoProvider",
     "scrapingbee": "ScrapingBeeProvider",
@@ -22,15 +24,19 @@ PROVIDER_CLASSES: dict[str, str] = {
 
 def _default_providers() -> list[ProviderAdapter]:
     from .providers import (
+        CurlCffiProvider,
         RawHttpProvider,
         ScrapeDoProvider,
         ScrapeDriveProvider,
         ScraperApiProvider,
         ScrapingBeeProvider,
+        WreqProvider,
     )
 
     return [
         RawHttpProvider(),
+        WreqProvider(),
+        CurlCffiProvider(),
         ScrapeDriveProvider(),
         ScrapeDoProvider(),
         ScrapingBeeProvider(),
