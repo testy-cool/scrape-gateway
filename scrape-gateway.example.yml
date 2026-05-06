@@ -1,0 +1,26 @@
+# Copy to scrape-gateway.yml and fill in your API keys in .env
+
+cache:
+  ttl: 24h
+  root: .scrape-gateway/artifacts
+
+providers:
+  - name: raw_http
+    enabled: true
+
+  - name: scrapedrive
+    enabled: true
+    # api_key_env: SCRAPEDRIVE_API_KEY  (reads from .env automatically)
+
+  - name: scrape_do
+    enabled: false
+
+  - name: scrapingbee
+    enabled: false
+
+  - name: scraperapi
+    enabled: false
+
+strategy:
+  mode: cheapest_successful
+  # max_cost_per_url: 0.10
