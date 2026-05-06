@@ -120,7 +120,10 @@ async def test_preferred_provider_tried_first(tmp_dir):
         async def scrape(self, request):
             call_order.append(self.name)
             return ScrapeResult(
-                url=request.url, provider=self.name, success=False, status_code=500,
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=500,
                 failure_reason=FailureReason.HTTP_5XX,
             )
 
@@ -229,3 +232,65 @@ async def test_skips_providers_cheaper_than_preferred(tmp_dir):
     assert result.success
     assert result.provider == "success"
     assert "cheap" not in call_order
+
+
+async def test_tier_escalation_full_flow(tmp_dir):
+    """After ScrapeDrive succeeds at 'advanced', next scrape skips cheap providers
+    and tells ScrapeDrive to start at 'advanced'."""
+    mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
+
+    class FakeScrapeDrive(ProviderAdapter):
+        name = "scrapedrive"
+        cost_rank = 25
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            tier = request.metadata.get("start_tier", "")
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                html="<html><body><h1>Real page</h1><p>Plenty of real content here to pass validation.</p></body></html>",
+                route=f"scrapedrive:{tier.split(':')[1] if ':' in tier else 'standard'}",
+                metadata={"tier_used": tier},
+            )
+
+    class CheapBlocked(ProviderAdapter):
+        name = "raw_http"
+        cost_rank = 0
+        capabilities = frozenset({"html"})
+        call_count = 0
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            self.call_count += 1
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                html="<html><body>Checking your browser. Ray ID: x</body></html>" + "x" * 200,
+                route="raw_http",
+            )
+
+    cheap = CheapBlocked()
+    sd = FakeScrapeDrive()
+
+    gw = ScrapeGateway(
+        providers=[cheap, sd],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=mem,
+    )
+
+    # First scrape: raw_http gets blocked, scrapedrive succeeds
+    r1 = await gw.scrape(ScrapeRequest("https://hard.com/page1"), use_cache=False)
+    assert r1.success
+    assert r1.provider == "scrapedrive"
+    assert cheap.call_count == 1
+
+    # Second scrape: should skip raw_http entirely, go straight to scrapedrive with tier hint
+    r2 = await gw.scrape(ScrapeRequest("https://hard.com/page2"), use_cache=False)
+    assert r2.success
+    assert r2.provider == "scrapedrive"
+    assert cheap.call_count == 1  # NOT called again
+    assert r2.metadata.get("tier_used") == "scrapedrive:standard"  # tier was passed through
