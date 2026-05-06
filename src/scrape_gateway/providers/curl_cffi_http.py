@@ -26,9 +26,12 @@ class CurlCffiProvider(ProviderAdapter):
                 failure_reason=FailureReason.PROVIDER_ERROR,
             )
 
+        import os
+
         start = time.perf_counter()
+        proxy_url = os.getenv("SCRAPE_PROXY_URL")
         try:
-            async with AsyncSession(impersonate="chrome") as session:
+            async with AsyncSession(impersonate="chrome", proxy=proxy_url) as session:
                 response = await session.get(
                     request.url,
                     headers=request.headers or None,
