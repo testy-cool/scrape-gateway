@@ -12,7 +12,16 @@ from ..provider import ProviderAdapter
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
 
 
+TIER_ORDER = ["standard", "advanced", "hyperdrive"]
+
+
 def _tier_for_request(request: ScrapeRequest) -> str:
+    start_tier = request.metadata.get("start_tier", "")
+    if start_tier.startswith("scrapedrive:"):
+        remembered = start_tier.split(":", 1)[1]
+        if remembered in TIER_ORDER:
+            return remembered
+
     if request.premium:
         return "hyperdrive"
     if request.country:
