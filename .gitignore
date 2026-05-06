@@ -1,0 +1,13 @@
+.venv/
+.env
+.scrape-gateway/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.sqlite
+*.sqlite3
