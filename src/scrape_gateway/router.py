@@ -135,8 +135,14 @@ class ScrapeGateway:
         )
 
     def _ordered_providers(self, request: ScrapeRequest) -> list[ProviderAdapter]:
-        preferred = self.memory.preferred_provider(request.url)
+        pref = self.memory.preferred_provider(request.url)
         providers = sorted(self.providers, key=lambda p: p.cost_rank)
-        if preferred:
-            providers = sorted(providers, key=lambda p: 0 if p.name == preferred else 1)
+        if pref:
+            pref_name, pref_tier = pref
+            pref_cost = next((p.cost_rank for p in providers if p.name == pref_name), None)
+            if pref_cost is not None:
+                providers = [p for p in providers if p.cost_rank >= pref_cost]
+                providers = sorted(providers, key=lambda p: 0 if p.name == pref_name else 1)
+            if pref_tier:
+                request.metadata["start_tier"] = pref_tier
         return providers

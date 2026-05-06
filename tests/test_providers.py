@@ -128,6 +128,36 @@ class TestScrapeDrive:
         assert result.html == GOOD_HTML
         assert result.markdown == "# Hello"
 
+    @respx.mock
+    async def test_respects_start_tier(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scrapedrive:advanced"})
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["scrape_tier"] == "advanced"
+
+    @respx.mock
+    async def test_start_tier_hyperdrive(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scrapedrive:hyperdrive"})
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["scrape_tier"] == "hyperdrive"
+
+    @respx.mock
+    async def test_ignores_irrelevant_start_tier(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scraperapi:premium"})
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["scrape_tier"] == "standard"
+
 
 # ---------- ScrapeDoProvider ----------
 
