@@ -13,3 +13,4 @@ build/
 *.sqlite3
 CLAUDE.md
 .claude/
+uv.lock

@@ -8,6 +8,14 @@ providers:
   - name: raw_http
     enabled: true
 
+  - name: wreq
+    enabled: true
+    # TLS-fingerprinted HTTP (pip install wreq). No API key needed.
+
+  - name: curl_cffi
+    enabled: true
+    # TLS-fingerprinted HTTP (pip install curl_cffi). No API key needed.
+
   - name: scrapedrive
     enabled: true
     # api_key_env: SCRAPEDRIVE_API_KEY  (reads from .env automatically)
