@@ -44,7 +44,7 @@ def url(
     """Scrape one URL through the gateway."""
 
     async def run() -> None:
-        gateway = ScrapeGateway()
+        gateway = ScrapeGateway.from_config()
         result = await gateway.scrape(
             ScrapeRequest(target_url, country=country, render_js=render_js, premium=premium),
             use_cache=not no_cache,
@@ -64,7 +64,7 @@ def run(
     """Scrape URLs from a text file, one URL per line."""
 
     async def execute() -> None:
-        gateway = ScrapeGateway()
+        gateway = ScrapeGateway.from_config()
         urls = [line.strip() for line in urls_file.read_text().splitlines() if line.strip()]
         successes = 0
         total_cost = 0.0
