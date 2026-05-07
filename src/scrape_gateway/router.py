@@ -1,21 +1,74 @@
 from __future__ import annotations
 
+import re
 import sys
 import time
 from collections.abc import Iterable
+from urllib.parse import urlparse
 
 from markdownify import markdownify as md
 
 from .cache import ArtifactCache
-from .config import GatewayConfig, load_config
+from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
 from .models import ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
 from .validators import validate_content
 
+CCTLD_TO_COUNTRY = {
+    "ro": "RO", "de": "DE", "fr": "FR", "es": "ES", "it": "IT", "nl": "NL",
+    "pt": "PT", "pl": "PL", "cz": "CZ", "at": "AT", "ch": "CH", "be": "BE",
+    "se": "SE", "no": "NO", "dk": "DK", "fi": "FI", "ie": "IE", "hu": "HU",
+    "bg": "BG", "hr": "HR", "sk": "SK", "si": "SI", "lt": "LT", "lv": "LV",
+    "ee": "EE", "gr": "GR", "cy": "CY", "mt": "MT", "lu": "LU",
+    "uk": "GB", "co.uk": "GB", "jp": "JP", "kr": "KR", "cn": "CN",
+    "in": "IN", "br": "BR", "mx": "MX", "ar": "AR", "cl": "CL",
+    "au": "AU", "nz": "NZ", "ca": "CA", "za": "ZA", "ru": "RU",
+    "tr": "TR", "ua": "UA", "il": "IL", "ae": "AE", "sg": "SG",
+    "th": "TH", "vn": "VN", "my": "MY", "ph": "PH", "id": "ID",
+    "tw": "TW", "hk": "HK",
+}
+
+_HREFLANG_RE = re.compile(
+    r'<link[^>]+hreflang=["\']([^"\']+)["\'][^>]+href=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
 
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+def _country_from_tld(url: str) -> str | None:
+    host = urlparse(url).hostname or ""
+    parts = host.rsplit(".", 2)
+    if len(parts) >= 3:
+        two_part = f"{parts[-2]}.{parts[-1]}"
+        if two_part in CCTLD_TO_COUNTRY:
+            return CCTLD_TO_COUNTRY[two_part]
+    tld = parts[-1] if parts else ""
+    return CCTLD_TO_COUNTRY.get(tld)
+
+
+def _check_hreflang(html: str, url: str, country: str | None) -> dict | None:
+    matches = _HREFLANG_RE.findall(html)
+    if not matches:
+        return None
+    hreflangs = {lang.lower(): href for lang, href in matches}
+    result = {"hreflangs": hreflangs}
+    if country:
+        cc = country.lower()
+        matching = [lang for lang in hreflangs if cc in lang.split("-")]
+        if matching:
+            result["country_match"] = True
+            if hreflangs[matching[0]] != url:
+                result["canonical_url"] = hreflangs[matching[0]]
+        else:
+            result["country_match"] = False
+            available = [lang for lang in hreflangs if lang != "x-default"]
+            if available:
+                result["available_countries"] = available
+    return result
 
 PROVIDER_CLASSES: dict[str, str] = {
     "raw_http": "RawHttpProvider",
@@ -75,10 +128,12 @@ class ScrapeGateway:
         providers: Iterable[ProviderAdapter] | None = None,
         cache: ArtifactCache | None = None,
         memory: DomainMemory | None = None,
+        strategy: StrategyConfig | None = None,
     ) -> None:
         self.providers = list(providers if providers is not None else _default_providers())
         self.cache = cache or ArtifactCache()
         self.memory = memory or DomainMemory()
+        self.strategy = strategy or StrategyConfig()
 
     @classmethod
     def from_config(cls, config: GatewayConfig | None = None) -> ScrapeGateway:
@@ -87,10 +142,17 @@ class ScrapeGateway:
             providers=_providers_from_config(config),
             cache=ArtifactCache(root=config.cache.root, ttl_seconds=config.cache.ttl_seconds),
             memory=DomainMemory(db_path=config.memory_path),
+            strategy=config.strategy,
         )
 
     async def scrape(self, request: ScrapeRequest, use_cache: bool = True) -> ScrapeResult:
         _log(f"\nscrape {request.url}")
+
+        if not request.country:
+            detected = _country_from_tld(request.url)
+            if detected:
+                request.country = detected
+                _log(f"  [auto-country] {detected} (from TLD)")
 
         if use_cache:
             html = self.cache.get_html(request.url)
@@ -143,6 +205,15 @@ class ScrapeGateway:
                     request.premium,
                     tier=result.route,
                 )
+                if result.html:
+                    hreflang = _check_hreflang(result.html, request.url, request.country)
+                    if hreflang:
+                        result.metadata["hreflang"] = hreflang
+                        if hreflang.get("country_match") is False:
+                            avail = hreflang.get("available_countries", [])
+                            _log(f"  [hreflang] country {request.country} not in page alternatives: {', '.join(avail)}")
+                        elif hreflang.get("canonical_url"):
+                            _log(f"  [hreflang] canonical for {request.country}: {hreflang['canonical_url']}")
                 _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✓ pass")
                 return result
             reason = result.failure_reason.value if result.failure_reason else result.error or "failed"
@@ -159,8 +230,17 @@ class ScrapeGateway:
         )
 
     def _ordered_providers(self, request: ScrapeRequest) -> list[ProviderAdapter]:
-        pref = self.memory.preferred_provider(request.url)
         providers = sorted(self.providers, key=lambda p: p.cost_rank)
+
+        if self.strategy.provider:
+            preferred = [p for p in providers if p.name == self.strategy.provider]
+            rest = [p for p in providers if p.name != self.strategy.provider]
+            if preferred:
+                _log(f"  [strategy] preferred provider: {self.strategy.provider}")
+                return preferred + rest
+            _log(f"  [strategy] preferred provider {self.strategy.provider!r} not found, falling back")
+
+        pref = self.memory.preferred_provider(request.url)
         if pref:
             pref_name, pref_tier = pref
             pref_cost = next((p.cost_rank for p in providers if p.name == pref_name), None)

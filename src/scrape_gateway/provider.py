@@ -15,8 +15,6 @@ class ProviderAdapter(ABC):
             return False
         if request.premium and "premium" not in self.capabilities:
             return False
-        if request.country and "country" not in self.capabilities:
-            return False
         if request.screenshot and "screenshot" not in self.capabilities:
             return False
         return True

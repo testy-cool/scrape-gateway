@@ -27,6 +27,12 @@ class ScrapeRequest:
     render_js: bool = False
     premium: bool = False
     screenshot: bool = False
+    mobile: bool = False
+    wait_event: str | None = None  # domcontentloaded, load, networkidle
+    wait_selector: str | None = None
+    extra_wait_ms: int = 0
+    block_ads: bool = False
+    output_format: str = "html"  # html, markdown
     timeout_seconds: float = 45
     headers: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
