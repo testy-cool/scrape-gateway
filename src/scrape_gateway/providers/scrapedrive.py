@@ -68,7 +68,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             "render_js": "true" if request.render_js else "false",
             "device_type": "mobile" if request.mobile else "desktop",
             "block_resources": "true",
-            "result_type": request.output_format or "html",
+            "result_type": "html",
         }
         if request.country and tier != "standard":
             params["country_code"] = request.country.upper()

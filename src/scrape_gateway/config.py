@@ -65,7 +65,7 @@ def _load_dotenv(path: Path | None = None) -> None:
         key = key.strip()
         val = val.strip().strip("'\"")
         if key and val:
-            os.environ.setdefault(key, val)
+            os.environ[key] = val
 
 
 def load_config(path: Path | str | None = None) -> GatewayConfig:
