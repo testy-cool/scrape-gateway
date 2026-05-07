@@ -171,7 +171,7 @@ class ScrapeGateway:
             strategy=config.strategy,
         )
 
-    async def scrape(self, request: ScrapeRequest, use_cache: bool = True) -> ScrapeResult:
+    async def scrape(self, request: ScrapeRequest, use_cache: bool = True, use_memory: bool = True) -> ScrapeResult:
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
         req_data = {
@@ -215,7 +215,7 @@ class ScrapeGateway:
             if not provider.can_handle(request):
                 skipped.append(f"{provider.name}(no capability)")
                 continue
-            if self.memory.should_skip_provider(request.url, provider.name):
+            if use_memory and self.memory.should_skip_provider(request.url, provider.name):
                 skipped.append(f"{provider.name}(bad history)")
                 continue
             start = time.perf_counter()

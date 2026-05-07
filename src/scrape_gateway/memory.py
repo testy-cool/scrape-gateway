@@ -161,8 +161,8 @@ class DomainMemory:
         if not row:
             return False
         total_failures = row["failure_count"] + row["block_count"]
-        if row["success_count"] == 0 and total_failures >= 3:
+        if row["success_count"] == 0 and total_failures >= 5:
             return True
-        if total_failures > 0 and row["success_count"] / max(total_failures, 1) < 0.2:
+        if total_failures >= 10 and row["success_count"] / max(total_failures, 1) < 0.2:
             return True
         return False

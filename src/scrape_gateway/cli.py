@@ -89,6 +89,7 @@ def url(
                     output_format=output_format,
                 ),
                 use_cache=not no_cache,
+                use_memory=not no_cache,
             )
         _print_result(result)
 

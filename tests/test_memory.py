@@ -55,7 +55,7 @@ def test_remember_block():
 def test_should_skip_after_repeated_failures():
     with tempfile.TemporaryDirectory() as tmp:
         mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        for _ in range(3):
+        for _ in range(5):
             mem.remember_failure("https://hard.com/page", "raw_http")
         assert mem.should_skip_provider("https://hard.com/other", "raw_http") is True
 
