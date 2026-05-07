@@ -28,6 +28,7 @@ class CacheConfig:
 @dataclass(slots=True)
 class StrategyConfig:
     mode: str = "cheapest_successful"
+    provider: str | None = None
     max_cost_per_url: float | None = None
 
 
@@ -109,6 +110,7 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
     strategy_raw = raw.get("strategy", {})
     strategy = StrategyConfig(
         mode=strategy_raw.get("mode", "cheapest_successful"),
+        provider=strategy_raw.get("provider"),
         max_cost_per_url=strategy_raw.get("max_cost_per_url"),
     )
 
