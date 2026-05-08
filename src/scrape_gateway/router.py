@@ -262,6 +262,12 @@ class ScrapeGateway:
                             _log(f"  [hreflang] country {request.country} not in page alternatives: {', '.join(avail)}")
                         elif hreflang.get("canonical_url"):
                             _log(f"  [hreflang] canonical for {request.country}: {hreflang['canonical_url']}")
+                    changes = self.memory.record_scrape(request.url, result.html, provider.name)
+                    if changes and changes != ["no changes"]:
+                        result.metadata["changes"] = changes
+                        _log(f"  [history] {'; '.join(changes)}")
+                    elif changes == ["no changes"]:
+                        _log("  [history] no changes since last scrape")
                 attempt["result"] = "success"
                 attempt["chars"] = len(result.html or "")
                 attempts.append(attempt)

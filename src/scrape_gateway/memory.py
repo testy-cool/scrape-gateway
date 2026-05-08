@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
@@ -28,6 +31,17 @@ class DomainMemory:
               updated_at datetime default current_timestamp,
               primary key (domain, provider)
             );
+
+            create table if not exists page_history (
+              id integer primary key autoincrement,
+              url text not null,
+              content_hash text not null,
+              fingerprint text not null,
+              changes text,
+              provider text,
+              scraped_at datetime default current_timestamp
+            );
+            create index if not exists idx_page_history_url on page_history(url);
 
             -- legacy table kept for backward compat during migration
             create table if not exists domain_routes (
@@ -166,3 +180,106 @@ class DomainMemory:
         if total_failures >= 10 and row["success_count"] / max(total_failures, 1) < 0.2:
             return True
         return False
+
+    # --- Page history / change detection ---
+
+    @staticmethod
+    def fingerprint(html: str) -> dict:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+
+        links = [a["href"] for a in soup.find_all("a", href=True)]
+        forms = [f.get("action", "") for f in soup.find_all("form")]
+        images = len(soup.find_all("img"))
+        scripts = len(soup.find_all("script"))
+        meta = {m.get("name", m.get("property", "")): m.get("content", "")
+                for m in soup.find_all("meta") if m.get("content")}
+
+        tag_counts: dict[str, int] = {}
+        for tag in soup.find_all(True):
+            tag_counts[tag.name] = tag_counts.get(tag.name, 0) + 1
+
+        headings = []
+        for level in range(1, 4):
+            for h in soup.find_all(f"h{level}"):
+                headings.append(h.get_text(strip=True)[:80])
+
+        text = soup.get_text(" ", strip=True)
+        prices = re.findall(r'(?:[$€£¥₹]\s?\d[\d,. ]*|\d[\d,. ]*\s?(?:USD|EUR|GBP|RON|lei))', text, re.I)
+
+        return {
+            "link_count": len(links),
+            "image_count": images,
+            "script_count": scripts,
+            "form_count": len(forms),
+            "price_count": len(prices),
+            "heading_count": len(headings),
+            "headings": headings[:10],
+            "tag_counts": dict(sorted(tag_counts.items(), key=lambda x: -x[1])[:15]),
+            "title": (soup.title.string.strip() if soup.title and soup.title.string else ""),
+            "meta_description": meta.get("description", "")[:200],
+            "text_length": len(text),
+        }
+
+    @staticmethod
+    def _diff_fingerprints(old: dict, new: dict) -> list[str]:
+        changes = []
+        for key in ("link_count", "image_count", "script_count", "form_count",
+                     "price_count", "heading_count", "text_length"):
+            ov, nv = old.get(key, 0), new.get(key, 0)
+            if ov != nv:
+                diff = nv - ov
+                sign = "+" if diff > 0 else ""
+                changes.append(f"{key}: {ov} → {nv} ({sign}{diff})")
+        if old.get("title") != new.get("title"):
+            changes.append(f"title: {old.get('title', '')!r} → {new.get('title', '')!r}")
+        old_heads = set(old.get("headings", []))
+        new_heads = set(new.get("headings", []))
+        added = new_heads - old_heads
+        removed = old_heads - new_heads
+        if added:
+            changes.append(f"headings added: {', '.join(list(added)[:3])}")
+        if removed:
+            changes.append(f"headings removed: {', '.join(list(removed)[:3])}")
+        return changes
+
+    def record_scrape(self, url: str, html: str, provider: str | None = None) -> list[str]:
+        content_hash = hashlib.sha256(html.encode()).hexdigest()[:16]
+        fp = self.fingerprint(html)
+        fp_json = json.dumps(fp, ensure_ascii=False)
+
+        last = self.conn.execute(
+            "select content_hash, fingerprint from page_history where url = ? order by id desc limit 1",
+            (url,),
+        ).fetchone()
+
+        changes: list[str] = []
+        if last:
+            if last["content_hash"] == content_hash:
+                changes = ["no changes"]
+            else:
+                old_fp = json.loads(last["fingerprint"])
+                changes = self._diff_fingerprints(old_fp, fp)
+                if not changes:
+                    changes = ["content changed (hash differs, structure same)"]
+
+        self.conn.execute(
+            "insert into page_history(url, content_hash, fingerprint, changes, provider) values (?,?,?,?,?)",
+            (url, content_hash, fp_json, json.dumps(changes) if changes else None, provider),
+        )
+        self.conn.commit()
+        return changes
+
+    def get_history(self, url: str, limit: int = 20) -> list[dict]:
+        rows = self.conn.execute(
+            """select url, content_hash, fingerprint, changes, provider, scraped_at
+               from page_history where url = ? order by id desc limit ?""",
+            (url, limit),
+        ).fetchall()
+        result = []
+        for r in rows:
+            entry = dict(r)
+            entry["fingerprint"] = json.loads(entry["fingerprint"])
+            entry["changes"] = json.loads(entry["changes"]) if entry["changes"] else []
+            result.append(entry)
+        return result

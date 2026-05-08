@@ -367,6 +367,66 @@ def detect(
 
 
 @app.command()
+def history(
+    target_url: str,
+    limit: int = typer.Option(20, "--limit", "-n"),
+) -> None:
+    """Show scrape history and structural changes for a URL."""
+    from .config import load_config
+    from .memory import DomainMemory
+
+    config = load_config()
+    memory = DomainMemory(db_path=config.memory_path)
+
+    if not target_url.startswith(("http://", "https://")):
+        target_url = f"https://{target_url}"
+
+    entries = memory.get_history(target_url, limit=limit)
+    if not entries:
+        console.print(f"[dim]No history for {target_url}[/]")
+        raise typer.Exit(0)
+
+    console.print(f"\n[bold]{len(entries)}[/] scrapes of [cyan]{target_url}[/]\n")
+
+    table = Table(show_lines=True)
+    table.add_column("When", style="dim", width=19)
+    table.add_column("Provider", style="cyan", width=12)
+    table.add_column("Hash", width=8)
+    table.add_column("Links", justify="right", width=6)
+    table.add_column("Chars", justify="right", width=8)
+    table.add_column("Changes")
+
+    for entry in entries:
+        fp = entry["fingerprint"]
+        changes = entry["changes"]
+        change_text = "; ".join(changes) if changes else "[dim]first scrape[/]"
+        if changes == ["no changes"]:
+            change_text = "[dim]no changes[/]"
+        table.add_row(
+            entry["scraped_at"][:19],
+            entry["provider"] or "?",
+            entry["content_hash"][:8],
+            str(fp.get("link_count", "")),
+            f"{fp.get('text_length', 0):,}",
+            change_text,
+        )
+
+    console.print(table)
+
+    if entries:
+        latest = entries[0]["fingerprint"]
+        console.print(f"\n[bold]Latest fingerprint:[/]")
+        console.print(f"  title: [cyan]{latest.get('title', '')}[/]")
+        console.print(f"  links: {latest.get('link_count', 0)}  images: {latest.get('image_count', 0)}  "
+                       f"forms: {latest.get('form_count', 0)}  prices: {latest.get('price_count', 0)}")
+        heads = latest.get("headings", [])
+        if heads:
+            console.print(f"  headings: {', '.join(heads[:5])}")
+
+    raise typer.Exit(0)
+
+
+@app.command()
 def selftest() -> None:
     """Run a live smoke test against safe public URLs."""
 
