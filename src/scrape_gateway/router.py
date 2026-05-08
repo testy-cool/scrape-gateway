@@ -172,6 +172,8 @@ class ScrapeGateway:
         )
 
     async def scrape(self, request: ScrapeRequest, use_cache: bool = True, use_memory: bool = True) -> ScrapeResult:
+        if not request.url.startswith(("http://", "https://")):
+            request.url = f"https://{request.url}"
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
         req_data = {
