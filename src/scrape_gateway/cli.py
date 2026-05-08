@@ -178,42 +178,50 @@ SEMANTIC_TAGS = {
 }
 
 
-def _extract_links(html: str, base_url: str) -> dict[str, list[tuple[str, str]]]:
+def _extract_links(html: str, base_url: str) -> tuple[list[dict], dict[str, list[int]]]:
+    """Returns (flat indexed list, section->indices mapping)."""
     from urllib.parse import urljoin
 
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
-    groups: dict[str, list[tuple[str, str]]] = {}
+    all_links: list[dict] = []
+    groups: dict[str, list[int]] = {}
+    seen: set[str] = set()
 
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
         if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
             continue
         href = urljoin(base_url, href)
+        if href in seen:
+            continue
+        seen.add(href)
         text = a.get_text(strip=True)[:80] or href
 
-        group = "Other"
+        section = "other"
         for parent in a.parents:
             if parent.name in SEMANTIC_TAGS:
-                group = SEMANTIC_TAGS[parent.name]
+                section = parent.name
                 break
 
-        groups.setdefault(group, []).append((href, text))
+        idx = len(all_links) + 1
+        all_links.append({"id": idx, "href": href, "text": text, "section": section})
+        groups.setdefault(section, []).append(idx)
 
-    for links in groups.values():
-        seen = set()
-        deduped = []
-        for href, text in links:
-            if href not in seen:
-                seen.add(href)
-                deduped.append((href, text))
-        links[:] = deduped
-
-    return groups
+    return all_links, groups
 
 
-def _compact_links(groups: dict[str, list[tuple[str, str]]], base_url: str) -> str:
+def _to_path(href: str, origins: set[str]) -> tuple[str, bool]:
+    for o in origins:
+        if href.startswith(o):
+            return (href[len(o):] or "/", True)
+    if href.startswith("/"):
+        return (href, True)
+    return (href, False)
+
+
+def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url: str) -> str:
     from urllib.parse import urlparse
 
     parsed = urlparse(base_url)
@@ -223,58 +231,46 @@ def _compact_links(groups: dict[str, list[tuple[str, str]]], base_url: str) -> s
         origins.add(f"{parsed.scheme}://{host[4:]}")
     else:
         origins.add(f"{parsed.scheme}://www.{host}")
-    lines = [f"# {host} ({sum(len(v) for v in groups.values())} links)\n"]
 
-    order = ["Navigation", "Header", "Content", "Article", "Section", "Sidebar", "Footer", "Other"]
-    tag_map = {v: k for k, v in SEMANTIC_TAGS.items()}
+    by_id = {link["id"]: link for link in all_links}
+    lines = [f"# {host} ({len(all_links)} links)\n"]
 
-    for group_name in order:
-        if group_name not in groups:
+    section_order = ["nav", "header", "main", "article", "section", "aside", "footer", "other"]
+
+    for section in section_order:
+        if section not in groups:
             continue
-        link_list = groups[group_name]
-        tag = tag_map.get(group_name, group_name.lower())
-        lines.append(f"## {tag} ({len(link_list)})")
+        indices = groups[section]
+        lines.append(f"## {section} ({len(indices)})")
 
-        internal: list[tuple[str, str]] = []
-        external: list[tuple[str, str]] = []
-        for href, text in link_list:
-            matched = False
-            for o in origins:
-                if href.startswith(o):
-                    internal.append((href[len(o):] or "/", text[:80]))
-                    matched = True
-                    break
-            if not matched:
-                if href.startswith("/"):
-                    internal.append((href, text[:80]))
-                else:
-                    external.append((href, text[:80]))
-
-        # Tree-ify internal paths by first segment
-        prefix_groups: dict[str, list[tuple[str, str]]] = {}
-        for path, text in internal:
-            parts = path.strip("/").split("/")
-            if len(parts) >= 2:
-                prefix = "/" + parts[0] + "/"
+        internal: list[tuple[int, str, str]] = []
+        external: list[tuple[int, str, str]] = []
+        for idx in indices:
+            link = by_id[idx]
+            path, is_internal = _to_path(link["href"], origins)
+            if is_internal:
+                internal.append((idx, path, link["text"]))
             else:
-                prefix = ""
-            prefix_groups.setdefault(prefix, []).append((path, text))
+                external.append((idx, link["href"], link["text"]))
+
+        prefix_groups: dict[str, list[tuple[int, str, str]]] = {}
+        for idx, path, text in internal:
+            parts = path.strip("/").split("/")
+            prefix = "/" + parts[0] + "/" if len(parts) >= 2 else ""
+            prefix_groups.setdefault(prefix, []).append((idx, path, text))
 
         for prefix, items in prefix_groups.items():
             if not prefix or len(items) == 1:
-                for path, text in items:
-                    lines.append(f"{path} {text}")
+                for idx, path, text in items:
+                    lines.append(f"[{idx}] {path} {text}")
             else:
                 lines.append(prefix)
-                for path, text in items:
+                for idx, path, text in items:
                     suffix = path[len(prefix):]
-                    if suffix:
-                        lines.append(f"  {suffix} {text}")
-                    else:
-                        lines.append(f"  . {text}")
+                    lines.append(f"  [{idx}] {suffix or '.'} {text}")
 
-        for href, text in external:
-            lines.append(f"{href} {text}")
+        for idx, href, text in external:
+            lines.append(f"[{idx}] {href} {text}")
         lines.append("")
 
     return "\n".join(lines)
@@ -303,28 +299,72 @@ def links(
             console.print(f"[red]Scrape failed:[/] {result.error or result.failure_reason}")
             raise typer.Exit(1)
 
-        groups = _extract_links(result.html, result.url)
+        all_links, groups = _extract_links(result.html, result.url)
 
         if output_format == "json":
             import json
-            print(json.dumps({k: [{"href": h, "text": t} for h, t in v] for k, v in groups.items()}, indent=2))
+            print(json.dumps(all_links, indent=2, ensure_ascii=False))
         elif output_format == "compact":
-            print(_compact_links(groups, result.url))
+            print(_compact_links(all_links, groups, result.url))
         else:
-            total = sum(len(v) for v in groups.values())
-            console.print(f"\n[bold]{total}[/] links from [cyan]{result.url}[/]\n")
-            order = ["Navigation", "Header", "Content", "Article", "Section", "Sidebar", "Footer", "Other"]
-            for group_name in order:
-                if group_name not in groups:
+            console.print(f"\n[bold]{len(all_links)}[/] links from [cyan]{result.url}[/]\n")
+            section_order = ["nav", "header", "main", "article", "section", "aside", "footer", "other"]
+            by_id = {link["id"]: link for link in all_links}
+            for section in section_order:
+                if section not in groups:
                     continue
-                link_list = groups[group_name]
-                table = Table(title=group_name, show_lines=False, title_style="bold")
-                table.add_column("Link", style="cyan", max_width=70)
+                label = SEMANTIC_TAGS.get(section, section.title())
+                indices = groups[section]
+                table = Table(title=label, show_lines=False, title_style="bold")
+                table.add_column("#", style="dim", width=5)
+                table.add_column("Link", style="cyan", max_width=65)
                 table.add_column("Text", max_width=50)
-                for href, text in link_list:
-                    table.add_row(href, text)
+                for idx in indices:
+                    link = by_id[idx]
+                    table.add_row(str(idx), link["href"], link["text"])
                 console.print(table)
                 console.print()
+
+    asyncio.run(run())
+
+
+@app.command()
+def follow(
+    target_url: str,
+    link_id: int = typer.Argument(..., help="Link index from sg links output"),
+    country: str | None = typer.Option(None, "--country", "-c"),
+    render_js: bool = typer.Option(False, "--render-js"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+) -> None:
+    """Scrape a page, pick a link by index, then scrape that link."""
+
+    async def run() -> None:
+        gateway = _build_gateway(provider)
+        with console.status(f"[bold cyan]Scraping {target_url}...", spinner="dots"):
+            result = await gateway.scrape(
+                ScrapeRequest(target_url, country=country, render_js=render_js),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        if not result.success or not result.html:
+            console.print(f"[red]Scrape failed:[/] {result.error or result.failure_reason}")
+            raise typer.Exit(1)
+
+        all_links, _ = _extract_links(result.html, result.url)
+        match = next((l for l in all_links if l["id"] == link_id), None)
+        if not match:
+            console.print(f"[red]Link [{link_id}] not found[/] (max: {len(all_links)})")
+            raise typer.Exit(1)
+
+        console.print(f"[dim]Following [{link_id}] {match['text']}[/] → [cyan]{match['href']}[/]\n")
+        with console.status(f"[bold cyan]Scraping {match['href']}...", spinner="dots"):
+            follow_result = await gateway.scrape(
+                ScrapeRequest(match["href"], country=country, render_js=render_js),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        _print_result(follow_result)
 
     asyncio.run(run())
 
