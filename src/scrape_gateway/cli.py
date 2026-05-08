@@ -167,6 +167,94 @@ def run(
     asyncio.run(execute())
 
 
+SEMANTIC_TAGS = {
+    "nav": "Navigation",
+    "header": "Header",
+    "footer": "Footer",
+    "aside": "Sidebar",
+    "main": "Content",
+    "article": "Article",
+    "section": "Section",
+}
+
+
+def _extract_links(html: str, base_url: str) -> dict[str, list[tuple[str, str]]]:
+    from urllib.parse import urljoin
+
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    groups: dict[str, list[tuple[str, str]]] = {}
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        href = urljoin(base_url, href)
+        text = a.get_text(strip=True)[:80] or href
+
+        group = "Other"
+        for parent in a.parents:
+            if parent.name in SEMANTIC_TAGS:
+                group = SEMANTIC_TAGS[parent.name]
+                break
+
+        groups.setdefault(group, []).append((href, text))
+
+    for links in groups.values():
+        seen = set()
+        deduped = []
+        for href, text in links:
+            if href not in seen:
+                seen.add(href)
+                deduped.append((href, text))
+        links[:] = deduped
+
+    return groups
+
+
+@app.command()
+def links(
+    target_url: str,
+    country: str | None = typer.Option(None, "--country", "-c"),
+    render_js: bool = typer.Option(False, "--render-js"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+) -> None:
+    """Extract and group links from a page by semantic location."""
+
+    async def run() -> None:
+        gateway = _build_gateway(provider)
+        with console.status(f"[bold cyan]Scraping {target_url}...", spinner="dots"):
+            result = await gateway.scrape(
+                ScrapeRequest(target_url, country=country, render_js=render_js),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        if not result.success or not result.html:
+            console.print(f"[red]Scrape failed:[/] {result.error or result.failure_reason}")
+            raise typer.Exit(1)
+
+        groups = _extract_links(result.html, result.url)
+        total = sum(len(v) for v in groups.values())
+        console.print(f"\n[bold]{total}[/] links from [cyan]{result.url}[/]\n")
+
+        order = ["Navigation", "Header", "Content", "Article", "Section", "Sidebar", "Footer", "Other"]
+        for group_name in order:
+            if group_name not in groups:
+                continue
+            link_list = groups[group_name]
+            table = Table(title=group_name, show_lines=False, title_style="bold")
+            table.add_column("Link", style="cyan", max_width=70)
+            table.add_column("Text", max_width=50)
+            for href, text in link_list:
+                table.add_row(href, text)
+            console.print(table)
+            console.print()
+
+    asyncio.run(run())
+
+
 @app.command()
 def selftest() -> None:
     """Run a live smoke test against safe public URLs."""
