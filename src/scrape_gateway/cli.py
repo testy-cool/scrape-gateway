@@ -255,6 +255,117 @@ def links(
     asyncio.run(run())
 
 
+import re as _re
+
+DATA_PATTERNS = {
+    "Prices": _re.compile(r'(?:[$€£¥₹]\s?\d[\d,. ]*\d|\d[\d,. ]*\d\s?(?:USD|EUR|GBP|RON|lei))', _re.IGNORECASE),
+    "Emails": _re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'),
+    "Phones": _re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}'),
+    "Dates": _re.compile(r'\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2}'),
+}
+
+
+def _detect_patterns(html: str) -> dict:
+    from collections import Counter
+
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    results: dict = {}
+
+    # Repeated elements: find parent elements with 3+ children sharing the same tag+class
+    repeated = []
+    for parent in soup.find_all(True):
+        children = [c for c in parent.children if hasattr(c, "name") and c.name]
+        if len(children) < 3:
+            continue
+        sigs = Counter()
+        for child in children:
+            cls = " ".join(sorted(child.get("class", [])))
+            sig = f"{child.name}.{cls}" if cls else child.name
+            sigs[sig] += 1
+        for sig, count in sigs.most_common(5):
+            if count < 3:
+                break
+            tag = sig.split(".")[0]
+            cls = sig.split(".", 1)[1] if "." in sig else ""
+            selector = tag + ("." + ".".join(cls.split()) if cls else "")
+            parent_cls = " ".join(parent.get("class", [])[:2])
+            parent_sel = parent.name + ("." + ".".join(parent_cls.split()) if parent_cls else "")
+            sample_el = parent.find(tag, class_=cls.split() if cls else None)
+            sample = sample_el.get_text(strip=True)[:100] if sample_el else ""
+            repeated.append({
+                "parent": parent_sel, "selector": selector,
+                "count": count, "sample": sample,
+            })
+
+    # Deduplicate by selector, keep highest count
+    seen: dict[str, dict] = {}
+    for r in repeated:
+        key = f"{r['parent']} > {r['selector']}"
+        if key not in seen or r["count"] > seen[key]["count"]:
+            seen[key] = r
+    results["repeated"] = sorted(seen.values(), key=lambda x: x["count"], reverse=True)[:20]
+
+    # Data patterns from visible text
+    text = soup.get_text(" ", strip=True)
+    for name, pattern in DATA_PATTERNS.items():
+        matches = list(set(pattern.findall(text)))
+        if matches:
+            results[name.lower()] = matches[:15]
+
+    return results
+
+
+@app.command()
+def detect(
+    target_url: str,
+    country: str | None = typer.Option(None, "--country", "-c"),
+    render_js: bool = typer.Option(False, "--render-js"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+) -> None:
+    """Detect repeated elements and data patterns in a page."""
+
+    async def run() -> None:
+        gateway = _build_gateway(provider)
+        with console.status(f"[bold cyan]Scraping {target_url}...", spinner="dots"):
+            result = await gateway.scrape(
+                ScrapeRequest(target_url, country=country, render_js=render_js),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        if not result.success or not result.html:
+            console.print(f"[red]Scrape failed:[/] {result.error or result.failure_reason}")
+            raise typer.Exit(1)
+
+        patterns = _detect_patterns(result.html)
+
+        if patterns.get("repeated"):
+            table = Table(title="Repeated Elements", title_style="bold")
+            table.add_column("Count", justify="right", style="bold cyan", width=6)
+            table.add_column("Parent", max_width=30)
+            table.add_column("Selector", style="green", max_width=30)
+            table.add_column("Sample", max_width=50, style="dim")
+            for r in patterns["repeated"]:
+                table.add_row(str(r["count"]), r["parent"], r["selector"], r["sample"])
+            console.print(table)
+            console.print()
+
+        for name, label in [("prices", "Prices"), ("emails", "Emails"), ("phones", "Phones"), ("dates", "Dates")]:
+            items = patterns.get(name, [])
+            if items:
+                console.print(f"[bold]{label}[/] ({len(items)} found)")
+                for item in items[:10]:
+                    console.print(f"  [dim]•[/] {item}")
+                console.print()
+
+        if not patterns.get("repeated") and not any(patterns.get(k) for k in ("prices", "emails", "phones", "dates")):
+            console.print("[dim]No patterns detected.[/]")
+
+    asyncio.run(run())
+
+
 @app.command()
 def selftest() -> None:
     """Run a live smoke test against safe public URLs."""
