@@ -24,6 +24,40 @@ def _build_gateway(provider: str | None = None) -> ScrapeGateway:
     return gateway
 
 
+def _hints(cmd: str, url: str = "", **ctx) -> None:
+    console.print("\n[dim]---[/]")
+    url_display = url or "<url>"
+    if cmd == "url":
+        console.print(f"[dim]sg links {url_display}          # extract & index all links[/]")
+        console.print(f"[dim]sg detect {url_display}         # find repeated elements & data patterns[/]")
+        console.print(f"[dim]sg history {url_display}        # view change history[/]")
+        console.print(f"[dim]sg url {url_display} --render-js  # re-scrape with JS rendering[/]")
+    elif cmd == "links":
+        fmt = ctx.get("fmt", "rich")
+        if fmt != "compact":
+            console.print(f"[dim]sg links {url_display} -f compact  # LLM-optimized tree output[/]")
+        if fmt != "json":
+            console.print(f"[dim]sg links {url_display} -f json     # pipe to jq[/]")
+        console.print(f"[dim]sg follow {url_display} <id>        # scrape a link by index[/]")
+        console.print(f"[dim]sg detect {url_display}             # find repeated elements[/]")
+    elif cmd == "follow":
+        followed = ctx.get("followed_url", url_display)
+        console.print(f"[dim]sg links {followed}          # extract links from followed page[/]")
+        console.print(f"[dim]sg detect {followed}         # find patterns in followed page[/]")
+        console.print(f"[dim]sg history {followed}        # view change history[/]")
+    elif cmd == "detect":
+        console.print(f"[dim]sg links {url_display}              # see all links indexed[/]")
+        console.print(f"[dim]sg url {url_display} --render-js    # re-scrape with JS[/]")
+        console.print(f"[dim]sg history {url_display}            # track changes over time[/]")
+    elif cmd == "history":
+        console.print(f"[dim]sg url {url_display} --no-cache     # fresh scrape to update history[/]")
+        console.print(f"[dim]sg detect {url_display}             # analyze current structure[/]")
+        console.print(f"[dim]sg links {url_display} -f compact   # LLM-optimized link tree[/]")
+    elif cmd == "selftest":
+        console.print(f"[dim]sg url <url>                   # scrape any URL[/]")
+        console.print(f"[dim]sg links <url> -f compact      # extract links for LLM[/]")
+
+
 def _print_result(result) -> None:
     if result.success:
         title = Text("SUCCESS", style="bold green")
@@ -92,6 +126,7 @@ def url(
                 use_memory=not no_cache,
             )
         _print_result(result)
+        _hints("url", target_url)
 
     asyncio.run(run())
 
@@ -221,7 +256,7 @@ def _to_path(href: str, origins: set[str]) -> tuple[str, bool]:
     return (href, False)
 
 
-def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url: str) -> str:
+def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url: str, limit: int = 0) -> str:
     from urllib.parse import urlparse
 
     parsed = urlparse(base_url)
@@ -264,10 +299,14 @@ def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url
                 for idx, path, text in items:
                     lines.append(f"[{idx}] {path} {text}")
             else:
-                lines.append(prefix)
-                for idx, path, text in items:
+                show = items if not limit else items[:limit]
+                remaining = len(items) - len(show)
+                lines.append(f"{prefix} ({len(items)})" if limit else prefix)
+                for idx, path, text in show:
                     suffix = path[len(prefix):]
                     lines.append(f"  [{idx}] {suffix or '.'} {text}")
+                if remaining > 0:
+                    lines.append(f"  ... +{remaining} more")
 
         for idx, href, text in external:
             lines.append(f"[{idx}] {href} {text}")
@@ -284,6 +323,7 @@ def links(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     no_cache: bool = typer.Option(False, "--no-cache"),
     output_format: str = typer.Option("rich", "--format", "-f", help="rich|compact|json"),
+    limit: int = typer.Option(0, "--limit", "-n", help="Max links per directory in compact mode (0=all)"),
 ) -> None:
     """Extract and group links from a page by semantic location."""
 
@@ -305,7 +345,7 @@ def links(
             import json
             print(json.dumps(all_links, indent=2, ensure_ascii=False))
         elif output_format == "compact":
-            print(_compact_links(all_links, groups, result.url))
+            print(_compact_links(all_links, groups, result.url, limit=limit))
         else:
             console.print(f"\n[bold]{len(all_links)}[/] links from [cyan]{result.url}[/]\n")
             section_order = ["nav", "header", "main", "article", "section", "aside", "footer", "other"]
@@ -324,6 +364,7 @@ def links(
                     table.add_row(str(idx), link["href"], link["text"])
                 console.print(table)
                 console.print()
+            _hints("links", target_url, fmt=output_format)
 
     asyncio.run(run())
 
@@ -365,6 +406,7 @@ def follow(
                 use_memory=not no_cache,
             )
         _print_result(follow_result)
+        _hints("follow", target_url, followed_url=match["href"])
 
     asyncio.run(run())
 
@@ -476,6 +518,7 @@ def detect(
 
         if not patterns.get("repeated") and not any(patterns.get(k) for k in ("prices", "emails", "phones", "dates")):
             console.print("[dim]No patterns detected.[/]")
+        _hints("detect", target_url)
 
     asyncio.run(run())
 
@@ -537,6 +580,7 @@ def history(
         if heads:
             console.print(f"  headings: {', '.join(heads[:5])}")
 
+    _hints("history", target_url)
     raise typer.Exit(0)
 
 
@@ -580,6 +624,7 @@ def selftest() -> None:
                 console.print(f"  [red]FAIL[/]  {description}")
 
         console.print(f"\n[green]{passed} passed[/], [red]{failed} failed[/]")
+        _hints("selftest")
         raise typer.Exit(code=1 if failed else 0)
 
     asyncio.run(run_tests())
