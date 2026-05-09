@@ -23,7 +23,7 @@ You have 3-4 scraping APIs. Each has its own SDK, its own auth, its own quirks. 
 
 `sg` is that code, written once:
 
-1. **One interface, many providers.** 7 providers (3 free, 4 paid) behind a single `sg url` command. Add your API keys and the router handles the rest.
+1. **One interface, many providers.** 7 built-in providers (3 free, 4 paid) behind a single `sg url` command. Add your own with the extension system.
 2. **Cheapest-first routing.** Free providers are tried before paid ones. You only pay when the free ones fail.
 3. **Content validation.** A 200 OK doesn't mean success — the page might be a Cloudflare challenge, a captcha wall, or a "please enable JavaScript" placeholder. `sg` catches all of these and retries with the next provider.
 4. **Domain memory.** After one successful scrape, `sg` remembers which provider and tier worked for that domain. Next scrape skips the trial-and-error entirely.
@@ -168,6 +168,23 @@ sg history https://example.com
 sg history https://example.com -n 5    # last 5 scrapes
 ```
 
+### `sg providers` — See what's available
+
+Lists all providers `sg` can use — built-in, pip packages, and local extensions — with cost, capabilities, and source.
+
+```bash
+sg providers
+```
+
+### `sg extensions` — Browse the extension registry
+
+Shows available community extensions. Install with `sg extensions <name>` — the package goes into sg's own isolated environment.
+
+```bash
+sg extensions                    # browse the registry
+sg extensions sg-playwright      # install one
+```
+
 ### `sg selftest` — Verify installation
 
 Scrapes a few known-safe sites to verify `sg` is working. Uses only the free raw_http provider, no API keys needed.
@@ -217,6 +234,54 @@ SCRAPERAPI_API_KEY=your_key_here
 ```
 
 `sg` works without any paid API keys — it will use the free providers only. Add paid keys when you need JS rendering, geo-targeting, or anti-bot bypass.
+
+## Extensions
+
+The 7 built-in providers cover most scraping needs, but you can add your own — an Amazon Product API, a Wayback Machine fetcher, a headless browser, anything that takes a URL and returns content.
+
+Three ways to add providers, in order of effort:
+
+### 1. Drop a file (easiest)
+
+Put a `.py` file in `~/.config/scrape-gateway/providers/` with a class that extends `ProviderAdapter`:
+
+```python
+from scrape_gateway import ProviderAdapter, ScrapeRequest, ScrapeResult
+
+class MyProvider(ProviderAdapter):
+    name = "my_api"
+    cost_rank = 10
+    capabilities = frozenset({"html"})
+    install_requires = ["some-package"]  # auto-installed on first use
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        # your logic here
+        ...
+```
+
+`sg` discovers it automatically. Run `sg providers` to verify.
+
+If your provider needs a pip package, set `install_requires` — `sg` will prompt to install it the first time it loads.
+
+### 2. Install from the registry
+
+```bash
+sg extensions                    # browse available extensions
+sg extensions sg-playwright      # install one into sg's own venv
+```
+
+### 3. Publish a pip package
+
+Create a package that declares an entry point:
+
+```toml
+[project.entry-points."scrape_gateway.providers"]
+my_provider = "my_package:MyProvider"
+```
+
+After `pip install my-package`, `sg` discovers it automatically.
+
+See `examples/extension_example.py` for a complete template.
 
 ## LLM integration (optional)
 
@@ -298,14 +363,15 @@ pytest tests/ --html=output/test-report.html --self-contained-html
 src/scrape_gateway/
   cli.py          — Typer CLI (all sg commands)
   router.py       — Provider routing, fallback, validation
+  discovery.py    — Extension discovery (built-in, entry points, local dir)
+  provider.py     — ProviderAdapter base class (extend this for extensions)
   memory.py       — Domain memory (SQLite) + extraction pattern cache
   cache.py        — HTML/Markdown artifact cache
   config.py       — YAML config + .env loader
   models.py       — ScrapeRequest, ScrapeResult, FailureReason
   validators.py   — Content validation (Cloudflare, captcha, JS detection)
-  providers/      — One adapter per scraping provider
-    raw_http.py, wreq_http.py, curl_cffi_http.py,
-    scrapedrive.py, scrape_do.py, scrapingbee.py, scraperapi.py
+  providers/      — One adapter per built-in scraping provider
+registry.yml      — Official extension registry
 tests/            — 112 tests with HTML report support
-examples/         — Sample recipe files
+examples/         — Sample recipes and extension template
 ```
