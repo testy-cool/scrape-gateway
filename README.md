@@ -1,5 +1,38 @@
 # scrape-gateway (`sg`)
 
+```bash
+$ sg extract https://books.toscrape.com -n 3
+  ol.row > li (20 items) (learned)
+
+[
+  {
+    "title": "A Light in the Attic",
+    "href": "catalogue/a-light-in-the-attic_1000/index.html",
+    "image": "media/cache/2c/da/2cdad67c44b002e7ead0cc35693c0e8b.jpg",
+    "price": "£51.77",
+    "availability": "In stock"
+  },
+  {
+    "title": "Tipping the Velvet",
+    "href": "catalogue/tipping-the-velvet_999/index.html",
+    "image": "media/cache/26/0c/260c6ae16bce31c8f8c95daddd9f4a1c.jpg",
+    "price": "£53.74",
+    "availability": "In stock"
+  },
+  {
+    "title": "Soumission",
+    "href": "catalogue/soumission_998/index.html",
+    "image": "media/cache/3e/ef/3eef99c9d9adef34639f510662022830.jpg",
+    "price": "£50.10",
+    "availability": "In stock"
+  }
+]
+```
+
+One command. No selectors to write, no custom scraper code, no API to learn. The tool figured out the page structure, picked the product listing over the navigation sidebar, named the fields, and cached the pattern so next time it's instant.
+
+---
+
 A CLI that scrapes web pages through multiple providers, picks the cheapest one that works, and remembers what worked per domain. It also extracts structured data from listing pages using pattern detection and optional LLM assistance.
 
 ## Why this exists
