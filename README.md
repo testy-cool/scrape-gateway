@@ -1,55 +1,33 @@
 # scrape-gateway (`sg`)
 
 ```bash
-$ sg extract https://books.toscrape.com -n 3
-  ol.row > li (20 items) (learned)
+$ sg url https://hard-to-scrape-store.com
+  [raw_http]    403 0.3s → ✗ blocked
+  [wreq]        403 0.5s → ✗ blocked
+  [scrapedrive] 200 2.1s → ✓ pass (advanced tier)
 
-[
-  {
-    "title": "A Light in the Attic",
-    "href": "catalogue/a-light-in-the-attic_1000/index.html",
-    "image": "media/cache/2c/da/2cdad67c44b002e7ead0cc35693c0e8b.jpg",
-    "price": "£51.77",
-    "availability": "In stock"
-  },
-  {
-    "title": "Tipping the Velvet",
-    "href": "catalogue/tipping-the-velvet_999/index.html",
-    "image": "media/cache/26/0c/260c6ae16bce31c8f8c95daddd9f4a1c.jpg",
-    "price": "£53.74",
-    "availability": "In stock"
-  },
-  {
-    "title": "Soumission",
-    "href": "catalogue/soumission_998/index.html",
-    "image": "media/cache/3e/ef/3eef99c9d9adef34639f510662022830.jpg",
-    "price": "£50.10",
-    "availability": "In stock"
-  }
-]
+# Next time — sg remembers what worked:
+$ sg url https://hard-to-scrape-store.com/other-page
+  [scrapedrive] 200 1.8s → ✓ pass (advanced tier)    ← skipped free providers, went straight here
 ```
 
-One command. No selectors to write, no custom scraper code, no API to learn. The tool figured out the page structure, picked the product listing over the navigation sidebar, named the fields, and cached the pattern so next time it's instant.
+One `sg url` call. Seven providers behind it. It tried the free ones first, they got blocked, ScrapeDrive's advanced tier worked, and now it remembers — every future scrape of that domain skips straight to what works.
 
 ---
 
-A CLI that scrapes web pages through multiple providers, picks the cheapest one that works, and remembers what worked per domain. It also extracts structured data from listing pages using pattern detection and optional LLM assistance.
+**scrape-gateway is a unified interface to multiple scraping providers.** You write `sg url <anything>` and it figures out which provider to use, handles failures, validates the content isn't a Cloudflare challenge page, and remembers what worked per domain. It also extracts structured data from listing pages, but the gateway is the core.
 
 ## Why this exists
 
-Scraping a single URL is easy. Scraping thousands of URLs across different sites is not, because:
+You have 3-4 scraping APIs. Each has its own SDK, its own auth, its own quirks. Some sites work with free HTTP requests. Some need residential proxies. Some need full browser rendering. You end up writing if/else chains, retry logic, and provider-switching code for every project.
 
-- **Sites block differently.** Some block raw HTTP, some block cheap proxies, some need full browser rendering. You end up switching between 3-4 scraping APIs manually.
-- **You waste money.** Paid providers charge per request. If a free provider works for a site, you shouldn't be paying for it.
-- **You repeat mistakes.** Yesterday you learned that site X needs ScrapeDrive's advanced tier. Today you've forgotten and try the standard tier again, wasting a request.
-- **Extracting data is a separate problem.** You get the HTML, then you write custom BeautifulSoup code for every site to pull out the product cards or article lists.
+`sg` is that code, written once:
 
-`sg` solves all of these:
-
-1. **Tries providers cheapest-first**, falling back to more expensive ones only when cheaper ones fail.
-2. **Validates content**, not just HTTP status — catches Cloudflare challenge pages, captchas, and "enable JavaScript" placeholders that return 200 OK.
-3. **Remembers what worked** per domain in a local SQLite database. Next time you scrape the same site, it skips straight to the provider that succeeded.
-4. **Extracts structured data** from repeated page elements (product cards, article lists, search results) as JSON or CSV, with optional LLM-powered field naming.
+1. **One interface, many providers.** 7 providers (3 free, 4 paid) behind a single `sg url` command. Add your API keys and the router handles the rest.
+2. **Cheapest-first routing.** Free providers are tried before paid ones. You only pay when the free ones fail.
+3. **Content validation.** A 200 OK doesn't mean success — the page might be a Cloudflare challenge, a captcha wall, or a "please enable JavaScript" placeholder. `sg` catches all of these and retries with the next provider.
+4. **Domain memory.** After one successful scrape, `sg` remembers which provider and tier worked for that domain. Next scrape skips the trial-and-error entirely.
+5. **Structured extraction.** Once you have the HTML, `sg extract` pulls structured data (JSON/CSV) from repeated page elements — product cards, article lists, search results — with optional LLM-powered pattern picking.
 
 ## Quick start
 
