@@ -1283,9 +1283,9 @@ def providers():
     Examples:
       sg providers
     """
-    from .discovery import EXTENSIONS_DIR, discover_providers
+    from .discovery import EXTENSIONS_DIR, discover_providers_with_sources
 
-    available = discover_providers()
+    available = discover_providers_with_sources()
     if not available:
         console.print("[red]No providers found.[/]")
         raise typer.Exit(1)
@@ -1296,21 +1296,7 @@ def providers():
     table.add_column("Capabilities")
     table.add_column("Source", style="dim")
 
-    from .discovery import _builtin_providers, _entrypoint_providers, _local_providers
-
-    builtin_names = set(_builtin_providers())
-    ep_names = set(_entrypoint_providers())
-    local_names = set(_local_providers())
-
-    for name, cls in sorted(available.items(), key=lambda x: x[1].cost_rank):
-        if name in local_names:
-            source = str(EXTENSIONS_DIR)
-        elif name in ep_names:
-            source = "pip package"
-        elif name in builtin_names:
-            source = "built-in"
-        else:
-            source = "unknown"
+    for name, (cls, source) in sorted(available.items(), key=lambda x: x[1][0].cost_rank):
         caps = ", ".join(sorted(cls.capabilities)) if cls.capabilities else "html"
         table.add_row(name, str(cls.cost_rank), caps, source)
 

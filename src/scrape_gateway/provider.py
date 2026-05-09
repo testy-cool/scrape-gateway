@@ -9,6 +9,7 @@ class ProviderAdapter(ABC):
     name: str
     cost_rank: int = 100
     capabilities: frozenset[ProviderCapability] = frozenset({"html"})
+    install_requires: list[str] = []
 
     def can_handle(self, request: ScrapeRequest) -> bool:
         if request.render_js and "render_js" not in self.capabilities:
