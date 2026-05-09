@@ -13,7 +13,24 @@ from .config import StrategyConfig
 from .models import ScrapeRequest
 from .router import ScrapeGateway
 
-app = typer.Typer(help="Scrape Gateway: cache, route, escalate, remember.")
+app = typer.Typer(help="""Scrape Gateway — a CLI that scrapes web pages through multiple providers,
+picks the cheapest one that works, and remembers what worked per domain.
+
+Core idea: you shouldn't have to think about which scraping API to use,
+or retry manually when one gets blocked. sg handles provider fallback,
+content validation (catches Cloudflare/captcha pages), tier escalation,
+and domain memory automatically.
+
+Commands:
+  url       Scrape a single page
+  run       Batch scrape from a file of URLs
+  links     Find and index all links on a page
+  follow    Jump to a link by its index number
+  detect    Find repeated elements (product cards, article lists, etc.)
+  extract   Pull structured data (JSON/CSV) from those repeated elements
+  recipe    Replay a saved scrape+extract workflow from a YAML file
+  history   See how a page changed across scrapes
+  selftest  Verify the tool works against safe public URLs""")
 console = Console(stderr=True)
 
 
@@ -109,7 +126,22 @@ def url(
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
 ) -> None:
-    """Scrape one URL through the gateway."""
+    """Scrape one URL through the gateway.
+
+    Tries providers from cheapest to most expensive until one succeeds.
+    Results are cached locally so repeat scrapes are instant and free.
+    Domain memory remembers which provider worked, so next time it
+    skips straight to the winner.
+
+    Good for: quick one-off scrapes, testing if a site is scrapeable,
+    getting raw HTML/markdown for analysis.
+
+    Examples:
+      sg url https://example.com
+      sg url https://example.com --render-js     # JS-heavy SPA
+      sg url https://example.com -p scrapedrive  # force a provider
+      sg url https://example.com --no-cache      # fresh scrape
+    """
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -152,7 +184,19 @@ def run(
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
 ) -> None:
-    """Scrape URLs from a text file, one URL per line."""
+    """Scrape URLs from a text file, one URL per line.
+
+    Scrapes each URL through the gateway and shows a summary table.
+    Uses the same provider fallback and caching as 'sg url'.
+
+    Good for: scraping a known list of pages in bulk. If you also
+    need to extract data from each page, use 'sg recipe' instead —
+    it combines scraping and extraction in one step.
+
+    Examples:
+      sg run urls.txt
+      sg run urls.txt --render-js -p scrapedrive
+    """
 
     async def execute() -> None:
         gateway = _build_gateway(provider)
@@ -331,7 +375,23 @@ def links(
     output_format: str = typer.Option("rich", "--format", "-f", help="rich|compact|json"),
     limit: int = typer.Option(0, "--limit", "-n", help="Max links per directory in compact mode (0=all)"),
 ) -> None:
-    """Extract and group links from a page by semantic location."""
+    """Extract and group links from a page by semantic location.
+
+    Finds all links on a page, assigns each a numbered index, and
+    groups them by where they appear (navigation, main content,
+    footer, sidebar). Use 'sg follow <url> <index>' to scrape
+    a specific link by its number.
+
+    Good for: exploring a site's structure, finding pagination links,
+    discovering content URLs before bulk extraction. The JSON format
+    pipes cleanly to jq; compact format is optimized for LLMs.
+
+    Examples:
+      sg links https://example.com             # rich table
+      sg links https://example.com -f compact  # tree view for LLMs
+      sg links https://example.com -f json     # pipe to jq
+      sg links https://example.com --limit 20  # first 20 only
+    """
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -384,7 +444,20 @@ def follow(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     no_cache: bool = typer.Option(False, "--no-cache"),
 ) -> None:
-    """Scrape a page, pick a link by index, then scrape that link."""
+    """Scrape a page, pick a link by index, then scrape that link.
+
+    Two scrapes in one command: first it loads the page to get the
+    link list (from cache if available), then scrapes the link you
+    picked by index number. Use 'sg links' first to see the indices.
+
+    Good for: navigating a site step by step — load a page, see its
+    links, follow one, see that page's links, follow another. Like
+    browsing, but from the terminal.
+
+    Examples:
+      sg links https://example.com         # see link indices
+      sg follow https://example.com 3      # scrape link #3
+    """
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -487,7 +560,24 @@ def detect(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     no_cache: bool = typer.Option(False, "--no-cache"),
 ) -> None:
-    """Detect repeated elements and data patterns in a page."""
+    """Detect repeated elements and data patterns in a page.
+
+    Scans the HTML for elements that repeat (product cards, article
+    lists, table rows, nav items) and reports what it finds: the CSS
+    selector, how many times it repeats, and a sample of the content.
+    Also spots prices, dates, and emails.
+
+    Good for: figuring out what's on a page before extracting.
+    'sg detect' is the reconnaissance step — it tells you what
+    patterns exist. Then 'sg extract' pulls the actual data.
+
+    Not useful for: pages that need JavaScript to render (the
+    patterns won't be in the raw HTML). Use --render-js.
+
+    Examples:
+      sg detect https://books.toscrape.com
+      sg detect https://example.com --render-js
+    """
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -694,7 +784,32 @@ def extract(
     output_format: str = typer.Option("json", "--format", "-f", help="json|csv|rich"),
     limit: int = typer.Option(0, "--limit", "-n", help="Max rows (0=all)"),
 ) -> None:
-    """Extract structured data from repeated page elements."""
+    """Extract structured data from repeated page elements.
+
+    The main data extraction command. Finds repeated elements on a
+    page (product cards, article lists, search results) and pulls
+    structured data from each one — titles, prices, images, links,
+    dates — as JSON, CSV, or a rich table.
+
+    By default, an LLM (via your 'llm' CLI config) picks the best
+    pattern and gives fields semantic names. This costs a few cents
+    the first time, then it's cached per domain forever — repeat
+    extractions are instant and free.
+
+    Good for: turning any listing page into structured data without
+    writing a custom scraper. Works on product pages, search results,
+    blog feeds, directories — anything with repeated elements.
+
+    Not useful for: single-item pages (there's nothing repeated to
+    detect), or heavily JS-rendered pages (use --render-js).
+
+    Examples:
+      sg extract https://books.toscrape.com              # auto-detect
+      sg extract https://books.toscrape.com -f csv       # CSV output
+      sg extract https://books.toscrape.com -s "ol > li" # manual selector
+      sg extract https://books.toscrape.com --no-llm     # skip LLM
+      sg extract https://books.toscrape.com -m proxy-pro # use better model
+    """
 
     async def run() -> None:
         from .config import load_config
@@ -826,7 +941,22 @@ def history(
     target_url: str,
     limit: int = typer.Option(20, "--limit", "-n"),
 ) -> None:
-    """Show scrape history and structural changes for a URL."""
+    """Show scrape history and structural changes for a URL.
+
+    Every time you scrape a URL, sg fingerprints the page (title,
+    link count, headings, text length) and stores it. This command
+    shows the timeline: when you scraped, which provider worked,
+    and what changed between scrapes (new links added, title changed,
+    content grew/shrank).
+
+    Good for: monitoring if a page changed since last time, catching
+    layout changes that might break extraction, or building a history
+    of a page over time.
+
+    Examples:
+      sg history https://example.com
+      sg history https://example.com -n 5    # last 5 scrapes only
+    """
     from .config import load_config
     from .memory import DomainMemory
 
@@ -890,6 +1020,18 @@ def recipe(
 ) -> None:
     """Run a saved scrape+extract recipe from a YAML file.
 
+    Saves you from retyping the same sg extract command with all its
+    flags every time. Write the URLs, scrape settings, and extraction
+    config once as YAML, then replay with one command. Results from
+    multiple URLs are combined into a single output file.
+
+    Good for: monitoring a product listing regularly, scraping the
+    same set of sites with specific settings you don't want to
+    remember, or sharing a scraping workflow with someone else —
+    hand them a YAML file instead of a bash command.
+
+    Not useful for: one-off scrapes. Just use 'sg extract' directly.
+
     Recipe format:
 
         url: https://books.toscrape.com       # single URL
@@ -911,6 +1053,11 @@ def recipe(
           no_llm: false
 
         output: results.json                    # optional output file
+
+    Examples:
+      sg recipe books.yml                  # run the recipe
+      sg recipe books.yml --dry-run        # preview without scraping
+      sg recipe books.yml -o results.csv   # override output path
     """
     import json
 
@@ -1067,7 +1214,18 @@ def recipe(
 
 @app.command()
 def selftest() -> None:
-    """Run a live smoke test against safe public URLs."""
+    """Run a live smoke test against safe public URLs.
+
+    Scrapes a few known-safe sites (example.com, httpbin.org) to
+    verify that sg is installed correctly and can make HTTP requests.
+    Uses only the free raw_http provider, no API keys needed.
+
+    Good for: checking that sg works after installation or config
+    changes. Not a full test suite — run 'pytest' for that.
+
+    Examples:
+      sg selftest
+    """
 
     tests = [
         ("https://example.com", "clean static page"),
