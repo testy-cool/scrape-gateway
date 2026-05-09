@@ -1,6 +1,6 @@
 ---
 name: scrape-gateway
-description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sg", "add a scraping provider", "write an sg extension", "sgw url", "sgw extract", "sgw recipe", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, extract structured data from listing pages, or build custom scraping providers.
+description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sgw", "add a scraping provider", "write an sgw extension", "sgw url", "sgw extract", "sgw recipe", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, extract structured data from listing pages, or build custom scraping providers.
 ---
 
 # scrape-gateway (sgw)
