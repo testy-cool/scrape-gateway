@@ -35,10 +35,8 @@ You have 3-4 scraping APIs. Each has its own SDK, its own auth, its own quirks. 
 # Install
 git clone https://github.com/testy-cool/scrape-gateway.git
 cd scrape-gateway
-python -m venv .venv
-source .venv/bin/activate
 pip install -e .
-cp .env.example .env   # add your API keys
+cp .env.example .env   # add your API keys (optional — free providers work without any)
 
 # Verify it works (no API keys needed)
 sgw selftest

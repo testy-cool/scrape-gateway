@@ -18,12 +18,12 @@ Unified CLI for scraping web pages through multiple providers with cheapest-firs
 ```bash
 git clone https://github.com/testy-cool/scrape-gateway.git
 cd scrape-gateway
-uv tool install -e . --with wreq --with curl_cffi
+pip install -e .
 cp .env.example .env  # add your API keys
 sgw selftest
 ```
 
-The `--with wreq --with curl_cffi` installs free anti-detect HTTP providers. Without them, only `raw_http` (plain httpx) works for free scraping.
+wreq and curl_cffi (free anti-detect HTTP) are included as required dependencies.
 
 ## Providers
 
