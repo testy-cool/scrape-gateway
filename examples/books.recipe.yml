@@ -1,0 +1,13 @@
+# Extract book listings from books.toscrape.com
+# Run: sg recipe examples/books.recipe.yml
+
+urls:
+  - https://books.toscrape.com
+  - https://books.toscrape.com/catalogue/page-2.html
+
+extract:
+  selector: "ol.row > li"
+  format: json
+  limit: 5
+
+output: output/books.json

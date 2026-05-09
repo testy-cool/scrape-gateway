@@ -883,6 +883,189 @@ def history(
 
 
 @app.command()
+def recipe(
+    recipe_file: Path,
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would run without scraping"),
+    output_file: str | None = typer.Option(None, "--output", "-o", help="Override output file path"),
+) -> None:
+    """Run a saved scrape+extract recipe from a YAML file.
+
+    Recipe format:
+
+        url: https://books.toscrape.com       # single URL
+        # OR
+        urls:                                   # multiple URLs
+          - https://books.toscrape.com
+          - https://books.toscrape.com/catalogue/page-2.html
+
+        scrape:                                 # optional scrape settings
+          provider: scrapedrive
+          country: us
+          render_js: true
+
+        extract:                                # optional extraction step
+          selector: "ol.row > li"
+          format: json                          # json|csv
+          limit: 20
+          model: proxy-flash-lite
+          no_llm: false
+
+        output: results.json                    # optional output file
+    """
+    import json
+
+    import yaml
+
+    if not recipe_file.exists():
+        console.print(f"[red]error:[/] recipe file not found: {recipe_file}")
+        raise typer.Exit(1)
+
+    spec = yaml.safe_load(recipe_file.read_text())
+    if not spec:
+        console.print(f"[red]error:[/] empty recipe file: {recipe_file}")
+        raise typer.Exit(1)
+
+    urls = spec.get("urls", [])
+    if not urls and spec.get("url"):
+        urls = [spec["url"]]
+    if not urls:
+        console.print("[red]error:[/] recipe must have 'url' or 'urls'")
+        raise typer.Exit(1)
+
+    scrape_opts = spec.get("scrape", {})
+    extract_opts = spec.get("extract", {})
+    dest = output_file or spec.get("output")
+    do_extract = bool(extract_opts) or "extract" in spec
+
+    if dry_run:
+        console.print(f"\n[bold]Recipe:[/] {recipe_file.name}")
+        console.print(f"  URLs: {len(urls)}")
+        for u in urls[:5]:
+            console.print(f"    [cyan]{u}[/]")
+        if len(urls) > 5:
+            console.print(f"    [dim]... and {len(urls) - 5} more[/]")
+        if scrape_opts:
+            console.print(f"  Scrape: {scrape_opts}")
+        if do_extract:
+            console.print(f"  Extract: {extract_opts}")
+        if dest:
+            console.print(f"  Output: {dest}")
+        else:
+            console.print("  Output: stdout")
+        raise typer.Exit(0)
+
+    async def run_recipe() -> None:
+        from .config import load_config
+        from .memory import DomainMemory
+
+        gateway = _build_gateway(scrape_opts.get("provider"))
+        config = load_config()
+        memory = DomainMemory(db_path=config.memory_path)
+
+        all_rows: list[dict] = []
+        fmt = extract_opts.get("format", "json")
+        sel = extract_opts.get("selector")
+        pick = extract_opts.get("pick", 1)
+        no_llm = extract_opts.get("no_llm", False)
+        llm_model = extract_opts.get("model")
+        row_limit = extract_opts.get("limit", 0)
+
+        for i, target_url in enumerate(urls, 1):
+            if not target_url.startswith(("http://", "https://")):
+                target_url = f"https://{target_url}"
+
+            label = f"[{i}/{len(urls)}] {target_url}"
+            with console.status(f"[bold cyan]{label}...", spinner="dots"):
+                result = await gateway.scrape(
+                    ScrapeRequest(
+                        target_url,
+                        country=scrape_opts.get("country"),
+                        render_js=scrape_opts.get("render_js", False),
+                        premium=scrape_opts.get("premium", False),
+                        mobile=scrape_opts.get("mobile", False),
+                    ),
+                    use_cache=not scrape_opts.get("no_cache", False),
+                    use_memory=not scrape_opts.get("no_cache", False),
+                )
+
+            if not result.success or not result.html:
+                console.print(f"  [red]FAIL[/]  {target_url} — {result.failure_reason or 'empty'}")
+                continue
+
+            console.print(f"  [green]OK[/]    {target_url} — {len(result.html):,} chars")
+
+            if not do_extract:
+                continue
+
+            domain = DomainMemory.domain_for_url(result.url)
+            field_map: dict[str, str] = {}
+
+            if sel:
+                rows, desc = _extract_rows(result.html, sel)
+            elif not no_llm:
+                cached = memory.get_extraction(domain)
+                if cached:
+                    sel_cached, field_map = cached
+                    rows, desc = _extract_rows(result.html, sel_cached)
+                    if not rows:
+                        memory.learn_extraction(domain, "", {})
+                        rows, desc = _extract_rows(result.html, pick=pick)
+                else:
+                    patterns = _detect_patterns(result.html)
+                    repeated = patterns.get("repeated", [])
+                    if repeated:
+                        llm_result = _llm_pick_pattern(repeated, result.html, domain, llm_model)
+                        if llm_result:
+                            llm_sel, field_map = llm_result
+                            memory.learn_extraction(domain, llm_sel, field_map)
+                            rows, desc = _extract_rows(result.html, llm_sel)
+                        else:
+                            rows, desc = _extract_rows(result.html, pick=pick)
+                    else:
+                        rows, desc = [], "no repeated elements"
+            else:
+                rows, desc = _extract_rows(result.html, pick=pick)
+
+            rows = _apply_field_map(rows, field_map)
+            if row_limit:
+                rows = rows[:row_limit]
+
+            console.print(f"         [dim]{len(rows)} rows — {desc}[/]")
+
+            for row in rows:
+                row["_source_url"] = target_url
+            all_rows.extend(rows)
+
+        if not do_extract:
+            console.print(f"\n[bold]{len(urls)}[/] URLs scraped.")
+            raise typer.Exit(0)
+
+        console.print(f"\n[bold]{len(all_rows)}[/] total rows from [bold]{len(urls)}[/] URLs")
+
+        output_text = ""
+        if fmt == "csv":
+            import csv
+            import io
+
+            all_keys = list(dict.fromkeys(k for r in all_rows for k in r))
+            out = io.StringIO()
+            writer = csv.DictWriter(out, fieldnames=all_keys)
+            writer.writeheader()
+            writer.writerows(all_rows)
+            output_text = out.getvalue()
+        else:
+            output_text = json.dumps(all_rows, indent=2, ensure_ascii=False)
+
+        if dest:
+            Path(dest).write_text(output_text)
+            console.print(f"Saved to [cyan]{dest}[/]")
+        else:
+            print(output_text, end="")
+
+    asyncio.run(run_recipe())
+
+
+@app.command()
 def selftest() -> None:
     """Run a live smoke test against safe public URLs."""
 
