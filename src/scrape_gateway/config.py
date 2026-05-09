@@ -9,6 +9,10 @@ import yaml
 
 CONFIG_FILENAMES = ["scrape-gateway.yml", "scrape-gateway.yaml"]
 
+# Project root: the directory containing pyproject.toml / .env / scrape-gateway.yml.
+# Resolved from this file's location (src/scrape_gateway/config.py → ../../..).
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 @dataclass(slots=True)
 class ProviderConfig:
@@ -54,7 +58,14 @@ def _parse_ttl(value: str | int) -> int:
 
 
 def _load_dotenv(path: Path | None = None) -> None:
-    dotenv = path or Path(".env")
+    if path:
+        dotenv = path
+    elif Path(".env").exists():
+        dotenv = Path(".env")
+    elif (_PROJECT_ROOT / ".env").exists():
+        dotenv = _PROJECT_ROOT / ".env"
+    else:
+        return
     if not dotenv.exists():
         return
     for line in dotenv.read_text().splitlines():
@@ -76,7 +87,12 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
     else:
         config_path = None
         for name in CONFIG_FILENAMES:
+            # Check CWD first, then project root
             candidate = Path(name)
+            if candidate.exists():
+                config_path = candidate
+                break
+            candidate = _PROJECT_ROOT / name
             if candidate.exists():
                 config_path = candidate
                 break

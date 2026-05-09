@@ -42,7 +42,7 @@ class WreqProvider(ProviderAdapter):
             if proxy_url:
                 from wreq import Proxy
 
-                kwargs["proxies"] = [Proxy(url=proxy_url)]
+                kwargs["proxies"] = [Proxy.all(proxy_url)]
             client = Client(**kwargs)
             response = await client.get(request.url, headers=request.headers or None)
             status_code = response.status.as_int()
