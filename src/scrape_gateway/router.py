@@ -96,54 +96,27 @@ def _check_hreflang(html: str, url: str, country: str | None) -> dict | None:
                 result["available_countries"] = available
     return result
 
-PROVIDER_CLASSES: dict[str, str] = {
-    "raw_http": "RawHttpProvider",
-    "wreq": "WreqProvider",
-    "curl_cffi": "CurlCffiProvider",
-    "scrapedrive": "ScrapeDriveProvider",
-    "scrape_do": "ScrapeDoProvider",
-    "scrapingbee": "ScrapingBeeProvider",
-    "scraperapi": "ScraperApiProvider",
-}
-
-
 def _default_providers() -> list[ProviderAdapter]:
-    from .providers import (
-        CurlCffiProvider,
-        RawHttpProvider,
-        ScrapeDoProvider,
-        ScrapeDriveProvider,
-        ScraperApiProvider,
-        ScrapingBeeProvider,
-        WreqProvider,
-    )
+    from .discovery import discover_providers
 
-    return [
-        RawHttpProvider(),
-        WreqProvider(),
-        CurlCffiProvider(),
-        ScrapeDriveProvider(),
-        ScrapeDoProvider(),
-        ScrapingBeeProvider(),
-        ScraperApiProvider(),
-    ]
+    return [cls() for cls in discover_providers().values()]
 
 
 def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
     if not config.providers:
         return _default_providers()
 
-    import importlib
+    from .discovery import discover_providers
 
-    module = importlib.import_module(".providers", package="scrape_gateway")
+    available = discover_providers()
     result = []
     for pc in config.providers:
         if not pc.enabled:
             continue
-        class_name = PROVIDER_CLASSES.get(pc.name)
-        if not class_name:
+        cls = available.get(pc.name)
+        if not cls:
+            _log(f"  [config] unknown provider: {pc.name}")
             continue
-        cls = getattr(module, class_name)
         result.append(cls(**pc.options))
     return result
 

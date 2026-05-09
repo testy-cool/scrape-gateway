@@ -1,0 +1,21 @@
+# Official scrape-gateway extension registry.
+# Submit a PR to add your extension.
+# Extensions must subclass ProviderAdapter from scrape_gateway.
+
+- name: sg-amazon-paapi
+  description: Amazon Product Advertising API — structured product data, no proxies needed
+  install: pip install sg-amazon-paapi
+  url: https://github.com/scrape-gateway/sg-amazon-paapi
+  status: planned
+
+- name: sg-playwright
+  description: Full browser rendering via Playwright — JS-heavy sites, SPAs, screenshots
+  install: pip install sg-playwright
+  url: https://github.com/scrape-gateway/sg-playwright
+  status: planned
+
+- name: sg-selenium
+  description: Selenium with undetected-chromedriver — stealth browser for anti-bot sites
+  install: pip install sg-selenium
+  url: https://github.com/scrape-gateway/sg-selenium
+  status: planned

@@ -1267,3 +1267,131 @@ def selftest() -> None:
         raise typer.Exit(code=1 if failed else 0)
 
     asyncio.run(run_tests())
+
+
+@app.command()
+def providers():
+    """List all available providers — built-in, installed packages, and local extensions.
+
+    Good for:
+      Checking which providers sg can see, whether an extension loaded,
+      and what capabilities each provider has (country, JS rendering, etc.)
+
+    Not useful for:
+      Changing provider order — that's in scrape-gateway.yml.
+
+    Examples:
+      sg providers
+    """
+    from .discovery import EXTENSIONS_DIR, discover_providers
+
+    available = discover_providers()
+    if not available:
+        console.print("[red]No providers found.[/]")
+        raise typer.Exit(1)
+
+    table = Table(title="Available Providers", show_lines=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Cost", justify="right")
+    table.add_column("Capabilities")
+    table.add_column("Source", style="dim")
+
+    from .discovery import _builtin_providers, _entrypoint_providers, _local_providers
+
+    builtin_names = set(_builtin_providers())
+    ep_names = set(_entrypoint_providers())
+    local_names = set(_local_providers())
+
+    for name, cls in sorted(available.items(), key=lambda x: x[1].cost_rank):
+        if name in local_names:
+            source = str(EXTENSIONS_DIR)
+        elif name in ep_names:
+            source = "pip package"
+        elif name in builtin_names:
+            source = "built-in"
+        else:
+            source = "unknown"
+        caps = ", ".join(sorted(cls.capabilities)) if cls.capabilities else "html"
+        table.add_row(name, str(cls.cost_rank), caps, source)
+
+    console.print(table)
+    console.print(f"\n[dim]Extensions directory: {EXTENSIONS_DIR}[/]")
+    console.print("[dim]Drop a .py file there with a ProviderAdapter subclass to add a provider.[/]")
+    console.print("[dim]sg extensions                # browse the official extension registry[/]")
+
+
+REGISTRY_URL = "https://raw.githubusercontent.com/testy-cool/scrape-gateway/main/registry.yml"
+
+
+@app.command()
+def extensions(
+    install: str | None = typer.Argument(None, help="Extension name to install"),
+):
+    """Browse or install extensions from the official registry.
+
+    Good for:
+      Discovering community providers, installing them in one command.
+      The registry is curated — only reviewed extensions are listed.
+
+    Examples:
+      sg extensions              # list available extensions
+      sg extensions sg-playwright  # install an extension by name
+    """
+    import subprocess
+
+    import httpx
+    import yaml
+
+    entries = None
+    try:
+        resp = httpx.get(REGISTRY_URL, timeout=10, follow_redirects=True)
+        resp.raise_for_status()
+        entries = yaml.safe_load(resp.text) or []
+    except Exception:
+        pass
+    if entries is None:
+        from .config import _PROJECT_ROOT
+        local = _PROJECT_ROOT / "registry.yml"
+        if local.exists():
+            entries = yaml.safe_load(local.read_text()) or []
+        else:
+            console.print("[red]Failed to fetch registry and no local copy found.[/]")
+            raise typer.Exit(1) from None
+
+    if install:
+        match = next((e for e in entries if e["name"] == install), None)
+        if not match:
+            console.print(f"[red]Extension '{install}' not found in registry.[/]")
+            raise typer.Exit(1)
+        if match.get("status") == "planned":
+            console.print(f"[yellow]{install} is planned but not published yet.[/]")
+            console.print(f"[dim]Track progress: {match.get('url', 'n/a')}[/]")
+            raise typer.Exit(1)
+        cmd = match["install"]
+        console.print(f"[cyan]Running: {cmd}[/]")
+        subprocess.run(cmd.split(), check=False)
+        return
+
+    from .discovery import discover_providers
+
+    installed = set(discover_providers())
+
+    table = Table(title="Extension Registry", show_lines=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+    table.add_column("Status")
+    table.add_column("Install")
+
+    for entry in entries:
+        name = entry["name"]
+        if name in installed:
+            status = "[green]installed[/]"
+        elif entry.get("status") == "planned":
+            status = "[yellow]planned[/]"
+        else:
+            status = "[dim]available[/]"
+        table.add_row(name, entry.get("description", ""), status, entry.get("install", ""))
+
+    console.print(table)
+    console.print(f"\n[dim]Install: sg extensions <name>[/]")
+    console.print(f"[dim]Submit yours: {REGISTRY_URL.replace('/main/registry.yml', '')}[/]")
