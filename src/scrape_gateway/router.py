@@ -106,7 +106,7 @@ def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
     if not config.providers:
         return _default_providers()
 
-    from .discovery import BUILTIN_NAMES, discover_providers
+    from .discovery import discover_providers
 
     available = discover_providers()
     configured_names = set()
@@ -121,7 +121,7 @@ def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
             continue
         result.append(cls(**pc.options))
     for name, cls in available.items():
-        if name not in configured_names and name not in BUILTIN_NAMES:
+        if name not in configured_names:
             result.append(cls())
     return result
 

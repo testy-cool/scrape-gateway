@@ -1389,3 +1389,114 @@ def extensions(
     console.print(table)
     console.print(f"\n[dim]Install: sgw extensions <name>[/]")
     console.print(f"[dim]Submit yours: {REGISTRY_URL.replace('/main/registry.yml', '')}[/]")
+
+
+# -- Provider API key env vars ------------------------------------------------
+
+PROVIDER_API_KEYS: dict[str, tuple[str, str]] = {
+    "scrapedrive": ("SCRAPEDRIVE_API_KEY", "https://scrapedrive.com"),
+    "scrape_do": ("SCRAPE_DO_TOKEN", "https://scrape.do"),
+    "scrapingbee": ("SCRAPINGBEE_API_KEY", "https://scrapingbee.com"),
+    "scraperapi": ("SCRAPERAPI_API_KEY", "https://scraperapi.com"),
+}
+
+
+@app.command()
+def setup():
+    """Interactive setup — choose which providers to activate and set API keys.
+
+    Writes scrape-gateway.yml and .env in the current directory.
+    Run this once after installing, or again to change your config.
+
+    Examples:
+      sgw setup
+    """
+    import os
+
+    import yaml
+
+    from .discovery import discover_providers
+
+    available = discover_providers()
+    if not available:
+        console.print("[red]No providers found.[/]")
+        raise typer.Exit(1)
+
+    console.print("\n[bold]sgw setup[/] — choose which providers to activate\n")
+
+    free_providers = []
+    paid_providers = []
+    for name, cls in sorted(available.items(), key=lambda x: x[1].cost_rank):
+        if name in PROVIDER_API_KEYS:
+            paid_providers.append((name, cls))
+        else:
+            free_providers.append((name, cls))
+
+    enabled = []
+    env_vars: dict[str, str] = {}
+
+    console.print("[bold green]Free providers[/] (no API key needed):")
+    for name, cls in free_providers:
+        caps = ", ".join(sorted(cls.capabilities))
+        answer = input(f"  Enable {name} ({caps})? [Y/n] ").strip().lower()
+        if not answer or answer in ("y", "yes"):
+            enabled.append(name)
+            console.print(f"    [green]✓[/] {name}")
+        else:
+            console.print(f"    [dim]✗ {name}[/]")
+
+    console.print(f"\n[bold yellow]Paid providers[/] (need API keys):")
+    for name, cls in paid_providers:
+        env_var, signup_url = PROVIDER_API_KEYS[name]
+        caps = ", ".join(sorted(cls.capabilities))
+        existing_key = os.getenv(env_var, "")
+        hint = " [dim](key already set)[/]" if existing_key else ""
+        answer = input(f"  Enable {name} ({caps})?{hint} [y/N] ").strip().lower()
+        if answer in ("y", "yes"):
+            if existing_key:
+                use_existing = input(f"    Keep existing {env_var}? [Y/n] ").strip().lower()
+                if not use_existing or use_existing in ("y", "yes"):
+                    env_vars[env_var] = existing_key
+                else:
+                    key = input(f"    {env_var}: ").strip()
+                    if key:
+                        env_vars[env_var] = key
+            else:
+                console.print(f"    [dim]Sign up: {signup_url}[/]")
+                key = input(f"    {env_var}: ").strip()
+                if key:
+                    env_vars[env_var] = key
+            enabled.append(name)
+            console.print(f"    [green]✓[/] {name}")
+        else:
+            console.print(f"    [dim]✗ {name}[/]")
+
+    if not enabled:
+        console.print("\n[red]No providers enabled. At least one is required.[/]")
+        raise typer.Exit(1)
+
+    config = {
+        "providers": [{"name": n, "enabled": True} for n in enabled],
+        "cache": {"ttl": "24h"},
+        "strategy": {"mode": "cheapest_successful"},
+    }
+
+    config_path = Path("scrape-gateway.yml")
+    config_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+    console.print(f"\n[green]Wrote {config_path}[/]")
+
+    if env_vars:
+        env_path = Path(".env")
+        existing_lines = []
+        if env_path.exists():
+            existing_lines = [
+                line for line in env_path.read_text().splitlines()
+                if not any(line.startswith(k + "=") for k in env_vars)
+            ]
+        all_lines = existing_lines + [f'{k}="{v}"' for k, v in env_vars.items()]
+        env_path.write_text("\n".join(all_lines) + "\n")
+        console.print(f"[green]Wrote {env_path}[/]")
+
+    console.print(f"\n[bold]Ready![/] {len(enabled)} providers active.")
+    console.print("[dim]sgw selftest    # verify everything works[/]")
+    console.print("[dim]sgw providers   # see what's loaded[/]")

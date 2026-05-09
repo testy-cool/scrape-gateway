@@ -10,11 +10,6 @@ from .provider import ProviderAdapter
 
 EXTENSIONS_DIR = Path("~/.config/scrape-gateway/providers").expanduser()
 
-BUILTIN_NAMES = frozenset({
-    "raw_http", "wreq", "curl_cffi", "scrapedrive",
-    "scrape_do", "scrapingbee", "scraperapi",
-})
-
 
 def _check_deps(cls: type[ProviderAdapter]) -> bool:
     """Check if a provider's dependencies are installed. Prompt to install if not."""
@@ -40,7 +35,7 @@ def _check_deps(cls: type[ProviderAdapter]) -> bool:
         return False
 
     try:
-        answer = input(f"  Install into sg's environment? [Y/n] ").strip().lower()
+        answer = input(f"  Install into sgw's environment? [Y/n] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -75,7 +70,7 @@ def _entrypoint_providers() -> dict[str, type[ProviderAdapter]]:
         try:
             cls = ep.load()
             if isinstance(cls, type) and issubclass(cls, ProviderAdapter):
-                if cls.name in BUILTIN_NAMES or _check_deps(cls):
+                if _check_deps(cls):
                     result[cls.name] = cls
         except Exception:  # noqa: BLE001
             print(f"  [extensions] failed to load entry point: {ep.name}", file=sys.stderr)
@@ -121,8 +116,7 @@ def discover_providers_with_sources() -> dict[str, tuple[type[ProviderAdapter], 
     """Like discover_providers, but also returns the source of each provider."""
     result = {}
     for name, cls in _entrypoint_providers().items():
-        source = "built-in" if name in BUILTIN_NAMES else "pip package"
-        result[name] = (cls, source)
+        result[name] = (cls, "package")
     for name, cls in _local_providers().items():
         result[name] = (cls, str(EXTENSIONS_DIR))
     return result

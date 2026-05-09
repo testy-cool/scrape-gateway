@@ -12,13 +12,17 @@ from pathlib import Path
 import pytest
 
 from scrape_gateway.discovery import (
-    BUILTIN_NAMES,
     EXTENSIONS_DIR,
     _entrypoint_providers,
     _local_providers,
     discover_providers,
     discover_providers_with_sources,
 )
+
+SHIPPED_PROVIDERS = frozenset({
+    "raw_http", "wreq", "curl_cffi", "scrapedrive",
+    "scrape_do", "scrapingbee", "scraperapi",
+})
 from scrape_gateway.models import ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
 
@@ -73,37 +77,37 @@ class TestBuiltinProviders:
 
     def test_all_builtins_discovered(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             assert name in providers, f"built-in provider {name!r} not found via entry points"
 
     def test_builtin_names_match_class_names(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             cls = providers[name]
             assert cls.name == name
 
     def test_all_builtins_subclass_provider_adapter(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             cls = providers[name]
             assert issubclass(cls, ProviderAdapter)
 
     def test_all_builtins_have_cost_rank(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             cls = providers[name]
             assert isinstance(cls.cost_rank, int)
 
     def test_all_builtins_have_capabilities(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             cls = providers[name]
             assert isinstance(cls.capabilities, frozenset)
             assert "html" in cls.capabilities
 
     def test_all_builtins_have_async_scrape(self):
         providers = _entrypoint_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             cls = providers[name]
             assert inspect.iscoroutinefunction(cls.scrape)
 
@@ -124,15 +128,15 @@ class TestBuiltinProviders:
 class TestDiscovery:
     def test_discover_finds_all_builtins(self):
         providers = discover_providers()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             assert name in providers
 
-    def test_discover_with_sources_labels_builtins(self):
+    def test_discover_with_sources_labels_shipped(self):
         result = discover_providers_with_sources()
-        for name in BUILTIN_NAMES:
+        for name in SHIPPED_PROVIDERS:
             assert name in result
             _, source = result[name]
-            assert source == "built-in"
+            assert source == "package"
 
     def test_local_provider_from_file(self, monkeypatch, tmp_path):
         ext_file = tmp_path / "fake_provider.py"
