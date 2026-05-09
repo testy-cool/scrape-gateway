@@ -3,7 +3,7 @@
 # Extensions must subclass ProviderAdapter from scrape_gateway.
 #
 # Fields:
-#   name:        unique extension name (used in `sg extensions <name>`)
+#   name:        unique extension name (used in `sgw extensions <name>`)
 #   package:     PyPI package name (defaults to name if omitted)
 #   description: what it does, one line
 #   url:         source repo

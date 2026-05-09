@@ -22,7 +22,7 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.25", "ruff>=0.8", "respx>=0.22"]
 
 [project.scripts]
 scrape-gateway = "scrape_gateway.cli:app"
-sg = "scrape_gateway.cli:app"
+sgw = "scrape_gateway.cli:app"
 
 [project.entry-points."scrape_gateway.providers"]
 raw_http = "scrape_gateway.providers.raw_http:RawHttpProvider"

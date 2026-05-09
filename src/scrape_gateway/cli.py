@@ -17,7 +17,7 @@ app = typer.Typer(help="""Scrape Gateway — a CLI that scrapes web pages throug
 picks the cheapest one that works, and remembers what worked per domain.
 
 Core idea: you shouldn't have to think about which scraping API to use,
-or retry manually when one gets blocked. sg handles provider fallback,
+or retry manually when one gets blocked. sgw handles provider fallback,
 content validation (catches Cloudflare/captcha pages), tier escalation,
 and domain memory automatically.
 
@@ -45,40 +45,40 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
     console.print("\n[dim]---[/]")
     url_display = url or "<url>"
     if cmd == "url":
-        console.print(f"[dim]sg links {url_display}          # extract & index all links[/]")
-        console.print(f"[dim]sg detect {url_display}         # find repeated elements & data patterns[/]")
-        console.print(f"[dim]sg history {url_display}        # view change history[/]")
-        console.print(f"[dim]sg url {url_display} --render-js  # re-scrape with JS rendering[/]")
+        console.print(f"[dim]sgw links {url_display}          # extract & index all links[/]")
+        console.print(f"[dim]sgw detect {url_display}         # find repeated elements & data patterns[/]")
+        console.print(f"[dim]sgw history {url_display}        # view change history[/]")
+        console.print(f"[dim]sgw url {url_display} --render-js  # re-scrape with JS rendering[/]")
     elif cmd == "links":
         fmt = ctx.get("fmt", "rich")
         if fmt != "compact":
-            console.print(f"[dim]sg links {url_display} -f compact  # LLM-optimized tree output[/]")
+            console.print(f"[dim]sgw links {url_display} -f compact  # LLM-optimized tree output[/]")
         if fmt != "json":
-            console.print(f"[dim]sg links {url_display} -f json     # pipe to jq[/]")
-        console.print(f"[dim]sg follow {url_display} <id>        # scrape a link by index[/]")
-        console.print(f"[dim]sg detect {url_display}             # find repeated elements[/]")
+            console.print(f"[dim]sgw links {url_display} -f json     # pipe to jq[/]")
+        console.print(f"[dim]sgw follow {url_display} <id>        # scrape a link by index[/]")
+        console.print(f"[dim]sgw detect {url_display}             # find repeated elements[/]")
     elif cmd == "follow":
         followed = ctx.get("followed_url", url_display)
-        console.print(f"[dim]sg links {followed}          # extract links from followed page[/]")
-        console.print(f"[dim]sg detect {followed}         # find patterns in followed page[/]")
-        console.print(f"[dim]sg history {followed}        # view change history[/]")
+        console.print(f"[dim]sgw links {followed}          # extract links from followed page[/]")
+        console.print(f"[dim]sgw detect {followed}         # find patterns in followed page[/]")
+        console.print(f"[dim]sgw history {followed}        # view change history[/]")
     elif cmd == "detect":
-        console.print(f"[dim]sg extract {url_display}            # pull data from top pattern[/]")
-        console.print(f"[dim]sg extract {url_display} -s 'sel'   # extract with custom selector[/]")
-        console.print(f"[dim]sg links {url_display}              # see all links indexed[/]")
-        console.print(f"[dim]sg history {url_display}            # track changes over time[/]")
+        console.print(f"[dim]sgw extract {url_display}            # pull data from top pattern[/]")
+        console.print(f"[dim]sgw extract {url_display} -s 'sel'   # extract with custom selector[/]")
+        console.print(f"[dim]sgw links {url_display}              # see all links indexed[/]")
+        console.print(f"[dim]sgw history {url_display}            # track changes over time[/]")
     elif cmd == "extract":
-        console.print(f"[dim]sg detect {url_display}             # see all detected patterns[/]")
-        console.print(f"[dim]sg extract {url_display} -f csv     # CSV output[/]")
-        console.print(f"[dim]sg extract {url_display} -s 'sel'   # custom CSS selector[/]")
-        console.print(f"[dim]sg links {url_display}              # see all links indexed[/]")
+        console.print(f"[dim]sgw detect {url_display}             # see all detected patterns[/]")
+        console.print(f"[dim]sgw extract {url_display} -f csv     # CSV output[/]")
+        console.print(f"[dim]sgw extract {url_display} -s 'sel'   # custom CSS selector[/]")
+        console.print(f"[dim]sgw links {url_display}              # see all links indexed[/]")
     elif cmd == "history":
-        console.print(f"[dim]sg url {url_display} --no-cache     # fresh scrape to update history[/]")
-        console.print(f"[dim]sg detect {url_display}             # analyze current structure[/]")
-        console.print(f"[dim]sg links {url_display} -f compact   # LLM-optimized link tree[/]")
+        console.print(f"[dim]sgw url {url_display} --no-cache     # fresh scrape to update history[/]")
+        console.print(f"[dim]sgw detect {url_display}             # analyze current structure[/]")
+        console.print(f"[dim]sgw links {url_display} -f compact   # LLM-optimized link tree[/]")
     elif cmd == "selftest":
-        console.print(f"[dim]sg url <url>                   # scrape any URL[/]")
-        console.print(f"[dim]sg links <url> -f compact      # extract links for LLM[/]")
+        console.print(f"[dim]sgw url <url>                   # scrape any URL[/]")
+        console.print(f"[dim]sgw links <url> -f compact      # extract links for LLM[/]")
 
 
 def _print_result(result) -> None:
@@ -137,10 +137,10 @@ def url(
     getting raw HTML/markdown for analysis.
 
     Examples:
-      sg url https://example.com
-      sg url https://example.com --render-js     # JS-heavy SPA
-      sg url https://example.com -p scrapedrive  # force a provider
-      sg url https://example.com --no-cache      # fresh scrape
+      sgw url https://example.com
+      sgw url https://example.com --render-js     # JS-heavy SPA
+      sgw url https://example.com -p scrapedrive  # force a provider
+      sgw url https://example.com --no-cache      # fresh scrape
     """
 
     async def run() -> None:
@@ -187,15 +187,15 @@ def run(
     """Scrape URLs from a text file, one URL per line.
 
     Scrapes each URL through the gateway and shows a summary table.
-    Uses the same provider fallback and caching as 'sg url'.
+    Uses the same provider fallback and caching as 'sgw url'.
 
     Good for: scraping a known list of pages in bulk. If you also
-    need to extract data from each page, use 'sg recipe' instead —
+    need to extract data from each page, use 'sgw recipe' instead —
     it combines scraping and extraction in one step.
 
     Examples:
-      sg run urls.txt
-      sg run urls.txt --render-js -p scrapedrive
+      sgw run urls.txt
+      sgw run urls.txt --render-js -p scrapedrive
     """
 
     async def execute() -> None:
@@ -379,7 +379,7 @@ def links(
 
     Finds all links on a page, assigns each a numbered index, and
     groups them by where they appear (navigation, main content,
-    footer, sidebar). Use 'sg follow <url> <index>' to scrape
+    footer, sidebar). Use 'sgw follow <url> <index>' to scrape
     a specific link by its number.
 
     Good for: exploring a site's structure, finding pagination links,
@@ -387,10 +387,10 @@ def links(
     pipes cleanly to jq; compact format is optimized for LLMs.
 
     Examples:
-      sg links https://example.com             # rich table
-      sg links https://example.com -f compact  # tree view for LLMs
-      sg links https://example.com -f json     # pipe to jq
-      sg links https://example.com --limit 20  # first 20 only
+      sgw links https://example.com             # rich table
+      sgw links https://example.com -f compact  # tree view for LLMs
+      sgw links https://example.com -f json     # pipe to jq
+      sgw links https://example.com --limit 20  # first 20 only
     """
 
     async def run() -> None:
@@ -438,7 +438,7 @@ def links(
 @app.command()
 def follow(
     target_url: str,
-    link_id: int = typer.Argument(..., help="Link index from sg links output"),
+    link_id: int = typer.Argument(..., help="Link index from sgw links output"),
     country: str | None = typer.Option(None, "--country", "-c"),
     render_js: bool = typer.Option(False, "--render-js"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
@@ -448,15 +448,15 @@ def follow(
 
     Two scrapes in one command: first it loads the page to get the
     link list (from cache if available), then scrapes the link you
-    picked by index number. Use 'sg links' first to see the indices.
+    picked by index number. Use 'sgw links' first to see the indices.
 
     Good for: navigating a site step by step — load a page, see its
     links, follow one, see that page's links, follow another. Like
     browsing, but from the terminal.
 
     Examples:
-      sg links https://example.com         # see link indices
-      sg follow https://example.com 3      # scrape link #3
+      sgw links https://example.com         # see link indices
+      sgw follow https://example.com 3      # scrape link #3
     """
 
     async def run() -> None:
@@ -568,15 +568,15 @@ def detect(
     Also spots prices, dates, and emails.
 
     Good for: figuring out what's on a page before extracting.
-    'sg detect' is the reconnaissance step — it tells you what
-    patterns exist. Then 'sg extract' pulls the actual data.
+    'sgw detect' is the reconnaissance step — it tells you what
+    patterns exist. Then 'sgw extract' pulls the actual data.
 
     Not useful for: pages that need JavaScript to render (the
     patterns won't be in the raw HTML). Use --render-js.
 
     Examples:
-      sg detect https://books.toscrape.com
-      sg detect https://example.com --render-js
+      sgw detect https://books.toscrape.com
+      sgw detect https://example.com --render-js
     """
 
     async def run() -> None:
@@ -804,11 +804,11 @@ def extract(
     detect), or heavily JS-rendered pages (use --render-js).
 
     Examples:
-      sg extract https://books.toscrape.com              # auto-detect
-      sg extract https://books.toscrape.com -f csv       # CSV output
-      sg extract https://books.toscrape.com -s "ol > li" # manual selector
-      sg extract https://books.toscrape.com --no-llm     # skip LLM
-      sg extract https://books.toscrape.com -m proxy-pro # use better model
+      sgw extract https://books.toscrape.com              # auto-detect
+      sgw extract https://books.toscrape.com -f csv       # CSV output
+      sgw extract https://books.toscrape.com -s "ol > li" # manual selector
+      sgw extract https://books.toscrape.com --no-llm     # skip LLM
+      sgw extract https://books.toscrape.com -m proxy-pro # use better model
     """
 
     async def run() -> None:
@@ -852,7 +852,7 @@ def extract(
             if not rows:
                 console.print(
                     f"[red]error:[/] selector matched 0 elements: {selector}\n"
-                    f"  hint: run 'sg detect {target_url}' to see available patterns"
+                    f"  hint: run 'sgw detect {target_url}' to see available patterns"
                 )
                 raise typer.Exit(1)
         elif not no_llm:
@@ -899,7 +899,7 @@ def extract(
             console.print(
                 f"[red]error:[/] extraction returned 0 rows from {target_url}\n"
                 f"  pattern: {desc}\n"
-                f"  hint: try 'sg detect {target_url}' and use --selector or --pick N"
+                f"  hint: try 'sgw detect {target_url}' and use --selector or --pick N"
             )
             raise typer.Exit(1)
 
@@ -954,8 +954,8 @@ def history(
     of a page over time.
 
     Examples:
-      sg history https://example.com
-      sg history https://example.com -n 5    # last 5 scrapes only
+      sgw history https://example.com
+      sgw history https://example.com -n 5    # last 5 scrapes only
     """
     from .config import load_config
     from .memory import DomainMemory
@@ -1020,7 +1020,7 @@ def recipe(
 ) -> None:
     """Run a saved scrape+extract recipe from a YAML file.
 
-    Saves you from retyping the same sg extract command with all its
+    Saves you from retyping the same sgw extract command with all its
     flags every time. Write the URLs, scrape settings, and extraction
     config once as YAML, then replay with one command. Results from
     multiple URLs are combined into a single output file.
@@ -1030,7 +1030,7 @@ def recipe(
     remember, or sharing a scraping workflow with someone else —
     hand them a YAML file instead of a bash command.
 
-    Not useful for: one-off scrapes. Just use 'sg extract' directly.
+    Not useful for: one-off scrapes. Just use 'sgw extract' directly.
 
     Recipe format:
 
@@ -1055,9 +1055,9 @@ def recipe(
         output: results.json                    # optional output file
 
     Examples:
-      sg recipe books.yml                  # run the recipe
-      sg recipe books.yml --dry-run        # preview without scraping
-      sg recipe books.yml -o results.csv   # override output path
+      sgw recipe books.yml                  # run the recipe
+      sgw recipe books.yml --dry-run        # preview without scraping
+      sgw recipe books.yml -o results.csv   # override output path
     """
     import json
 
@@ -1220,11 +1220,11 @@ def selftest() -> None:
     verify that sg is installed correctly and can make HTTP requests.
     Uses only the free raw_http provider, no API keys needed.
 
-    Good for: checking that sg works after installation or config
+    Good for: checking that sgw works after installation or config
     changes. Not a full test suite — run 'pytest' for that.
 
     Examples:
-      sg selftest
+      sgw selftest
     """
 
     tests = [
@@ -1281,7 +1281,7 @@ def providers():
       Changing provider order — that's in scrape-gateway.yml.
 
     Examples:
-      sg providers
+      sgw providers
     """
     from .discovery import EXTENSIONS_DIR, discover_providers_with_sources
 
@@ -1303,7 +1303,7 @@ def providers():
     console.print(table)
     console.print(f"\n[dim]Extensions directory: {EXTENSIONS_DIR}[/]")
     console.print("[dim]Drop a .py file there with a ProviderAdapter subclass to add a provider.[/]")
-    console.print("[dim]sg extensions                # browse the official extension registry[/]")
+    console.print("[dim]sgw extensions                # browse the official extension registry[/]")
 
 
 REGISTRY_URL = "https://raw.githubusercontent.com/testy-cool/scrape-gateway/main/registry.yml"
@@ -1320,8 +1320,8 @@ def extensions(
       The registry is curated — only reviewed extensions are listed.
 
     Examples:
-      sg extensions              # list available extensions
-      sg extensions sg-playwright  # install an extension by name
+      sgw extensions              # list available extensions
+      sgw extensions sg-playwright  # install an extension by name
     """
     import subprocess
     import sys
@@ -1355,13 +1355,13 @@ def extensions(
             console.print(f"[dim]Track progress: {match.get('url', 'n/a')}[/]")
             raise typer.Exit(1)
         pkg = match.get("package", install)
-        console.print(f"[cyan]Installing {pkg} into sg's environment...[/]")
+        console.print(f"[cyan]Installing {pkg} into sgw's environment...[/]")
         result = subprocess.run(
             ["uv", "pip", "install", "--python", sys.executable, pkg],
             capture_output=True, text=True,
         )
         if result.returncode == 0:
-            console.print(f"[green]Installed {pkg}. Run `sg providers` to verify.[/]")
+            console.print(f"[green]Installed {pkg}. Run `sgw providers` to verify.[/]")
         else:
             console.print(f"[red]Failed:[/] {result.stderr.strip()}")
             raise typer.Exit(1)
@@ -1387,5 +1387,5 @@ def extensions(
         table.add_row(name, entry.get("description", ""), status)
 
     console.print(table)
-    console.print(f"\n[dim]Install: sg extensions <name>[/]")
+    console.print(f"\n[dim]Install: sgw extensions <name>[/]")
     console.print(f"[dim]Submit yours: {REGISTRY_URL.replace('/main/registry.yml', '')}[/]")

@@ -1,14 +1,14 @@
 ---
 name: scrape-gateway
-description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sg", "add a scraping provider", "write an sg extension", "sg url", "sg extract", "sg recipe", "sg providers", "sg extensions", or needs to scrape web pages through multiple providers with automatic fallback, extract structured data from listing pages, or build custom scraping providers.
+description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sg", "add a scraping provider", "write an sg extension", "sgw url", "sgw extract", "sgw recipe", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, extract structured data from listing pages, or build custom scraping providers.
 ---
 
-# scrape-gateway (sg)
+# scrape-gateway (sgw)
 
 Unified CLI for scraping web pages through multiple providers with cheapest-first routing, content validation, domain memory, and structured data extraction.
 
 **Repo**: https://github.com/testy-cool/scrape-gateway
-**Binary**: `sg` (installed via `uv tool install`)
+**Binary**: `sgw` (installed via `uv tool install`)
 **Config**: `scrape-gateway.yml` (project root or CWD)
 **API keys**: `.env` (copy from `.env.example`)
 **Extensions dir**: `~/.config/scrape-gateway/providers/`
@@ -20,7 +20,7 @@ git clone https://github.com/testy-cool/scrape-gateway.git
 cd scrape-gateway
 uv tool install -e . --with wreq --with curl_cffi
 cp .env.example .env  # add your API keys
-sg selftest
+sgw selftest
 ```
 
 The `--with wreq --with curl_cffi` installs free anti-detect HTTP providers. Without them, only `raw_http` (plain httpx) works for free scraping.
@@ -43,48 +43,48 @@ Router tries cheapest first. Domain memory skips to what worked last time.
 
 ## Core Commands
 
-### sg url — Scrape one page
+### sgw url — Scrape one page
 
 ```bash
-sg url <url>                        # auto-route
-sg url <url> --render-js            # force JS rendering
-sg url <url> -p scrapedrive         # force provider
-sg url <url> --no-cache             # skip cache
-sg url <url> -f markdown            # markdown output
-sg url <url> --country us           # geo-target
-sg url <url> --premium              # use highest tier
+sgw url <url>                        # auto-route
+sgw url <url> --render-js            # force JS rendering
+sgw url <url> -p scrapedrive         # force provider
+sgw url <url> --no-cache             # skip cache
+sgw url <url> -f markdown            # markdown output
+sgw url <url> --country us           # geo-target
+sgw url <url> --premium              # use highest tier
 ```
 
-### sg extract — Structured data from listing pages
+### sgw extract — Structured data from listing pages
 
 ```bash
-sg extract <url>                    # auto-detect pattern, JSON output
-sg extract <url> -f csv             # CSV output
-sg extract <url> -f rich            # visual table
-sg extract <url> -s "ol > li"       # manual CSS selector
-sg extract <url> --no-llm           # skip LLM pattern picking
-sg extract <url> -n 5               # limit rows
+sgw extract <url>                    # auto-detect pattern, JSON output
+sgw extract <url> -f csv             # CSV output
+sgw extract <url> -f rich            # visual table
+sgw extract <url> -s "ol > li"       # manual CSS selector
+sgw extract <url> --no-llm           # skip LLM pattern picking
+sgw extract <url> -n 5               # limit rows
 ```
 
 LLM picks the main content pattern and names fields semantically. Cached per domain — first call costs a few cents, repeat calls are free.
 
-### sg detect — Reconnaissance
+### sgw detect — Reconnaissance
 
 ```bash
-sg detect <url>                     # find repeated elements
+sgw detect <url>                     # find repeated elements
 ```
 
-Shows CSS selectors, repeat counts, sample content. Run before `sg extract` to understand page structure.
+Shows CSS selectors, repeat counts, sample content. Run before `sgw extract` to understand page structure.
 
-### sg links / sg follow — Navigate
+### sgw links / sgw follow — Navigate
 
 ```bash
-sg links <url>                      # indexed link list
-sg links <url> -f compact           # tree view (LLM-friendly)
-sg follow <url> 3                   # scrape link #3
+sgw links <url>                      # indexed link list
+sgw links <url> -f compact           # tree view (LLM-friendly)
+sgw follow <url> 3                   # scrape link #3
 ```
 
-### sg recipe — Replay workflows
+### sgw recipe — Replay workflows
 
 ```yaml
 # books.yml
@@ -101,21 +101,21 @@ output: results.json
 ```
 
 ```bash
-sg recipe books.yml                 # run it
-sg recipe books.yml --dry-run       # preview
+sgw recipe books.yml                 # run it
+sgw recipe books.yml --dry-run       # preview
 ```
 
-### sg providers — List available providers
+### sgw providers — List available providers
 
 ```bash
-sg providers                        # shows all: built-in + extensions
+sgw providers                        # shows all: built-in + extensions
 ```
 
-### sg extensions — Browse/install extensions
+### sgw extensions — Browse/install extensions
 
 ```bash
-sg extensions                       # browse registry
-sg extensions sg-playwright         # install one
+sgw extensions                       # browse registry
+sgw extensions sg-playwright         # install one
 ```
 
 ## Writing Extensions
@@ -167,7 +167,7 @@ asyncio.run(main())
 |---|---|---|
 | All providers fail with `js_required` | Site needs browser rendering | `--render-js` or add ScrapeDrive key |
 | `wreq`/`curl_cffi` show `PROVIDER_ERROR` | Not installed | `uv tool install --reinstall -e . --with wreq --with curl_cffi` |
-| ScrapeDrive returns 401 | API key not loaded | Check `.env` has `SCRAPEDRIVE_API_KEY`, verify with `sg selftest` |
-| `sg` works in project dir but not elsewhere | Config was CWD-relative | Update to latest — fixed to fall back to project root |
-| Extension not showing in `sg providers` | File not in right dir or has errors | Check `~/.config/scrape-gateway/providers/`, run `sg providers` for error messages |
-| `sg extract` picks wrong pattern | LLM chose nav instead of content | Use `-s "selector"` to specify manually, or `--no-llm` for heuristic |
+| ScrapeDrive returns 401 | API key not loaded | Check `.env` has `SCRAPEDRIVE_API_KEY`, verify with `sgw selftest` |
+| `sgw` works in project dir but not elsewhere | Config was CWD-relative | Update to latest — fixed to fall back to project root |
+| Extension not showing in `sgw providers` | File not in right dir or has errors | Check `~/.config/scrape-gateway/providers/`, run `sgw providers` for error messages |
+| `sgw extract` picks wrong pattern | LLM chose nav instead of content | Use `-s "selector"` to specify manually, or `--no-llm` for heuristic |

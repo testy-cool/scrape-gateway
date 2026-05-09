@@ -1,5 +1,5 @@
 # Extract book listings from books.toscrape.com
-# Run: sg recipe examples/books.recipe.yml
+# Run: sgw recipe examples/books.recipe.yml
 
 urls:
   - https://books.toscrape.com
