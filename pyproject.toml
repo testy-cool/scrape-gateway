@@ -24,6 +24,15 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.25", "ruff>=0.8", "respx>=0.22"]
 scrape-gateway = "scrape_gateway.cli:app"
 sg = "scrape_gateway.cli:app"
 
+[project.entry-points."scrape_gateway.providers"]
+raw_http = "scrape_gateway.providers.raw_http:RawHttpProvider"
+wreq = "scrape_gateway.providers.wreq_http:WreqProvider"
+curl_cffi = "scrape_gateway.providers.curl_cffi_http:CurlCffiProvider"
+scrapedrive = "scrape_gateway.providers.scrapedrive:ScrapeDriveProvider"
+scrape_do = "scrape_gateway.providers.scrape_do:ScrapeDoProvider"
+scrapingbee = "scrape_gateway.providers.scrapingbee:ScrapingBeeProvider"
+scraperapi = "scrape_gateway.providers.scraperapi:ScraperApiProvider"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

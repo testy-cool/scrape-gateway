@@ -10,6 +10,11 @@ from .provider import ProviderAdapter
 
 EXTENSIONS_DIR = Path("~/.config/scrape-gateway/providers").expanduser()
 
+BUILTIN_NAMES = frozenset({
+    "raw_http", "wreq", "curl_cffi", "scrapedrive",
+    "scrape_do", "scrapingbee", "scraperapi",
+})
+
 
 def _check_deps(cls: type[ProviderAdapter]) -> bool:
     """Check if a provider's dependencies are installed. Prompt to install if not."""
@@ -62,16 +67,6 @@ def _check_deps(cls: type[ProviderAdapter]) -> bool:
     return False
 
 
-def _builtin_providers() -> dict[str, type[ProviderAdapter]]:
-    module = importlib.import_module(".providers", package="scrape_gateway")
-    result = {}
-    for attr_name in getattr(module, "__all__", []):
-        cls = getattr(module, attr_name, None)
-        if cls and isinstance(cls, type) and issubclass(cls, ProviderAdapter):
-            result[cls.name] = cls
-    return result
-
-
 def _entrypoint_providers() -> dict[str, type[ProviderAdapter]]:
     from importlib.metadata import entry_points
 
@@ -80,7 +75,7 @@ def _entrypoint_providers() -> dict[str, type[ProviderAdapter]]:
         try:
             cls = ep.load()
             if isinstance(cls, type) and issubclass(cls, ProviderAdapter):
-                if _check_deps(cls):
+                if cls.name in BUILTIN_NAMES or _check_deps(cls):
                     result[cls.name] = cls
         except Exception:  # noqa: BLE001
             print(f"  [extensions] failed to load entry point: {ep.name}", file=sys.stderr)
@@ -116,9 +111,8 @@ def _local_providers() -> dict[str, type[ProviderAdapter]]:
 
 
 def discover_providers() -> dict[str, type[ProviderAdapter]]:
-    """Find all provider classes: built-in, entry points, then local directory."""
-    providers = _builtin_providers()
-    providers.update(_entrypoint_providers())
+    """Find all provider classes: entry points first, then local directory."""
+    providers = _entrypoint_providers()
     providers.update(_local_providers())
     return providers
 
@@ -126,10 +120,9 @@ def discover_providers() -> dict[str, type[ProviderAdapter]]:
 def discover_providers_with_sources() -> dict[str, tuple[type[ProviderAdapter], str]]:
     """Like discover_providers, but also returns the source of each provider."""
     result = {}
-    for name, cls in _builtin_providers().items():
-        result[name] = (cls, "built-in")
     for name, cls in _entrypoint_providers().items():
-        result[name] = (cls, "pip package")
+        source = "built-in" if name in BUILTIN_NAMES else "pip package"
+        result[name] = (cls, source)
     for name, cls in _local_providers().items():
         result[name] = (cls, str(EXTENSIONS_DIR))
     return result
