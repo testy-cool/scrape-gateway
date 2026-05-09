@@ -106,11 +106,14 @@ def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
     if not config.providers:
         return _default_providers()
 
-    from .discovery import discover_providers
+    from .discovery import _builtin_providers, discover_providers
 
     available = discover_providers()
+    builtin_names = set(_builtin_providers())
+    configured_names = set()
     result = []
     for pc in config.providers:
+        configured_names.add(pc.name)
         if not pc.enabled:
             continue
         cls = available.get(pc.name)
@@ -118,6 +121,9 @@ def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
             _log(f"  [config] unknown provider: {pc.name}")
             continue
         result.append(cls(**pc.options))
+    for name, cls in available.items():
+        if name not in configured_names and name not in builtin_names:
+            result.append(cls())
     return result
 
 

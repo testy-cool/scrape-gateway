@@ -23,3 +23,14 @@
   description: Selenium with undetected-chromedriver — stealth browser for anti-bot sites
   url: https://github.com/scrape-gateway/sg-selenium
   status: planned
+
+- name: sg-ddgs
+  description: DuckDuckGo search — text, images, news, videos. Free, no API key needed
+  package: duckduckgo-search
+  url: https://github.com/scrape-gateway/sg-ddgs
+  status: planned
+
+- name: sg-wayback
+  description: Wayback Machine snapshots — fetch archived versions of any page
+  url: https://github.com/scrape-gateway/sg-wayback
+  status: planned
