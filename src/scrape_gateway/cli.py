@@ -1338,6 +1338,7 @@ def extensions(
       sg extensions sg-playwright  # install an extension by name
     """
     import subprocess
+    import sys
 
     import httpx
     import yaml
@@ -1367,9 +1368,17 @@ def extensions(
             console.print(f"[yellow]{install} is planned but not published yet.[/]")
             console.print(f"[dim]Track progress: {match.get('url', 'n/a')}[/]")
             raise typer.Exit(1)
-        cmd = match["install"]
-        console.print(f"[cyan]Running: {cmd}[/]")
-        subprocess.run(cmd.split(), check=False)
+        pkg = match.get("package", install)
+        console.print(f"[cyan]Installing {pkg} into sg's environment...[/]")
+        result = subprocess.run(
+            ["uv", "pip", "install", "--python", sys.executable, pkg],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            console.print(f"[green]Installed {pkg}. Run `sg providers` to verify.[/]")
+        else:
+            console.print(f"[red]Failed:[/] {result.stderr.strip()}")
+            raise typer.Exit(1)
         return
 
     from .discovery import discover_providers
@@ -1380,7 +1389,6 @@ def extensions(
     table.add_column("Name", style="cyan")
     table.add_column("Description")
     table.add_column("Status")
-    table.add_column("Install")
 
     for entry in entries:
         name = entry["name"]
@@ -1390,7 +1398,7 @@ def extensions(
             status = "[yellow]planned[/]"
         else:
             status = "[dim]available[/]"
-        table.add_row(name, entry.get("description", ""), status, entry.get("install", ""))
+        table.add_row(name, entry.get("description", ""), status)
 
     console.print(table)
     console.print(f"\n[dim]Install: sg extensions <name>[/]")
