@@ -46,9 +46,15 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print(f"[dim]sg detect {followed}         # find patterns in followed page[/]")
         console.print(f"[dim]sg history {followed}        # view change history[/]")
     elif cmd == "detect":
+        console.print(f"[dim]sg extract {url_display}            # pull data from top pattern[/]")
+        console.print(f"[dim]sg extract {url_display} -s 'sel'   # extract with custom selector[/]")
         console.print(f"[dim]sg links {url_display}              # see all links indexed[/]")
-        console.print(f"[dim]sg url {url_display} --render-js    # re-scrape with JS[/]")
         console.print(f"[dim]sg history {url_display}            # track changes over time[/]")
+    elif cmd == "extract":
+        console.print(f"[dim]sg detect {url_display}             # see all detected patterns[/]")
+        console.print(f"[dim]sg extract {url_display} -f csv     # CSV output[/]")
+        console.print(f"[dim]sg extract {url_display} -s 'sel'   # custom CSS selector[/]")
+        console.print(f"[dim]sg links {url_display}              # see all links indexed[/]")
     elif cmd == "history":
         console.print(f"[dim]sg url {url_display} --no-cache     # fresh scrape to update history[/]")
         console.print(f"[dim]sg detect {url_display}             # analyze current structure[/]")
@@ -519,6 +525,298 @@ def detect(
         if not patterns.get("repeated") and not any(patterns.get(k) for k in ("prices", "emails", "phones", "dates")):
             console.print("[dim]No patterns detected.[/]")
         _hints("detect", target_url)
+
+    asyncio.run(run())
+
+
+def _element_to_row(el) -> dict[str, str]:
+    row: dict[str, str] = {}
+    el_text = el.get_text(" ", strip=True)
+
+    heading = el.find(["h1", "h2", "h3", "h4", "h5", "h6"])
+    if heading:
+        row["title"] = heading.get_text(strip=True)
+        a = heading.find("a")
+        if a and a.get("href"):
+            row["href"] = a["href"]
+        elif a := heading.find_parent("a"):
+            if a.get("href"):
+                row["href"] = a["href"]
+
+    img = el.find("img")
+    if img and img.get("src"):
+        row["image"] = img["src"]
+        alt = img.get("alt", "")
+        if alt and alt != row.get("title", ""):
+            row["image_alt"] = alt
+
+    price_match = DATA_PATTERNS["Prices"].search(el_text)
+    if price_match:
+        row["price"] = price_match.group()
+
+    if "href" not in row:
+        a = el.find("a", href=True)
+        if a:
+            row.setdefault("title", a.get_text(strip=True))
+            row["href"] = a["href"]
+
+    time_el = el.find("time")
+    if time_el:
+        row["date"] = time_el.get("datetime", time_el.get_text(strip=True))
+    elif date_match := DATA_PATTERNS["Dates"].search(el_text):
+        row["date"] = date_match.group()
+
+    skip_tags = {"script", "style", "img", "a", "h1", "h2", "h3",
+                  "h4", "h5", "h6", "time", "br", "hr", "i", "svg",
+                  "path", "button", "input", "form", "select", "noscript"}
+    captured = set(row.values())
+    for child in el.find_all(True, recursive=True):
+        if child.name in skip_tags:
+            continue
+        cls = child.get("class", [])
+        if not cls:
+            continue
+        t = child.get_text(strip=True)
+        if not t or len(t) < 2 or t in captured:
+            continue
+        sub_children = [c for c in child.children if hasattr(c, "name") and c.name]
+        if len(sub_children) > 2:
+            continue
+        name = cls[0]
+        if name not in row:
+            row[name] = t
+            captured.add(t)
+
+    return row
+
+
+def _extract_rows(html: str, selector: str | None = None, pick: int = 1) -> tuple[list[dict], str]:
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    if selector:
+        elements = soup.select(selector)
+        desc = f"{selector} ({len(elements)} items)"
+    else:
+        patterns = _detect_patterns(html)
+        repeated = patterns.get("repeated", [])
+        if not repeated:
+            return [], "no repeated patterns found"
+        idx = max(0, min(pick - 1, len(repeated) - 1))
+        top = repeated[idx]
+        css = f"{top['parent']} > {top['selector']}"
+        elements = soup.select(css)
+        if not elements:
+            elements = soup.select(top["selector"])
+        desc = f"{css} ({len(elements)} items)"
+
+    rows = [r for el in elements if (r := _element_to_row(el))]
+    return rows, desc
+
+
+def _apply_field_map(rows: list[dict], field_map: dict[str, str]) -> list[dict]:
+    if not field_map:
+        return rows
+    return [{field_map.get(k, k): v for k, v in row.items()} for row in rows]
+
+
+def _llm_pick_pattern(
+    patterns: list[dict], html: str, domain: str,
+    model_id: str | None = None,
+) -> tuple[str, dict[str, str]] | None:
+    import json
+
+    import llm
+
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+
+    lines = []
+    for i, p in enumerate(patterns[:8], 1):
+        css = f"{p['parent']} > {p['selector']}"
+        elements = soup.select(css) or soup.select(p["selector"])
+        fields: list[str] = []
+        if elements:
+            row = _element_to_row(elements[0])
+            fields = list(row.keys())
+        field_str = f"  fields: {', '.join(fields)}" if fields else ""
+        lines.append(
+            f"#{i}: {css} ({p['count']} items) — \"{p['sample'][:60]}\"\n{field_str}"
+        )
+
+    prompt = (
+        f"Domain: {domain}\n\nDetected patterns:\n"
+        + "\n".join(lines)
+        + '\n\nPick the pattern that is the main content listing '
+        '(products, articles, results), not navigation or boilerplate.\n'
+        'Reply JSON: {"pick": <number>, "fields": {"<raw>": "<better>", ...}}\n'
+        'Only rename unclear field names. Keep title, price, image, href, date as-is.'
+    )
+
+    try:
+        model = llm.get_model(model_id) if model_id else llm.get_model()
+        console.print(f"[dim]llm: using {model.model_id}[/]")
+        response = model.prompt(prompt, stream=False)
+        text = response.text()
+        text = text.strip().removeprefix("```json").removesuffix("```").strip()
+        result = json.loads(text)
+        pick_idx = max(0, min(int(result["pick"]) - 1, len(patterns) - 1))
+        p = patterns[pick_idx]
+        selector = f"{p['parent']} > {p['selector']}"
+        field_map = result.get("fields", {})
+        return selector, field_map
+    except llm.UnknownModelError as exc:
+        console.print(f"[red]llm error:[/] unknown model: {model_id}\n  available: llm models list")
+        return None
+    except llm.NeedsKeyException as exc:
+        console.print(f"[red]llm error:[/] no API key for {model_id or 'default model'}\n  run: llm keys set <name>")
+        return None
+    except json.JSONDecodeError as exc:
+        console.print(f"[dim]llm: model returned invalid JSON: {exc}[/]")
+        return None
+    except Exception as exc:
+        console.print(f"[dim]llm: {type(exc).__name__}: {exc}[/]")
+        return None
+
+
+@app.command()
+def extract(
+    target_url: str,
+    selector: str | None = typer.Option(None, "--selector", "-s", help="CSS selector (auto-detect if omitted)"),
+    pick: int = typer.Option(1, "--pick", "-k", help="Which detected pattern to use (1=top, 2=second, ...)"),
+    country: str | None = typer.Option(None, "--country", "-c"),
+    render_js: bool = typer.Option(False, "--render-js"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+    no_llm: bool = typer.Option(False, "--no-llm", help="Skip LLM pattern picking"),
+    model: str | None = typer.Option(None, "--model", "-m", help="LLM model for pattern picking (default: llm default)"),
+    output_format: str = typer.Option("json", "--format", "-f", help="json|csv|rich"),
+    limit: int = typer.Option(0, "--limit", "-n", help="Max rows (0=all)"),
+) -> None:
+    """Extract structured data from repeated page elements."""
+
+    async def run() -> None:
+        from .config import load_config
+        from .memory import DomainMemory
+
+        gateway = _build_gateway(provider)
+        with console.status(f"[bold cyan]Scraping {target_url}...", spinner="dots"):
+            result = await gateway.scrape(
+                ScrapeRequest(target_url, country=country, render_js=render_js),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        if not result.success:
+            reason = result.failure_reason or "unknown"
+            detail = result.error or ""
+            console.print(
+                f"[red]error:[/] scrape failed for {target_url}\n"
+                f"  provider: {result.provider or 'none'}\n"
+                f"  status: {result.status_code}\n"
+                f"  reason: {reason}\n"
+                + (f"  detail: {detail}\n" if detail else "")
+                + "  hint: try --render-js, --provider scrapedrive, or --no-cache"
+            )
+            raise typer.Exit(1)
+        if not result.html:
+            console.print(
+                f"[red]error:[/] scrape returned empty HTML for {target_url}\n"
+                f"  provider: {result.provider}\n"
+                f"  hint: the page may require JS rendering (--render-js)"
+            )
+            raise typer.Exit(1)
+
+        config = load_config()
+        memory = DomainMemory(db_path=config.memory_path)
+        domain = DomainMemory.domain_for_url(result.url)
+        field_map: dict[str, str] = {}
+
+        if selector:
+            rows, desc = _extract_rows(result.html, selector)
+            if not rows:
+                console.print(
+                    f"[red]error:[/] selector matched 0 elements: {selector}\n"
+                    f"  hint: run 'sg detect {target_url}' to see available patterns"
+                )
+                raise typer.Exit(1)
+        elif not no_llm:
+            cached = memory.get_extraction(domain)
+            if cached:
+                sel, field_map = cached
+                rows, desc = _extract_rows(result.html, sel)
+                if not rows:
+                    memory.learn_extraction(domain, "", {})
+                    console.print(
+                        f"[red]error:[/] learned selector no longer matches: {sel}\n"
+                        f"  cleared stale pattern for {domain}\n"
+                        f"  hint: re-run to re-learn, or use --selector"
+                    )
+                    raise typer.Exit(1)
+                desc = f"{desc} (learned)"
+            else:
+                patterns = _detect_patterns(result.html)
+                repeated = patterns.get("repeated", [])
+                if not repeated:
+                    console.print(
+                        f"[red]error:[/] no repeated elements found on {target_url}\n"
+                        f"  page has {len(result.html):,} chars of HTML\n"
+                        f"  hint: page may need JS rendering (--render-js) or has no listing structure"
+                    )
+                    raise typer.Exit(1)
+
+                with console.status("[bold cyan]Asking LLM to pick pattern...", spinner="dots"):
+                    llm_result = _llm_pick_pattern(repeated, result.html, domain, model)
+
+                if llm_result:
+                    sel, field_map = llm_result
+                    memory.learn_extraction(domain, sel, field_map)
+                    rows, desc = _extract_rows(result.html, sel)
+                    desc = f"{desc} (llm)"
+                else:
+                    rows, desc = _extract_rows(result.html, pick=pick)
+                    if rows:
+                        desc = f"{desc} (heuristic — llm fallback)"
+        else:
+            rows, desc = _extract_rows(result.html, pick=pick)
+
+        if not rows:
+            console.print(
+                f"[red]error:[/] extraction returned 0 rows from {target_url}\n"
+                f"  pattern: {desc}\n"
+                f"  hint: try 'sg detect {target_url}' and use --selector or --pick N"
+            )
+            raise typer.Exit(1)
+
+        rows = _apply_field_map(rows, field_map)
+        if limit:
+            rows = rows[:limit]
+
+        console.print(f"[dim]{desc}[/]\n")
+
+        if output_format == "csv":
+            import csv
+            import io
+
+            all_keys = list(dict.fromkeys(k for r in rows for k in r))
+            out = io.StringIO()
+            writer = csv.DictWriter(out, fieldnames=all_keys)
+            writer.writeheader()
+            writer.writerows(rows)
+            print(out.getvalue(), end="")
+        elif output_format == "rich":
+            table = Table(title=f"Extracted ({len(rows)} rows)", show_lines=True)
+            all_keys = list(dict.fromkeys(k for r in rows for k in r))
+            for k in all_keys:
+                table.add_column(k, max_width=40)
+            for r in rows:
+                table.add_row(*(str(r.get(k, "")) for k in all_keys))
+            console.print(table)
+        else:
+            import json
+            print(json.dumps(rows, indent=2, ensure_ascii=False))
+
+        _hints("extract", target_url)
 
     asyncio.run(run())
 

@@ -12,6 +12,7 @@ dependencies = [
   "markdownify>=0.13",
   "pyyaml>=6.0",
   "rich>=13.0",
+  "llm>=0.31",
 ]
 
 [project.optional-dependencies]

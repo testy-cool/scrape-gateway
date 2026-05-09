@@ -43,6 +43,13 @@ class DomainMemory:
             );
             create index if not exists idx_page_history_url on page_history(url);
 
+            create table if not exists extraction_patterns (
+              domain text primary key,
+              selector text not null,
+              field_map text not null default '{}',
+              learned_at datetime default current_timestamp
+            );
+
             -- legacy table kept for backward compat during migration
             create table if not exists domain_routes (
               domain text primary key,
@@ -180,6 +187,29 @@ class DomainMemory:
         if total_failures >= 10 and row["success_count"] / max(total_failures, 1) < 0.2:
             return True
         return False
+
+    # --- Extraction pattern memory ---
+
+    def get_extraction(self, domain: str) -> tuple[str, dict] | None:
+        row = self.conn.execute(
+            "select selector, field_map from extraction_patterns where domain = ?",
+            (domain,),
+        ).fetchone()
+        if not row:
+            return None
+        return (row["selector"], json.loads(row["field_map"]))
+
+    def learn_extraction(self, domain: str, selector: str, field_map: dict) -> None:
+        self.conn.execute(
+            """insert into extraction_patterns(domain, selector, field_map)
+               values (?, ?, ?)
+               on conflict(domain) do update set
+                 selector=excluded.selector,
+                 field_map=excluded.field_map,
+                 learned_at=current_timestamp""",
+            (domain, selector, json.dumps(field_map)),
+        )
+        self.conn.commit()
 
     # --- Page history / change detection ---
 
