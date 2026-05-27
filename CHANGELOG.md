@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-27
+
+### Added
+- `sgw meta` command — extract OpenGraph metadata as JSON
+- `sgw telemetry` command — inspect recent scrape reports with filters
+- Telemetry system: JSON report per scrape run with diagnosis and recommended next action
+- `--tier` flag on `sgw url` / `sgw run` to force ScrapeDrive tier
+- `--meta` flag on `sgw url` for inline OG metadata extraction
+- `--debug-artifacts` flag to save failed response bodies for analysis
+- `PROXY_ERROR` failure reason with `classify_exception()` for exception-based detection
+- Validators now capture `matched_pattern` and surrounding `snippet` for evidence
+
+### Fixed
+- Proxy misconfiguration no longer burns through the entire provider chain — router stops on PROXY_ERROR
+- All HTTP providers (raw, curl_cffi, wreq) retry direct when proxy fails
+- Cache keys now include `render_js` so static and JS-rendered pages don't collide
+- Login-wall detection only fires on short pages (< 8KB) to avoid false positives on forums
+- Dotenv loader no longer overrides env vars already set in the shell
+- `sgw url` exits non-zero on failure for shell pipeline use
+- `failure_reason` prints value not repr in CLI output
+
+### Changed
+- Block signatures for login walls tightened ("create an account" removed, length gate added)
+- 160 unit tests (up from 136)
+
 ## [0.1.0] - 2026-05-09
 
 ### Added
