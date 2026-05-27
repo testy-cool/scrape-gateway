@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-27
+
+### Added
+- Auto-spoof Referer header on every scrape (Google search URL by default)
+- `--referer` CLI flag on `sgw url` and `sgw run`
+- `referer` field on `ScrapeRequest` (None=auto, string=custom, ""=disabled)
+- 164 unit tests (up from 160)
+
 ## [0.2.0] - 2026-05-27
 
 ### Added
