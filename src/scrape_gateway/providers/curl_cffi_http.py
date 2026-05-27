@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from ..errors import classify_failure
+from ..errors import classify_exception, classify_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -29,7 +29,22 @@ class CurlCffiProvider(ProviderAdapter):
         import os
 
         start = time.perf_counter()
-        proxy_url = os.getenv("SCRAPE_PROXY_URL")
+        proxy_url = os.getenv("SCRAPE_PROXY_URL") or None
+        result = await self._scrape(request, proxy_url, start, AsyncSession)
+        if proxy_url and result.failure_reason == FailureReason.PROXY_ERROR:
+            retry = await self._scrape(request, None, start, AsyncSession)
+            retry.metadata["proxy_fallback"] = "disabled_after_proxy_error"
+            retry.metadata["proxy_error"] = result.error
+            return retry
+        return result
+
+    async def _scrape(
+        self,
+        request: ScrapeRequest,
+        proxy_url: str | None,
+        start: float,
+        AsyncSession,
+    ) -> ScrapeResult:
         try:
             async with AsyncSession(impersonate="chrome", proxy=proxy_url) as session:
                 response = await session.get(
@@ -50,11 +65,10 @@ class CurlCffiProvider(ProviderAdapter):
                 route="curl_cffi",
             )
         except Exception as exc:  # noqa: BLE001
-            is_timeout = "timeout" in type(exc).__name__.lower()
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
                 success=False,
                 error=str(exc),
-                failure_reason=FailureReason.TIMEOUT if is_timeout else FailureReason.UNKNOWN,
+                failure_reason=classify_exception(exc),
             )

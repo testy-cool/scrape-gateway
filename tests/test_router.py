@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
 from scrape_gateway.router import ScrapeGateway
+from scrape_gateway.telemetry import TelemetryRecorder
 
 
 class SuccessProvider(ProviderAdapter):
@@ -68,6 +70,44 @@ async def test_returns_last_failure_when_all_fail(tmp_dir):
     result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
     assert not result.success
     assert result.provider == "fail"
+
+
+async def test_proxy_error_stops_escalation(tmp_dir):
+    call_order = []
+
+    class ProxyFailProvider(ProviderAdapter):
+        name = "proxy_fail"
+        cost_rank = 0
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            call_order.append(self.name)
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                error="407 Proxy Authentication Required",
+                failure_reason=FailureReason.PROXY_ERROR,
+                route="proxy_fail",
+            )
+
+    class ExpensiveProvider(SuccessProvider):
+        name = "expensive"
+        cost_rank = 50
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            call_order.append(self.name)
+            return await super().scrape(request)
+
+    gw = ScrapeGateway(
+        providers=[ProxyFailProvider(), ExpensiveProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+    assert not result.success
+    assert result.failure_reason == FailureReason.PROXY_ERROR
+    assert call_order == ["proxy_fail"]
 
 
 async def test_cache_hit(tmp_dir):
@@ -178,6 +218,40 @@ async def test_validator_marks_block_type(tmp_dir):
     assert not result.success
     assert result.block_type == "cloudflare"
     assert result.content_validated is False
+
+
+async def test_telemetry_report_records_validation_evidence(tmp_dir):
+    gw = ScrapeGateway(
+        providers=[CloudflareProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_dir / "runs"),
+    )
+    result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+    report_path = Path(result.metadata["telemetry_report"])
+    report = json.loads(report_path.read_text())
+    assert report["run_id"] == result.metadata["run_id"]
+    assert report["diagnosis"] == "validator_rejected"
+    assert report["recommended_next_action"] == "inspect_validator_evidence_or_try_render_js"
+    assert report["attempts"][0]["matched_pattern"] == "checking your browser"
+    assert report["attempts"][0]["snippet"]
+
+
+async def test_debug_artifacts_save_failed_html(tmp_dir):
+    gw = ScrapeGateway(
+        providers=[CloudflareProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_dir / "runs"),
+    )
+    result = await gw.scrape(
+        ScrapeRequest("https://example.com", metadata={"debug_artifacts": True}),
+        use_cache=False,
+    )
+    report = json.loads(Path(result.metadata["telemetry_report"]).read_text())
+    artifact_path = Path(report["attempts"][0]["artifact_path"])
+    assert artifact_path.exists()
+    assert "Checking your browser" in artifact_path.read_text()
 
 
 async def test_no_providers_returns_error(tmp_dir):

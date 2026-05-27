@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_exception, classify_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -17,7 +17,21 @@ class RawHttpProvider(ProviderAdapter):
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         start = time.perf_counter()
-        proxy_url = os.getenv("SCRAPE_PROXY_URL")
+        proxy_url = os.getenv("SCRAPE_PROXY_URL") or None
+        result = await self._scrape(request, proxy_url, start)
+        if proxy_url and result.failure_reason == FailureReason.PROXY_ERROR:
+            retry = await self._scrape(request, None, start)
+            retry.metadata["proxy_fallback"] = "disabled_after_proxy_error"
+            retry.metadata["proxy_error"] = result.error
+            return retry
+        return result
+
+    async def _scrape(
+        self,
+        request: ScrapeRequest,
+        proxy_url: str | None,
+        start: float,
+    ) -> ScrapeResult:
         try:
             async with httpx.AsyncClient(
                 timeout=request.timeout_seconds,
@@ -50,5 +64,5 @@ class RawHttpProvider(ProviderAdapter):
                 provider=self.name,
                 success=False,
                 error=str(exc),
-                failure_reason=FailureReason.UNKNOWN,
+                failure_reason=classify_exception(exc),
             )

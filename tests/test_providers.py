@@ -50,6 +50,46 @@ class TestRawHttp:
         assert result.failure_reason == FailureReason.HTTP_403
         assert result.status_code == 403
 
+    async def test_proxy_auth_retries_direct(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SCRAPE_PROXY_URL", "http://bad-proxy.example")
+        calls = []
+
+        async def fake_scrape(self, request, proxy_url, start):
+            calls.append(proxy_url)
+            if proxy_url:
+                return result_proxy_error(request.url)
+            return result_success(request.url)
+
+        def result_proxy_error(url):
+            from scrape_gateway.models import ScrapeResult
+
+            return ScrapeResult(
+                url=url,
+                provider="raw_http",
+                success=False,
+                error="407 Proxy Authentication Required",
+                failure_reason=FailureReason.PROXY_ERROR,
+                route="raw_http",
+            )
+
+        def result_success(url):
+            from scrape_gateway.models import ScrapeResult
+
+            return ScrapeResult(
+                url=url,
+                provider="raw_http",
+                success=True,
+                status_code=200,
+                html=GOOD_HTML,
+                route="raw_http",
+            )
+
+        monkeypatch.setattr(RawHttpProvider, "_scrape", fake_scrape)
+        result = await RawHttpProvider().scrape(ScrapeRequest(url=TARGET_URL))
+        assert result.success is True
+        assert calls == ["http://bad-proxy.example", None]
+        assert result.metadata["proxy_fallback"] == "disabled_after_proxy_error"
+
 
 # ---------- ScrapeDriveProvider ----------
 

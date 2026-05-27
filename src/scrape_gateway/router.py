@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -16,8 +17,9 @@ from markdownify import markdownify as md
 from .cache import ArtifactCache
 from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
-from .models import ScrapeRequest, ScrapeResult
+from .models import FailureReason, ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
+from .telemetry import TelemetryRecorder, new_run_id, safe_metadata, utc_now
 from .validators import validate_content
 
 LOG_DIR = Path(".scrape-gateway")
@@ -133,11 +135,13 @@ class ScrapeGateway:
         cache: ArtifactCache | None = None,
         memory: DomainMemory | None = None,
         strategy: StrategyConfig | None = None,
+        telemetry: TelemetryRecorder | None = None,
     ) -> None:
         self.providers = list(providers if providers is not None else _default_providers())
         self.cache = cache or ArtifactCache()
         self.memory = memory or DomainMemory()
         self.strategy = strategy or StrategyConfig()
+        self.telemetry = telemetry or TelemetryRecorder()
 
     @classmethod
     def from_config(cls, config: GatewayConfig | None = None) -> ScrapeGateway:
@@ -147,6 +151,11 @@ class ScrapeGateway:
             cache=ArtifactCache(root=config.cache.root, ttl_seconds=config.cache.ttl_seconds),
             memory=DomainMemory(db_path=config.memory_path),
             strategy=config.strategy,
+            telemetry=TelemetryRecorder(
+                root=config.telemetry.root,
+                enabled=config.telemetry.enabled,
+                debug_artifacts=config.telemetry.debug_artifacts,
+            ),
         )
 
     async def scrape(self, request: ScrapeRequest, use_cache: bool = True, use_memory: bool = True) -> ScrapeResult:
@@ -154,10 +163,15 @@ class ScrapeGateway:
             request.url = f"https://{request.url}"
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
+        run_id = request.metadata.get("run_id") or new_run_id()
+        request.metadata["run_id"] = run_id
+        started_at = utc_now()
+        proxy_enabled = bool(os.getenv("SCRAPE_PROXY_URL"))
         req_data = {
             "url": request.url, "country": request.country, "render_js": request.render_js,
             "premium": request.premium, "mobile": request.mobile, "wait_event": request.wait_event,
             "wait_selector": request.wait_selector, "output_format": request.output_format,
+            "run_id": run_id,
         }
 
         if not request.country:
@@ -171,11 +185,11 @@ class ScrapeGateway:
         _log_event("scrape_start", **req_data)
 
         if use_cache:
-            html = self.cache.get_html(request.url)
+            html = self.cache.get_html(request.url, render_js=request.render_js)
             if html:
                 _log("  [cache] HIT")
-                _log_event("cache_hit", url=request.url)
-                return ScrapeResult(
+                _log_event("cache_hit", url=request.url, run_id=run_id)
+                result = ScrapeResult(
                     url=request.url,
                     provider="cache",
                     success=True,
@@ -183,8 +197,25 @@ class ScrapeGateway:
                     markdown=md(html),
                     cost_units=0,
                     route="cache",
-                    metadata={"cache_hit": True},
+                    metadata={"cache_hit": True, "run_id": run_id},
                 )
+                report = self.telemetry.build_report(
+                    run_id=run_id,
+                    started_at=started_at,
+                    finished_at=utc_now(),
+                    elapsed_ms=int((time.perf_counter() - scrape_start) * 1000),
+                    request=request,
+                    use_cache=use_cache,
+                    use_memory=use_memory,
+                    proxy_enabled=proxy_enabled,
+                    final=result,
+                    attempts=[],
+                    skipped=[],
+                )
+                report_path = self.telemetry.write_report(report)
+                if report_path:
+                    result.metadata["telemetry_report"] = str(report_path)
+                return result
             _log("  [cache] MISS")
 
         ordered = self._ordered_providers(request)
@@ -206,6 +237,10 @@ class ScrapeGateway:
                 "elapsed_ms": int(elapsed * 1000), "route": result.route,
                 "cost": result.cost_units,
             }
+            if result.failure_reason:
+                attempt["failure_reason"] = result.failure_reason.value
+            if result.metadata:
+                attempt["metadata"] = safe_metadata(result.metadata)
             if result.success:
                 validation = validate_content(result.html)
                 result.content_validated = validation.passed
@@ -216,13 +251,26 @@ class ScrapeGateway:
                     self.memory.remember_failure(request.url, provider.name, validation.block_type)
                     attempt["result"] = "validation_failed"
                     attempt["block_type"] = validation.block_type
+                    attempt["validation_detail"] = validation.detail
+                    attempt["matched_pattern"] = validation.matched_pattern
+                    attempt["snippet"] = validation.snippet
+                    attempt["chars"] = len(result.html or "")
+                    artifact_path = self.telemetry.write_failed_artifact(
+                        run_id,
+                        len(attempts) + 1,
+                        provider.name,
+                        result,
+                        force=bool(request.metadata.get("debug_artifacts")),
+                    )
+                    if artifact_path:
+                        attempt["artifact_path"] = artifact_path
                     attempts.append(attempt)
                     _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✗ {validation.block_type or 'failed'}")
                     last_result = result
                     continue
                 if result.html and not result.markdown:
                     result.markdown = md(result.html)
-                self.cache.save(result)
+                self.cache.save(result, render_js=request.render_js)
                 self.memory.remember_success(
                     request.url,
                     provider.name,
@@ -250,20 +298,60 @@ class ScrapeGateway:
                 attempt["chars"] = len(result.html or "")
                 attempts.append(attempt)
                 _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✓ pass")
-                _log_event("scrape_done", url=request.url, success=True,
+                elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
+                report = self.telemetry.build_report(
+                    run_id=run_id,
+                    started_at=started_at,
+                    finished_at=utc_now(),
+                    elapsed_ms=elapsed_ms,
+                    request=request,
+                    use_cache=use_cache,
+                    use_memory=use_memory,
+                    proxy_enabled=proxy_enabled,
+                    final=result,
+                    attempts=attempts,
+                    skipped=skipped,
+                )
+                report_path = self.telemetry.write_report(report)
+                result.metadata["run_id"] = run_id
+                if report_path:
+                    result.metadata["telemetry_report"] = str(report_path)
+                _log_event("scrape_done", url=request.url, run_id=run_id, success=True,
                            provider=provider.name, route=result.route, cost=result.cost_units,
-                           chars=len(result.html or ""), elapsed_ms=int((time.perf_counter() - scrape_start) * 1000),
-                           attempts=attempts, skipped=skipped)
+                           chars=len(result.html or ""), elapsed_ms=elapsed_ms,
+                           attempts=attempts, skipped=skipped,
+                           diagnosis=report["diagnosis"],
+                           recommended_next_action=report["recommended_next_action"])
                 return result
             reason = result.failure_reason.value if result.failure_reason else result.error or "failed"
+            if result.error and result.failure_reason in {
+                FailureReason.PROXY_ERROR,
+                FailureReason.PROVIDER_ERROR,
+                FailureReason.UNKNOWN,
+            }:
+                reason = f"{reason}: {result.error}"
             attempt["result"] = "failed"
             attempt["reason"] = reason
             if result.error:
                 attempt["error"] = result.error
+            if result.html:
+                attempt["chars"] = len(result.html)
+                artifact_path = self.telemetry.write_failed_artifact(
+                    run_id,
+                    len(attempts) + 1,
+                    provider.name,
+                    result,
+                    force=bool(request.metadata.get("debug_artifacts")),
+                )
+                if artifact_path:
+                    attempt["artifact_path"] = artifact_path
             attempts.append(attempt)
             _log(f"  [{provider.name}] {result.status_code or 'ERR'} {elapsed:.1f}s → ✗ {reason}")
             self.memory.remember_failure(request.url, provider.name)
             last_result = result
+            if result.failure_reason == FailureReason.PROXY_ERROR:
+                _log("  [result] proxy configuration failed; not escalating providers")
+                break
 
         if skipped:
             _log(f"  [skip] {', '.join(skipped)}")
@@ -273,10 +361,30 @@ class ScrapeGateway:
         final = last_result or ScrapeResult(
             request.url, "none", False, error="No provider could handle request"
         )
-        _log_event("scrape_done", url=request.url, success=False,
+        final.metadata["run_id"] = run_id
+        elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
+        report = self.telemetry.build_report(
+            run_id=run_id,
+            started_at=started_at,
+            finished_at=utc_now(),
+            elapsed_ms=elapsed_ms,
+            request=request,
+            use_cache=use_cache,
+            use_memory=use_memory,
+            proxy_enabled=proxy_enabled,
+            final=final,
+            attempts=attempts,
+            skipped=skipped,
+        )
+        report_path = self.telemetry.write_report(report)
+        if report_path:
+            final.metadata["telemetry_report"] = str(report_path)
+        _log_event("scrape_done", url=request.url, run_id=run_id, success=False,
                    provider=final.provider, error=final.error,
-                   elapsed_ms=int((time.perf_counter() - scrape_start) * 1000),
-                   attempts=attempts, skipped=skipped)
+                   elapsed_ms=elapsed_ms,
+                   attempts=attempts, skipped=skipped,
+                   diagnosis=report["diagnosis"],
+                   recommended_next_action=report["recommended_next_action"])
         return final
 
     def _ordered_providers(self, request: ScrapeRequest) -> list[ProviderAdapter]:

@@ -37,10 +37,18 @@ class StrategyConfig:
 
 
 @dataclass(slots=True)
+class TelemetryConfig:
+    enabled: bool = True
+    root: str = ".scrape-gateway/runs"
+    debug_artifacts: bool = False
+
+
+@dataclass(slots=True)
 class GatewayConfig:
     providers: list[ProviderConfig] = field(default_factory=list)
     cache: CacheConfig = field(default_factory=CacheConfig)
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     memory_path: str = ".scrape-gateway/memory.sqlite"
 
 
@@ -75,7 +83,7 @@ def _load_dotenv(path: Path | None = None) -> None:
         key, _, val = line.partition("=")
         key = key.strip()
         val = val.strip().strip("'\"")
-        if key and val:
+        if key and val and key not in os.environ:
             os.environ[key] = val
 
 
@@ -130,9 +138,17 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         max_cost_per_url=strategy_raw.get("max_cost_per_url"),
     )
 
+    telemetry_raw = raw.get("telemetry", {})
+    telemetry = TelemetryConfig(
+        enabled=telemetry_raw.get("enabled", True),
+        root=telemetry_raw.get("root", ".scrape-gateway/runs"),
+        debug_artifacts=telemetry_raw.get("debug_artifacts", False),
+    )
+
     return GatewayConfig(
         providers=providers,
         cache=cache,
         strategy=strategy,
+        telemetry=telemetry,
         memory_path=raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
     )

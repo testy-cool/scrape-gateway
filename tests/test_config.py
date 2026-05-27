@@ -56,6 +56,11 @@ providers:
 strategy:
   mode: cheapest_successful
   max_cost_per_url: 0.05
+
+telemetry:
+  enabled: true
+  root: /tmp/test-runs
+  debug_artifacts: true
 """
         )
         cfg = load_config(p)
@@ -67,6 +72,8 @@ strategy:
     assert cfg.providers[1].api_key_env == "SCRAPEDRIVE_API_KEY"
     assert cfg.providers[2].enabled is False
     assert cfg.strategy.max_cost_per_url == 0.05
+    assert cfg.telemetry.root == "/tmp/test-runs"
+    assert cfg.telemetry.debug_artifacts is True
 
 
 def test_load_dotenv(monkeypatch, tmp_path):
@@ -80,6 +87,19 @@ def test_load_dotenv(monkeypatch, tmp_path):
 
     _load_dotenv(dotenv)
     assert os.environ.get("TEST_KEY_XYZ") == "hello123"
+
+
+def test_load_dotenv_does_not_override_existing_env(monkeypatch, tmp_path):
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("TEST_KEY_XYZ=from_dotenv\n")
+    monkeypatch.setenv("TEST_KEY_XYZ", "from_shell")
+
+    import os
+
+    from scrape_gateway.config import _load_dotenv
+
+    _load_dotenv(dotenv)
+    assert os.environ.get("TEST_KEY_XYZ") == "from_shell"
 
 
 def test_string_provider_shorthand():

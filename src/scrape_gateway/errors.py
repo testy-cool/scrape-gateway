@@ -5,6 +5,8 @@ from .models import FailureReason
 
 def classify_failure(status_code: int | None, body: str | None = None) -> FailureReason | None:
     text = (body or "").lower()[:50_000]
+    if status_code == 407:
+        return FailureReason.PROXY_ERROR
     if status_code == 403:
         return FailureReason.HTTP_403
     if status_code == 429:
@@ -19,6 +21,24 @@ def classify_failure(status_code: int | None, body: str | None = None) -> Failur
         return FailureReason.CLOUDFLARE
     if "enable javascript" in text or "requires javascript" in text:
         return FailureReason.JS_REQUIRED
-    if "sign in" in text and "password" in text:
+    if "sign in" in text and "password" in text and len(text) < 8000:
         return FailureReason.LOGIN_REQUIRED
     return None
+
+
+def classify_exception(exc: Exception) -> FailureReason:
+    name = type(exc).__name__.lower()
+    message = str(exc).lower()
+    combined = f"{name} {message}"
+
+    if "timeout" in combined or "timed out" in combined:
+        return FailureReason.TIMEOUT
+    if (
+        "407" in combined
+        or "proxy authentication" in combined
+        or "proxyauthrequired" in combined
+        or "proxyconnect" in combined
+        or "proxyerror" in combined
+    ):
+        return FailureReason.PROXY_ERROR
+    return FailureReason.UNKNOWN

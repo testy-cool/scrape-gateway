@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 BLOCK_SIGNATURES: dict[str, list[str]] = {
@@ -33,8 +34,9 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
     "login_wall": [
         "sign in to continue",
         "log in to continue",
-        "create an account",
-        "please log in",
+        "login required",
+        "authentication required",
+        "please log in to continue",
     ],
     "consent_wall": [
         "accept cookies to continue",
@@ -52,6 +54,19 @@ class ValidationResult:
     checks_failed: list[str] = field(default_factory=list)
     block_type: str | None = None
     detail: str | None = None
+    matched_pattern: str | None = None
+    snippet: str | None = None
+
+
+def _snippet_around(text: str, pattern: str, limit: int = 600) -> str | None:
+    idx = text.find(pattern)
+    if idx < 0:
+        return None
+    radius = max(80, (limit - len(pattern)) // 2)
+    start = max(0, idx - radius)
+    end = min(len(text), idx + len(pattern) + radius)
+    snippet = re.sub(r"\s+", " ", text[start:end]).strip()
+    return snippet[:limit]
 
 
 def validate_content(
@@ -92,6 +107,8 @@ def validate_content(
                     checks_failed=checks_failed,
                     block_type=block_type,
                     detail=detail,
+                    matched_pattern=pattern,
+                    snippet=_snippet_around(text, pattern),
                 )
 
     if must_not_contain:

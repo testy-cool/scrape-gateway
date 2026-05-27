@@ -52,6 +52,17 @@ def test_js_required():
     assert result.block_type == "js_shell"
 
 
+def test_create_account_marketing_copy_not_login_wall():
+    html = (
+        "<html><body><h1>Developer platform</h1>"
+        "<p>Create an account to get started. You can set up an org for your team later.</p>"
+        "<p>This is normal public homepage content with enough text to pass validation.</p>"
+        "</body></html>"
+    )
+    result = validate_content(html)
+    assert result.passed
+
+
 def test_must_not_contain():
     html = "<html><body>" + "x" * 200 + "forbidden phrase here</body></html>"
     result = validate_content(html, must_not_contain=["forbidden phrase"])

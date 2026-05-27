@@ -18,11 +18,12 @@ class ArtifactCache:
         self.root.mkdir(parents=True, exist_ok=True)
         self.ttl_seconds = ttl_seconds
 
-    def key_for_url(self, url: str) -> str:
-        return hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+    def key_for_url(self, url: str, render_js: bool = False) -> str:
+        raw = f"{url}|js={render_js}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
-    def paths_for_url(self, url: str) -> dict[str, Path]:
-        key = self.key_for_url(url)
+    def paths_for_url(self, url: str, render_js: bool = False) -> dict[str, Path]:
+        key = self.key_for_url(url, render_js=render_js)
         folder = self.root / key
         return {
             "folder": folder,
@@ -32,8 +33,8 @@ class ArtifactCache:
             "screenshot": folder / "screenshot.bin",
         }
 
-    def get_html(self, url: str) -> str | None:
-        paths = self.paths_for_url(url)
+    def get_html(self, url: str, render_js: bool = False) -> str | None:
+        paths = self.paths_for_url(url, render_js=render_js)
         html_path = paths["html"]
         meta_path = paths["meta"]
         if not html_path.exists():
@@ -48,8 +49,8 @@ class ArtifactCache:
                 pass
         return html_path.read_text(encoding="utf-8")
 
-    def save(self, result: ScrapeResult) -> None:
-        paths = self.paths_for_url(result.url)
+    def save(self, result: ScrapeResult, render_js: bool = False) -> None:
+        paths = self.paths_for_url(result.url, render_js=render_js)
         paths["folder"].mkdir(parents=True, exist_ok=True)
         if result.html:
             paths["html"].write_text(result.html, encoding="utf-8")
