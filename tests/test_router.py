@@ -390,7 +390,7 @@ class HeaderCapture(ProviderAdapter):
         )
 
 
-async def test_auto_referer_is_google_search(tmp_dir):
+async def test_auto_referer_from_pool(tmp_dir):
     cap = HeaderCapture()
     gw = ScrapeGateway(
         providers=[cap],
@@ -398,7 +398,17 @@ async def test_auto_referer_is_google_search(tmp_dir):
         memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
     )
     await gw.scrape(ScrapeRequest("https://example.com/page"), use_cache=False)
-    assert cap.captured_headers["Referer"] == "https://www.google.com/search?q=site:example.com"
+    ref = cap.captured_headers["Referer"]
+    assert any(
+        ref.startswith(prefix)
+        for prefix in [
+            "https://www.google.com/",
+            "https://www.bing.com/",
+            "https://duckduckgo.com/",
+            "https://t.co/",
+            "https://www.reddit.com/",
+        ]
+    )
 
 
 async def test_custom_referer(tmp_dir):

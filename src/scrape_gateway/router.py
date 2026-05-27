@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import sys
 import time
@@ -175,6 +176,25 @@ def _providers_from_config(config: GatewayConfig) -> list[ProviderAdapter]:
     return result
 
 
+_REFERER_POOL = [
+    "https://www.google.com/",
+    "https://www.google.com/search?q={domain}",
+    "https://www.google.com/search?q={domain_words}",
+    "https://www.bing.com/search?q={domain}",
+    "https://duckduckgo.com/?q={domain}",
+    "https://t.co/redirect",
+    "https://www.reddit.com/",
+]
+
+
+def _auto_referer(url: str) -> str:
+    parsed = urlparse(url)
+    domain = (parsed.hostname or "").removeprefix("www.")
+    domain_words = domain.replace(".", " ").replace("-", " ").strip()
+    template = random.choice(_REFERER_POOL)
+    return template.format(domain=domain, domain_words=domain_words)
+
+
 class ScrapeGateway:
     def __init__(
         self,
@@ -212,8 +232,7 @@ class ScrapeGateway:
             request.url = f"https://{request.url}"
         if "Referer" not in request.headers and "referer" not in request.headers:
             if request.referer is None:
-                domain = urlparse(request.url).hostname or ""
-                request.headers["Referer"] = f"https://www.google.com/search?q=site:{domain}"
+                request.headers["Referer"] = _auto_referer(request.url)
             elif request.referer:
                 request.headers["Referer"] = request.referer
         _log(f"\nscrape {request.url}")
