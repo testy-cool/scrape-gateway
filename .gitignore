@@ -13,3 +13,10 @@ build/
 *.sqlite3
 .claude/
 uv.lock
+
+# Screenshots and local artifacts
+*.png
+output/
+scrape-gateway.yml
+.playwright-mcp/
+docs/scrape-gateway-scaffold.zip
