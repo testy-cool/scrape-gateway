@@ -210,6 +210,12 @@ class ScrapeGateway:
     ) -> ScrapeResult:
         if not request.url.startswith(("http://", "https://")):
             request.url = f"https://{request.url}"
+        if "Referer" not in request.headers and "referer" not in request.headers:
+            if request.referer is None:
+                domain = urlparse(request.url).hostname or ""
+                request.headers["Referer"] = f"https://www.google.com/search?q=site:{domain}"
+            elif request.referer:
+                request.headers["Referer"] = request.referer
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
         run_id = request.metadata.get("run_id") or new_run_id()

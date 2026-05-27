@@ -187,6 +187,9 @@ def url(
     debug_artifacts: bool = typer.Option(
         False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"
     ),
+    referer: str | None = typer.Option(
+        None, "--referer", help="Referer header (default: auto Google search URL, '' to disable)"
+    ),
 ) -> None:
     """Scrape one URL through the gateway.
 
@@ -205,7 +208,7 @@ def url(
       sgw url https://example.com --tier advanced  # force ScrapeDrive tier
       sgw url https://example.com --no-cache      # fresh scrape
       sgw url https://example.com --meta          # extract OG metadata
-      sgw url https://example.com --debug-artifacts  # save failed bodies for analysis
+      sgw url https://example.com --referer https://google.com  # spoof referer
     """
 
     async def run() -> None:
@@ -231,6 +234,7 @@ def url(
                     wait_selector=wait_selector,
                     extra_wait_ms=extra_wait,
                     block_ads=block_ads,
+                    referer=referer,
                     output_format=fmt,
                     metadata=metadata,
                 ),
@@ -358,6 +362,9 @@ def run(
     tier: str | None = typer.Option(
         None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
     ),
+    referer: str | None = typer.Option(
+        None, "--referer", help="Referer header (default: auto Google search URL, '' to disable)"
+    ),
 ) -> None:
     """Scrape URLs from a text file, one URL per line.
 
@@ -371,7 +378,7 @@ def run(
     Examples:
       sgw run urls.txt
       sgw run urls.txt --render-js -p scrapedrive
-      sgw run urls.txt -p scrapedrive --tier advanced
+      sgw run urls.txt --referer https://google.com
     """
 
     async def execute() -> None:
@@ -405,6 +412,7 @@ def run(
                         wait_selector=wait_selector,
                         extra_wait_ms=extra_wait,
                         block_ads=block_ads,
+                        referer=referer,
                         output_format=output_format,
                         metadata=metadata,
                     )

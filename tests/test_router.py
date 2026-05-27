@@ -368,3 +368,73 @@ async def test_tier_escalation_full_flow(tmp_dir):
     assert r2.provider == "scrapedrive"
     assert cheap.call_count == 1  # NOT called again
     assert r2.metadata.get("tier_used") == "scrapedrive:standard"  # tier was passed through
+
+
+class HeaderCapture(ProviderAdapter):
+    name = "header_capture"
+    cost_rank = 0
+    capabilities = frozenset({"html"})
+
+    def __init__(self):
+        self.captured_headers: dict[str, str] = {}
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        self.captured_headers = dict(request.headers)
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html="<html><body><h1>Example</h1><p>Enough content to pass validation.</p></body></html>",
+            route="header_capture",
+        )
+
+
+async def test_auto_referer_is_google_search(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(ScrapeRequest("https://example.com/page"), use_cache=False)
+    assert cap.captured_headers["Referer"] == "https://www.google.com/search?q=site:example.com"
+
+
+async def test_custom_referer(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(
+        ScrapeRequest("https://example.com", referer="https://reddit.com/r/python"),
+        use_cache=False,
+    )
+    assert cap.captured_headers["Referer"] == "https://reddit.com/r/python"
+
+
+async def test_empty_referer_disables_auto(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(ScrapeRequest("https://example.com", referer=""), use_cache=False)
+    assert "Referer" not in cap.captured_headers
+
+
+async def test_explicit_header_overrides_auto_referer(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(
+        ScrapeRequest("https://example.com", headers={"Referer": "https://bing.com"}),
+        use_cache=False,
+    )
+    assert cap.captured_headers["Referer"] == "https://bing.com"
