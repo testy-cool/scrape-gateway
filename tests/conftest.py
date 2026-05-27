@@ -529,23 +529,27 @@ def _name_to_description(name: str) -> str:
     return name.capitalize()
 
 
-# ── pytest-html hooks ───────────────────────────────────────────
+# ── pytest-html hooks (only active when pytest-html is installed) ──
 
+try:
+    import pytest_html as _pytest_html  # noqa: F401
 
-def pytest_html_results_table_header(cells):
-    cells.insert(1, '<th class="sortable">Description</th>')
-    cells.insert(2, "<th>Why It Matters</th>")
+    def pytest_html_results_table_header(cells):
+        cells.insert(1, '<th class="sortable">Description</th>')
+        cells.insert(2, "<th>Why It Matters</th>")
 
+    def pytest_html_results_table_row(report, cells):
+        key = _nodeid_to_key(report.nodeid)
+        if key in TEST_DOCS:
+            desc, why = TEST_DOCS[key]
+        else:
+            desc = _name_to_description(report.nodeid.split("::")[-1])
+            why = ""
+        cells.insert(1, f"<td>{desc}</td>")
+        cells.insert(2, f"<td>{why}</td>")
 
-def pytest_html_results_table_row(report, cells):
-    key = _nodeid_to_key(report.nodeid)
-    if key in TEST_DOCS:
-        desc, why = TEST_DOCS[key]
-    else:
-        desc = _name_to_description(report.nodeid.split("::")[-1])
-        why = ""
-    cells.insert(1, f"<td>{desc}</td>")
-    cells.insert(2, f"<td>{why}</td>")
+except ImportError:
+    pass
 
 
 @pytest.fixture(autouse=True)
