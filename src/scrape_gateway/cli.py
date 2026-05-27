@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import typer
@@ -81,6 +82,39 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print(f"[dim]sgw links <url> -f compact      # extract links for LLM[/]")
 
 
+def _extract_og_meta(html: str) -> dict[str, str]:
+    import re
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    og: dict[str, str] = {}
+    for tag in soup.find_all("meta"):
+        prop = tag.get("property", "") or tag.get("name", "")
+        content = tag.get("content", "")
+        if prop.startswith("og:") and content:
+            og[prop] = content
+    if not og.get("og:title") and soup.title and soup.title.string:
+        og["og:title"] = soup.title.string.strip()
+    if not og.get("og:image"):
+        best_src, best_area = "", 0
+        for img in soup.find_all("img", src=True):
+            src = img["src"]
+            if not src.startswith("http") or "rsrc.php" in src or "emoji" in src:
+                continue
+            try:
+                w = int(img.get("width", 0))
+                h = int(img.get("height", 0))
+            except (ValueError, TypeError):
+                w, h = 0, 0
+            area = w * h
+            if area > best_area:
+                best_src, best_area = src, area
+            elif area == 0 and not best_area and not best_src:
+                best_src = src
+        if best_src:
+            og["og:image"] = re.sub(r"&amp;", "&", best_src)
+    return og
+
+
 def _print_result(result) -> None:
     if result.success:
         title = Text("SUCCESS", style="bold green")
@@ -101,11 +135,17 @@ def _print_result(result) -> None:
     if result.block_type:
         table.add_row("block", f"[red]{result.block_type}[/]")
     if result.failure_reason:
-        table.add_row("reason", f"[red]{result.failure_reason}[/]")
+        table.add_row("reason", f"[red]{result.failure_reason.value}[/]")
+    if result.error:
+        table.add_row("error", f"[red]{result.error}[/]")
     if result.html:
         table.add_row("chars", f"{len(result.html):,}")
     if result.markdown:
         table.add_row("markdown", f"{len(result.markdown):,} chars")
+    if result.metadata.get("run_id"):
+        table.add_row("run", f"[dim]{result.metadata['run_id']}[/]")
+    if result.metadata.get("telemetry_report"):
+        table.add_row("report", f"[dim]{result.metadata['telemetry_report']}[/]")
 
     console.print(Panel(table, title=title, border_style="green" if result.success else "red"))
 
@@ -125,6 +165,9 @@ def url(
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
+    tier: str | None = typer.Option(None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"),
+    meta: bool = typer.Option(False, "--meta", help="Extract and print OpenGraph metadata as JSON"),
+    debug_artifacts: bool = typer.Option(False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"),
 ) -> None:
     """Scrape one URL through the gateway.
 
@@ -140,11 +183,22 @@ def url(
       sgw url https://example.com
       sgw url https://example.com --render-js     # JS-heavy SPA
       sgw url https://example.com -p scrapedrive  # force a provider
+      sgw url https://example.com --tier advanced  # force ScrapeDrive tier
       sgw url https://example.com --no-cache      # fresh scrape
+      sgw url https://example.com --meta          # extract OG metadata
+      sgw url https://example.com --debug-artifacts  # save failed bodies for analysis
     """
 
     async def run() -> None:
         gateway = _build_gateway(provider)
+        metadata = {}
+        if tier:
+            metadata["start_tier"] = f"scrapedrive:{tier}"
+        if debug_artifacts:
+            metadata["debug_artifacts"] = True
+        fmt = output_format
+        if meta and fmt == "markdown":
+            fmt = "html"
         with console.status(f"[bold cyan]Scraping {target_url}...", spinner="dots"):
             result = await gateway.scrape(
                 ScrapeRequest(
@@ -158,15 +212,110 @@ def url(
                     wait_selector=wait_selector,
                     extra_wait_ms=extra_wait,
                     block_ads=block_ads,
-                    output_format=output_format,
+                    output_format=fmt,
+                    metadata=metadata,
                 ),
                 use_cache=not no_cache,
                 use_memory=not no_cache,
             )
         _print_result(result)
+        if meta and result.success and result.html:
+            og = _extract_og_meta(result.html)
+            print(json.dumps(og, indent=2, ensure_ascii=False))
+        elif meta and result.success and not result.html:
+            console.print("[yellow]--meta requires HTML content; try without --format markdown[/]")
         _hints("url", target_url)
+        if not result.success:
+            raise typer.Exit(1)
 
     asyncio.run(run())
+
+
+@app.command()
+def meta(
+    target_url: str,
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
+    no_cache: bool = typer.Option(False, "--no-cache"),
+    render_js: bool = typer.Option(False, "--render-js", help="Render JS before extracting"),
+) -> None:
+    """Extract OpenGraph metadata from a URL.
+
+    OG tags are designed for crawlers — they're in static HTML, no JS needed.
+    Prints clean JSON to stdout — pipe to jq or use in scripts.
+
+    Examples:
+      sgw meta https://example.com
+      sgw meta https://facebook.com/some/post
+      sgw meta https://example.com --render-js  # if site needs JS
+      sgw meta https://example.com 2>/dev/null | jq .og:image
+    """
+
+    async def run() -> None:
+        gateway = _build_gateway(provider)
+        with console.status(f"[bold cyan]Fetching metadata from {target_url}...", spinner="dots"):
+            result = await gateway.scrape(
+                ScrapeRequest(
+                    target_url,
+                    render_js=render_js,
+                    output_format="html",
+                ),
+                use_cache=not no_cache,
+                use_memory=not no_cache,
+            )
+        if not result.success:
+            console.print(f"[red]Scrape failed: {result.failure_reason or result.error}[/]")
+            raise typer.Exit(1)
+        if not result.html:
+            console.print("[red]No HTML content returned[/]")
+            raise typer.Exit(1)
+        og = _extract_og_meta(result.html)
+        if og:
+            print(json.dumps(og, indent=2, ensure_ascii=False))
+        else:
+            console.print("[yellow]No OpenGraph tags found[/]")
+
+    asyncio.run(run())
+
+
+@app.command()
+def telemetry(
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of recent reports to show"),
+    domain: str | None = typer.Option(None, "--domain", "-d", help="Filter by domain"),
+    diagnosis: str | None = typer.Option(None, "--diagnosis", help="Filter by diagnosis code"),
+    json_output: bool = typer.Option(False, "--json", help="Print full reports as JSON"),
+) -> None:
+    """Inspect recent scrape telemetry reports."""
+    from .telemetry import load_recent_reports
+
+    reports = load_recent_reports(limit=limit, domain=domain, diagnosis=diagnosis)
+    if json_output:
+        print(json.dumps(reports, indent=2, ensure_ascii=False))
+        return
+    if not reports:
+        console.print("[yellow]No telemetry reports found[/]")
+        return
+
+    table = Table(title="Recent Scrape Telemetry")
+    table.add_column("time", style="dim")
+    table.add_column("ok")
+    table.add_column("domain")
+    table.add_column("provider")
+    table.add_column("diagnosis")
+    table.add_column("action")
+    table.add_column("report", style="dim")
+    for report in reports:
+        final = report.get("final", {})
+        ok = "[green]yes[/]" if report.get("success") else "[red]no[/]"
+        table.add_row(
+            str(report.get("started_at", ""))[:19],
+            ok,
+            str(report.get("domain", "")),
+            str(final.get("provider", "")),
+            str(report.get("diagnosis", "")),
+            str(report.get("recommended_next_action", "")),
+            str(report.get("_path", "")),
+        )
+    console.print(table)
 
 
 @app.command()
@@ -183,6 +332,7 @@ def run(
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
+    tier: str | None = typer.Option(None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"),
 ) -> None:
     """Scrape URLs from a text file, one URL per line.
 
@@ -196,10 +346,14 @@ def run(
     Examples:
       sgw run urls.txt
       sgw run urls.txt --render-js -p scrapedrive
+      sgw run urls.txt -p scrapedrive --tier advanced
     """
 
     async def execute() -> None:
         gateway = _build_gateway(provider)
+        metadata = {}
+        if tier:
+            metadata["start_tier"] = f"scrapedrive:{tier}"
         urls = [line.strip() for line in urls_file.read_text().splitlines() if line.strip()]
         successes = 0
         total_cost = 0.0
@@ -227,6 +381,7 @@ def run(
                         extra_wait_ms=extra_wait,
                         block_ads=block_ads,
                         output_format=output_format,
+                        metadata=metadata,
                     )
                 )
             successes += int(result.success)
