@@ -411,6 +411,50 @@ async def test_auto_referer_from_pool(tmp_dir):
     )
 
 
+async def test_browser_headers_applied(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+    h = cap.captured_headers
+    assert h["Sec-Fetch-Dest"] == "document"
+    assert h["Sec-Fetch-Mode"] == "navigate"
+    assert h["Sec-Fetch-Site"] == "cross-site"
+    assert h["Sec-Fetch-User"] == "?1"
+    assert h["Upgrade-Insecure-Requests"] == "1"
+    assert "text/html" in h["Accept"]
+    assert "en" in h["Accept-Language"]
+
+
+async def test_sec_fetch_site_cross_vs_none(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(ScrapeRequest("https://example.com", referer=""), use_cache=False)
+    assert cap.captured_headers["Sec-Fetch-Site"] == "none"
+
+
+async def test_browser_headers_dont_override_explicit(tmp_dir):
+    cap = HeaderCapture()
+    gw = ScrapeGateway(
+        providers=[cap],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    await gw.scrape(
+        ScrapeRequest("https://example.com", headers={"Accept-Language": "ro-RO"}),
+        use_cache=False,
+    )
+    assert cap.captured_headers["Accept-Language"] == "ro-RO"
+    assert "Sec-Fetch-Dest" in cap.captured_headers
+
+
 async def test_custom_referer(tmp_dir):
     cap = HeaderCapture()
     gw = ScrapeGateway(

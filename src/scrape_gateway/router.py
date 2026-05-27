@@ -186,6 +186,23 @@ _REFERER_POOL = [
     "https://www.reddit.com/",
 ]
 
+_ACCEPT_LANGUAGES = [
+    "en-US,en;q=0.9",
+    "en-US,en;q=0.9,es;q=0.8",
+    "en-GB,en;q=0.9,en-US;q=0.8",
+    "en-US,en;q=0.9,fr;q=0.8",
+    "en-US,en;q=0.9,de;q=0.8",
+    "en,en-US;q=0.9",
+]
+
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+]
+
 
 def _auto_referer(url: str) -> str:
     parsed = urlparse(url)
@@ -193,6 +210,37 @@ def _auto_referer(url: str) -> str:
     domain_words = domain.replace(".", " ").replace("-", " ").strip()
     template = random.choice(_REFERER_POOL)
     return template.format(domain=domain, domain_words=domain_words)
+
+
+def _apply_browser_headers(request_headers: dict[str, str], url: str) -> None:
+    """Fill in realistic browser headers that aren't already set."""
+    h = request_headers
+    referer = h.get("Referer", "")
+    target_host = urlparse(url).hostname or ""
+    referer_host = urlparse(referer).hostname or "" if referer else ""
+
+    if referer_host and referer_host == target_host:
+        fetch_site = "same-origin"
+    elif referer:
+        fetch_site = "cross-site"
+    else:
+        fetch_site = "none"
+
+    defaults = {
+        "User-Agent": random.choice(_USER_AGENTS),
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": fetch_site,
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": random.choice(_ACCEPT_LANGUAGES),
+        "Cache-Control": "max-age=0",
+        "Priority": "u=0, i",
+    }
+    for key, val in defaults.items():
+        if key not in h and key.lower() not in {k.lower() for k in h}:
+            h[key] = val
 
 
 class ScrapeGateway:
@@ -235,6 +283,7 @@ class ScrapeGateway:
                 request.headers["Referer"] = _auto_referer(request.url)
             elif request.referer:
                 request.headers["Referer"] = request.referer
+        _apply_browser_headers(request.headers, request.url)
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
         run_id = request.metadata.get("run_id") or new_run_id()
