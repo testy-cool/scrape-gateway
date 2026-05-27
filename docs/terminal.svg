@@ -21,10 +21,10 @@
   <rect class="bg" width="720" height="360" rx="10"/>
   <rect class="bar" width="720" height="36" rx="10"/>
   <rect class="bg" x="0" y="26" width="720" height="10"/>
-  <circle class="dot-r" cx="20" cy="18" r="6"/>
-  <circle class="dot-y" cx="40" cy="18" r="6"/>
-  <circle class="dot-g" cx="60" cy="18" r="6"/>
-  <text class="title" x="310" y="22" text-anchor="middle">sgw — scrape-gateway</text>
+  <circle class="dot-r" cx="20" cy="13" r="6"/>
+  <circle class="dot-y" cx="40" cy="13" r="6"/>
+  <circle class="dot-g" cx="60" cy="13" r="6"/>
+  <text class="title" x="310" y="17" text-anchor="middle">sgw — scrape-gateway</text>
 
   <!-- Line 1: prompt -->
   <text class="t prompt" x="16" y="62">$</text>
