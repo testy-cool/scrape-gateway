@@ -4,16 +4,9 @@
 [![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/testy-cool/scrape-gateway/releases/latest)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-```bash
-$ sgw url https://hard-to-scrape-store.com
-  [raw_http]    403 0.3s → ✗ blocked
-  [wreq]        403 0.5s → ✗ blocked
-  [scrapedrive] 200 2.1s → ✓ pass (advanced tier)
-
-# Next time — sgw remembers what worked:
-$ sgw url https://hard-to-scrape-store.com/other-page
-  [scrapedrive] 200 1.8s → ✓ pass (advanced tier)    ← skipped free providers, went straight here
-```
+<p align="center">
+  <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
+</p>
 
 One command, seven providers. Free ones tried first, paid ones only when needed. Domain memory skips the trial-and-error on repeat visits.
 

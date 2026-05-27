@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360">
+  <style>
+    .bg { fill: #1e1e2e; }
+    .bar { fill: #313244; }
+    .dot-r { fill: #f38ba8; }
+    .dot-y { fill: #f9e2af; }
+    .dot-g { fill: #a6e3a1; }
+    .title { fill: #cdd6f4; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+    .t { fill: #cdd6f4; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13.5px; }
+    .dim { fill: #6c7086; }
+    .cyan { fill: #89dceb; }
+    .green { fill: #a6e3a1; }
+    .red { fill: #f38ba8; }
+    .yellow { fill: #f9e2af; }
+    .bold { font-weight: bold; }
+    .border-g { stroke: #a6e3a1; stroke-width: 1.5; fill: none; rx: 6; }
+    .prompt { fill: #cba6f7; }
+  </style>
+
+  <!-- Window -->
+  <rect class="bg" width="720" height="360" rx="10"/>
+  <rect class="bar" width="720" height="36" rx="10"/>
+  <rect class="bg" x="0" y="26" width="720" height="10"/>
+  <circle class="dot-r" cx="20" cy="18" r="6"/>
+  <circle class="dot-y" cx="40" cy="18" r="6"/>
+  <circle class="dot-g" cx="60" cy="18" r="6"/>
+  <text class="title" x="310" y="22" text-anchor="middle">sgw — scrape-gateway</text>
+
+  <!-- Line 1: prompt -->
+  <text class="t prompt" x="16" y="62">$</text>
+  <text class="t" x="30" y="62">sgw url https://hard-to-scrape-store.com</text>
+
+  <!-- Line 2-4: provider attempts -->
+  <text class="t dim" x="30" y="84">  [raw_http]</text>
+  <text class="t dim" x="156" y="84">403  0.3s →</text>
+  <text class="t red" x="280" y="84">✗ blocked</text>
+
+  <text class="t dim" x="30" y="106">  [wreq]</text>
+  <text class="t dim" x="156" y="106">403  0.5s →</text>
+  <text class="t red" x="280" y="106">✗ blocked</text>
+
+  <text class="t dim" x="30" y="128">  [curl_cffi]</text>
+  <text class="t dim" x="156" y="128">403  0.4s →</text>
+  <text class="t red" x="280" y="128">✗ blocked</text>
+
+  <text class="t cyan" x="30" y="150">  [scrapedrive]</text>
+  <text class="t" x="178" y="150">200  2.1s →</text>
+  <text class="t green bold" x="304" y="150">✓ pass</text>
+  <text class="t dim" x="364" y="150">(advanced tier)</text>
+
+  <!-- Success panel -->
+  <rect class="border-g" x="26" y="168" width="668" height="100"/>
+  <text class="t green bold" x="280" y="188">SUCCESS</text>
+  <text class="t dim" x="46" y="210">provider</text>
+  <text class="t cyan" x="160" y="210">scrapedrive</text>
+  <text class="t dim" x="46" y="230">status</text>
+  <text class="t" x="160" y="230">200</text>
+  <text class="t dim" x="300" y="210">route</text>
+  <text class="t" x="400" y="210">raw→wreq→curl→scrapedrive:advanced</text>
+  <text class="t dim" x="300" y="230">chars</text>
+  <text class="t" x="400" y="230">48,291</text>
+  <text class="t dim" x="46" y="250">cost</text>
+  <text class="t" x="160" y="250">25</text>
+  <text class="t dim" x="300" y="250">validated</text>
+  <text class="t green" x="400" y="250">True</text>
+
+  <!-- Hint line -->
+  <text class="t dim" x="30" y="296">Next time — sgw remembers what worked:</text>
+  <text class="t prompt" x="16" y="318">$</text>
+  <text class="t" x="30" y="318">sgw url https://hard-to-scrape-store.com/other-page</text>
+  <text class="t cyan" x="30" y="340">  [scrapedrive]</text>
+  <text class="t" x="178" y="340">200  1.8s →</text>
+  <text class="t green bold" x="304" y="340">✓ pass</text>
+  <text class="t dim" x="364" y="340">← skipped free providers</text>
+</svg>
