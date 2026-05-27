@@ -26,7 +26,9 @@ class MyApiProvider(ProviderAdapter):
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if not self.api_key:
             return ScrapeResult(
-                request.url, self.name, False,
+                request.url,
+                self.name,
+                False,
                 error="Set MY_API_KEY in your environment",
                 failure_reason=FailureReason.PROVIDER_ERROR,
             )

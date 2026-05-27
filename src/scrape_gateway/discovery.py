@@ -35,7 +35,7 @@ def _check_deps(cls: type[ProviderAdapter]) -> bool:
         return False
 
     try:
-        answer = input(f"  Install into sgw's environment? [Y/n] ").strip().lower()
+        answer = input("  Install into sgw's environment? [Y/n] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -44,7 +44,8 @@ def _check_deps(cls: type[ProviderAdapter]) -> bool:
 
     result = subprocess.run(
         ["uv", "pip", "install", "--python", sys.executable, *missing],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode == 0:
         print(f"  [extensions] installed {', '.join(missing)}", file=sys.stderr)

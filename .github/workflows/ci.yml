@@ -11,11 +11,12 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e '.[dev]'
+      - run: uv pip install -e '.[dev]' --system
       - run: ruff check .
       - run: ruff format --check .
-      - run: pytest -q
-      - run: scrape-gateway --help
+      - run: pytest -q --ignore=tests/test_scraperapi_live.py --ignore=tests/test_scrapedrive_live.py
+      - run: sgw --help

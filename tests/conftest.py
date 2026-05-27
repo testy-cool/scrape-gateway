@@ -1,7 +1,5 @@
 """Pytest configuration: custom HTML report with plain-language test descriptions."""
 
-import re
-
 import pytest
 
 # ── Human-readable descriptions for every test ──────────────────
@@ -533,9 +531,10 @@ def _name_to_description(name: str) -> str:
 
 # ── pytest-html hooks ───────────────────────────────────────────
 
+
 def pytest_html_results_table_header(cells):
     cells.insert(1, '<th class="sortable">Description</th>')
-    cells.insert(2, '<th>Why It Matters</th>')
+    cells.insert(2, "<th>Why It Matters</th>")
 
 
 def pytest_html_results_table_row(report, cells):

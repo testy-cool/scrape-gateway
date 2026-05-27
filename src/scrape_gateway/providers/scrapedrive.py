@@ -47,7 +47,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             return ScrapeResult(request.url, self.name, False, error="Missing SCRAPEDRIVE_API_KEY")
 
         start = _start_tier(request)
-        tiers = TIER_ORDER[TIER_ORDER.index(start):]
+        tiers = TIER_ORDER[TIER_ORDER.index(start) :]
 
         last_result: ScrapeResult | None = None
         for tier in tiers:
@@ -56,7 +56,9 @@ class ScrapeDriveProvider(ProviderAdapter):
                 return result
             last_result = result
             if tier != tiers[-1]:
-                _log(f"    [{self.name}] {tier} failed, escalating to {tiers[tiers.index(tier) + 1]}")
+                _log(
+                    f"    [{self.name}] {tier} failed, escalating to {tiers[tiers.index(tier) + 1]}"
+                )
 
         return last_result  # type: ignore[return-value]
 

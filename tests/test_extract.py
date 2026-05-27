@@ -1,5 +1,5 @@
 """Tests for sg extract: pattern detection, data extraction, field mapping, and memory."""
-import json
+
 import tempfile
 from pathlib import Path
 
@@ -131,6 +131,7 @@ DEEPLY_NESTED_HTML = """
 
 # ── Pattern detection ────────────────────────────────────────────
 
+
 class TestDetectPatterns:
     def test_finds_product_cards(self):
         patterns = _detect_patterns(PRODUCT_LISTING_HTML)
@@ -150,17 +151,23 @@ class TestDetectPatterns:
     def test_finds_prices(self):
         patterns = _detect_patterns(PRODUCT_LISTING_HTML)
         assert "prices" in patterns, "should detect prices"
-        assert len(patterns["prices"]) >= 3, f"should find at least 3 prices, got {len(patterns['prices'])}"
+        assert len(patterns["prices"]) >= 3, (
+            f"should find at least 3 prices, got {len(patterns['prices'])}"
+        )
 
     def test_no_patterns_in_simple_page(self):
         patterns = _detect_patterns(NO_PATTERNS_HTML)
-        assert len(patterns.get("repeated", [])) == 0, "simple page should have no repeated patterns"
+        assert len(patterns.get("repeated", [])) == 0, (
+            "simple page should have no repeated patterns"
+        )
 
     def test_sorted_by_count_descending(self):
         patterns = _detect_patterns(PRODUCT_LISTING_HTML)
         repeated = patterns["repeated"]
         counts = [r["count"] for r in repeated]
-        assert counts == sorted(counts, reverse=True), f"patterns should be sorted by count desc, got: {counts}"
+        assert counts == sorted(counts, reverse=True), (
+            f"patterns should be sorted by count desc, got: {counts}"
+        )
 
     def test_flat_list_detected(self):
         patterns = _detect_patterns(FLAT_LIST_HTML)
@@ -171,9 +178,11 @@ class TestDetectPatterns:
 
 # ── Element-to-row extraction ────────────────────────────────────
 
+
 class TestElementToRow:
     def _parse_first(self, html, selector):
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html, "html.parser")
         el = soup.select_one(selector)
         assert el is not None, f"selector {selector!r} matched nothing"
@@ -210,6 +219,7 @@ class TestElementToRow:
 
     def test_empty_element_returns_empty(self):
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup("<div class='empty'></div>", "html.parser")
         row = _element_to_row(soup.select_one("div.empty"))
         assert row == {}, f"empty element should return empty dict, got: {row}"
@@ -217,20 +227,25 @@ class TestElementToRow:
 
 # ── Full extraction pipeline ─────────────────────────────────────
 
+
 class TestExtractRows:
     def test_products_with_selector(self):
         rows, desc = _extract_rows(PRODUCT_LISTING_HTML, selector="li.product-card")
         assert len(rows) == 4, f"expected 4 products, got {len(rows)}: {desc}"
-        assert all("title" in r for r in rows), f"all rows should have title: {[list(r.keys()) for r in rows]}"
-        assert all("price" in r for r in rows), f"all rows should have price: {[list(r.keys()) for r in rows]}"
+        assert all("title" in r for r in rows), (
+            f"all rows should have title: {[list(r.keys()) for r in rows]}"
+        )
+        assert all("price" in r for r in rows), (
+            f"all rows should have price: {[list(r.keys()) for r in rows]}"
+        )
         titles = [r["title"] for r in rows]
         assert titles == ["Widget A", "Widget B", "Widget C", "Widget D"], f"wrong titles: {titles}"
 
     def test_articles_with_selector(self):
         rows, desc = _extract_rows(ARTICLE_LISTING_HTML, selector="article.post-card")
         assert len(rows) == 3, f"expected 3 articles, got {len(rows)}: {desc}"
-        assert all("title" in r for r in rows), f"all rows should have title"
-        assert all("date" in r for r in rows), f"all rows should have date"
+        assert all("title" in r for r in rows), "all rows should have title"
+        assert all("date" in r for r in rows), "all rows should have date"
 
     def test_auto_detect_finds_something(self):
         rows, desc = _extract_rows(PRODUCT_LISTING_HTML)
@@ -239,8 +254,9 @@ class TestExtractRows:
     def test_pick_selects_correct_pattern(self):
         rows_1, desc_1 = _extract_rows(PRODUCT_LISTING_HTML, pick=1)
         rows_2, desc_2 = _extract_rows(PRODUCT_LISTING_HTML, pick=2)
-        assert desc_1 != desc_2 or len(rows_1) != len(rows_2), \
+        assert desc_1 != desc_2 or len(rows_1) != len(rows_2), (
             f"pick=1 and pick=2 should select different patterns: {desc_1} vs {desc_2}"
+        )
 
     def test_no_patterns_returns_empty(self):
         rows, desc = _extract_rows(NO_PATTERNS_HTML)
@@ -255,11 +271,12 @@ class TestExtractRows:
     def test_deeply_nested_extraction(self):
         rows, desc = _extract_rows(DEEPLY_NESTED_HTML, selector="div.result-item")
         assert len(rows) == 3, f"expected 3 results, got {len(rows)}: {desc}"
-        assert all("title" in r for r in rows), f"all nested results should have title"
-        assert all("href" in r for r in rows), f"all nested results should have href"
+        assert all("title" in r for r in rows), "all nested results should have title"
+        assert all("href" in r for r in rows), "all nested results should have href"
 
 
 # ── Field map application ────────────────────────────────────────
+
 
 class TestFieldMap:
     def test_renames_fields(self):
@@ -281,6 +298,7 @@ class TestFieldMap:
 
 
 # ── Extraction memory (learn/recall) ─────────────────────────────
+
 
 class TestExtractionMemory:
     def test_learn_and_recall(self):
@@ -310,6 +328,7 @@ class TestExtractionMemory:
 
 # ── Live integration tests (hit real URLs, cost money) ───────────
 
+
 @pytest.mark.live
 class TestExtractLive:
     """These tests hit real URLs. Run with: pytest -m live"""
@@ -317,12 +336,14 @@ class TestExtractLive:
     @pytest.fixture
     def gateway(self):
         from scrape_gateway.router import ScrapeGateway
+
         return ScrapeGateway.from_config()
 
     @pytest.mark.asyncio
     async def test_books_toscrape_products(self, gateway):
         """books.toscrape.com product listing — the canonical test."""
         from scrape_gateway.models import ScrapeRequest
+
         result = await gateway.scrape(ScrapeRequest("https://books.toscrape.com"))
         assert result.success, f"scrape failed: {result.error or result.failure_reason}"
         assert result.html, "scrape returned empty HTML"
@@ -341,6 +362,7 @@ class TestExtractLive:
     async def test_auto_detect_picks_content(self, gateway):
         """Auto-detect on books.toscrape.com should find some pattern."""
         from scrape_gateway.models import ScrapeRequest
+
         result = await gateway.scrape(ScrapeRequest("https://books.toscrape.com"))
         assert result.success, f"scrape failed: {result.error or result.failure_reason}"
 
@@ -355,8 +377,11 @@ class TestExtractLive:
     async def test_example_com_no_listings(self, gateway):
         """example.com has no repeated patterns — extract should return empty."""
         from scrape_gateway.models import ScrapeRequest
+
         result = await gateway.scrape(ScrapeRequest("https://example.com"))
         assert result.success, f"scrape failed: {result.error or result.failure_reason}"
 
         rows, desc = _extract_rows(result.html)
-        assert len(rows) == 0, f"example.com should have no extractable listings, got {len(rows)}: {desc}"
+        assert len(rows) == 0, (
+            f"example.com should have no extractable listings, got {len(rows)}: {desc}"
+        )

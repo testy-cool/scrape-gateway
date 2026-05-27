@@ -46,24 +46,18 @@ class TestBasic:
 
 class TestParams:
     async def test_country(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", country="US")
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", country="US"))
         assert result.success is True
         assert "Example Domain" in (result.html or "")
 
     async def test_render_js(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", render_js=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", render_js=True))
         assert result.success is True
         assert result.cost_units == 10
         assert len(result.html or "") > 100
 
     async def test_premium(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", premium=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", premium=True))
         assert result.success is True
         assert result.route == "scraperapi:premium"
         assert result.cost_units == 10

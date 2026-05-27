@@ -216,14 +216,18 @@ class DomainMemory:
     @staticmethod
     def fingerprint(html: str) -> dict:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html, "html.parser")
 
         links = [a["href"] for a in soup.find_all("a", href=True)]
         forms = [f.get("action", "") for f in soup.find_all("form")]
         images = len(soup.find_all("img"))
         scripts = len(soup.find_all("script"))
-        meta = {m.get("name", m.get("property", "")): m.get("content", "")
-                for m in soup.find_all("meta") if m.get("content")}
+        meta = {
+            m.get("name", m.get("property", "")): m.get("content", "")
+            for m in soup.find_all("meta")
+            if m.get("content")
+        }
 
         tag_counts: dict[str, int] = {}
         for tag in soup.find_all(True):
@@ -235,7 +239,9 @@ class DomainMemory:
                 headings.append(h.get_text(strip=True)[:80])
 
         text = soup.get_text(" ", strip=True)
-        prices = re.findall(r'(?:[$€£¥₹]\s?\d[\d,. ]*|\d[\d,. ]*\s?(?:USD|EUR|GBP|RON|lei))', text, re.I)
+        prices = re.findall(
+            r"(?:[$€£¥₹]\s?\d[\d,. ]*|\d[\d,. ]*\s?(?:USD|EUR|GBP|RON|lei))", text, re.I
+        )
 
         return {
             "link_count": len(links),
@@ -254,8 +260,15 @@ class DomainMemory:
     @staticmethod
     def _diff_fingerprints(old: dict, new: dict) -> list[str]:
         changes = []
-        for key in ("link_count", "image_count", "script_count", "form_count",
-                     "price_count", "heading_count", "text_length"):
+        for key in (
+            "link_count",
+            "image_count",
+            "script_count",
+            "form_count",
+            "price_count",
+            "heading_count",
+            "text_length",
+        ):
             ov, nv = old.get(key, 0), new.get(key, 0)
             if ov != nv:
                 diff = nv - ov

@@ -86,6 +86,7 @@ def test_url_exits_nonzero_on_failure():
 
 def test_extract_og_meta_basic():
     from scrape_gateway.cli import _extract_og_meta
+
     html = """<html><head>
     <title>Fallback Title</title>
     <meta property="og:title" content="My Page">
@@ -106,6 +107,7 @@ def test_extract_og_meta_basic():
 
 def test_extract_og_meta_title_fallback():
     from scrape_gateway.cli import _extract_og_meta
+
     html = "<html><head><title>Just a Title</title></head><body>ok</body></html>"
     og = _extract_og_meta(html)
     assert og["og:title"] == "Just a Title"
@@ -113,6 +115,7 @@ def test_extract_og_meta_title_fallback():
 
 def test_extract_og_meta_empty():
     from scrape_gateway.cli import _extract_og_meta
+
     og = _extract_og_meta("<html><body>nothing</body></html>")
     assert og == {}
 
@@ -125,8 +128,12 @@ def test_meta_flag_prints_json():
 
     async def fake_scrape(request, *, use_cache=True, use_memory=True):
         return ScrapeResult(
-            url=request.url, provider="mock", success=True,
-            status_code=200, html=html_with_og, route="mock",
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html=html_with_og,
+            route="mock",
         )
 
     with patch("scrape_gateway.cli._build_gateway") as mock_gw:
@@ -145,8 +152,11 @@ def test_meta_flag_forces_html_when_markdown():
     async def fake_scrape(request, *, use_cache=True, use_memory=True):
         captured["format"] = request.output_format
         return ScrapeResult(
-            url=request.url, provider="mock", success=True,
-            status_code=200, html="<html><head><meta property='og:title' content='X'></head><body>ok content</body></html>",
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html="<html><head><meta property='og:title' content='X'></head><body>ok content</body></html>",
             route="mock",
         )
 
@@ -165,8 +175,11 @@ def test_meta_command_no_js_by_default():
     async def fake_scrape(request, *, use_cache=True, use_memory=True):
         captured["render_js"] = request.render_js
         return ScrapeResult(
-            url=request.url, provider="mock", success=True,
-            status_code=200, html='<html><head><meta property="og:title" content="FB Post"><meta property="og:image" content="https://fb.com/img.jpg"></head><body>ok content</body></html>',
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html='<html><head><meta property="og:title" content="FB Post"><meta property="og:image" content="https://fb.com/img.jpg"></head><body>ok content</body></html>',
             route="mock",
         )
 
@@ -187,8 +200,11 @@ def test_meta_command_render_js_flag():
     async def fake_scrape(request, *, use_cache=True, use_memory=True):
         captured["render_js"] = request.render_js
         return ScrapeResult(
-            url=request.url, provider="mock", success=True,
-            status_code=200, html='<html><head><meta property="og:title" content="SPA Title"></head><body>ok content</body></html>',
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html='<html><head><meta property="og:title" content="SPA Title"></head><body>ok content</body></html>',
             route="mock",
         )
 
@@ -221,6 +237,7 @@ def test_telemetry_command_prints_recent_reports():
 
 def test_cache_key_differs_by_render_js():
     from scrape_gateway.cache import ArtifactCache
+
     cache = ArtifactCache()
     key_plain = cache.key_for_url("https://example.com", render_js=False)
     key_js = cache.key_for_url("https://example.com", render_js=True)

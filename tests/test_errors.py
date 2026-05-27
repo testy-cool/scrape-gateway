@@ -48,7 +48,7 @@ def test_login_required_short_page():
 
 def test_login_form_in_nav_not_flagged():
     """phpBB forums and similar sites have login forms in the nav but content is public."""
-    body = '<nav>sign in password</nav>' + '<div class="content">' + 'x' * 10000 + '</div>'
+    body = "<nav>sign in password</nav>" + '<div class="content">' + "x" * 10000 + "</div>"
     assert classify_failure(200, body) is None
 
 
@@ -58,5 +58,8 @@ def test_clean_page():
 
 
 def test_proxy_exception():
-    assert classify_exception(Exception("407 Proxy Authentication Required")) == FailureReason.PROXY_ERROR
+    assert (
+        classify_exception(Exception("407 Proxy Authentication Required"))
+        == FailureReason.PROXY_ERROR
+    )
     assert classify_exception(Exception("ProxyAuthRequired")) == FailureReason.PROXY_ERROR

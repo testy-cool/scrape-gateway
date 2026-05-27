@@ -57,17 +57,13 @@ class TestTierEscalation:
         assert result.cost_units == 5
 
     async def test_country_starts_at_advanced(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", country="US")
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", country="US"))
         assert result.success is True
         assert result.route == "scrapedrive:advanced"
         assert result.cost_units == 5
 
     async def test_premium_starts_at_hyperdrive(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", premium=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", premium=True))
         assert result.success is True
         assert result.route == "scrapedrive:hyperdrive"
         assert result.cost_units == 25
@@ -75,9 +71,7 @@ class TestTierEscalation:
 
 class TestParams:
     async def test_mobile_device(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", mobile=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", mobile=True))
         assert result.success is True
 
     async def test_html_always_returned(self, provider):
@@ -87,16 +81,12 @@ class TestParams:
         assert "<html" in result.html.lower()
 
     async def test_render_js(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", render_js=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", render_js=True))
         assert result.success is True
         assert len(result.html or "") > 100
 
     async def test_screenshot(self, provider):
-        result = await provider.scrape(
-            ScrapeRequest(url="https://example.com", screenshot=True)
-        )
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", screenshot=True))
         assert result.success is True
         screenshot_url = result.metadata.get("screenshot_url")
         assert screenshot_url is not None or result.screenshot is not None

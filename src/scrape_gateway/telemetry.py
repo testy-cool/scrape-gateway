@@ -45,7 +45,9 @@ def truncate(value: str | None, limit: int = MAX_ERROR_CHARS) -> str | None:
     return f"{value[:limit]}... [truncated {len(value) - limit} chars]"
 
 
-def evidence_snippet(html: str | None, pattern: str | None, *, limit: int = MAX_SNIPPET_CHARS) -> str | None:
+def evidence_snippet(
+    html: str | None, pattern: str | None, *, limit: int = MAX_SNIPPET_CHARS
+) -> str | None:
     if not html or not pattern:
         return None
     lower = html.lower()
@@ -82,7 +84,9 @@ def safe_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     return result
 
 
-def request_summary(request: ScrapeRequest, *, use_cache: bool, use_memory: bool, proxy_enabled: bool) -> dict[str, Any]:
+def request_summary(
+    request: ScrapeRequest, *, use_cache: bool, use_memory: bool, proxy_enabled: bool
+) -> dict[str, Any]:
     return {
         "url": request.url,
         "domain": domain_for_url(request.url),
@@ -118,7 +122,9 @@ def result_summary(result: ScrapeResult) -> dict[str, Any]:
     }
 
 
-def diagnose_scrape(success: bool, final: ScrapeResult, attempts: list[dict[str, Any]], skipped: list[str]) -> Diagnosis:
+def diagnose_scrape(
+    success: bool, final: ScrapeResult, attempts: list[dict[str, Any]], skipped: list[str]
+) -> Diagnosis:
     evidence: list[str] = []
 
     if success and final.provider == "cache":
@@ -164,7 +170,9 @@ def diagnose_scrape(success: bool, final: ScrapeResult, attempts: list[dict[str,
             evidence,
         )
 
-    if final.failure_reason == FailureReason.TIMEOUT or any(a.get("failure_reason") == "timeout" for a in attempts):
+    if final.failure_reason == FailureReason.TIMEOUT or any(
+        a.get("failure_reason") == "timeout" for a in attempts
+    ):
         return Diagnosis(
             "timeout",
             False,
@@ -173,7 +181,11 @@ def diagnose_scrape(success: bool, final: ScrapeResult, attempts: list[dict[str,
             ["one or more providers timed out"],
         )
 
-    http_5xx = [a for a in attempts if a.get("failure_reason") == "http_5xx" or (a.get("status") or 0) >= 500]
+    http_5xx = [
+        a
+        for a in attempts
+        if a.get("failure_reason") == "http_5xx" or (a.get("status") or 0) >= 500
+    ]
     if http_5xx:
         providers = ", ".join(a.get("provider", "?") for a in http_5xx)
         return Diagnosis(

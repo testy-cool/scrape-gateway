@@ -14,7 +14,8 @@ from .config import StrategyConfig
 from .models import ScrapeRequest
 from .router import ScrapeGateway
 
-app = typer.Typer(help="""Scrape Gateway — a CLI that scrapes web pages through multiple providers,
+app = typer.Typer(
+    help="""Scrape Gateway — a CLI that scrapes web pages through multiple providers,
 picks the cheapest one that works, and remembers what worked per domain.
 
 Core idea: you shouldn't have to think about which scraping API to use,
@@ -31,7 +32,8 @@ Commands:
   extract   Pull structured data (JSON/CSV) from those repeated elements
   recipe    Replay a saved scrape+extract workflow from a YAML file
   history   See how a page changed across scrapes
-  selftest  Verify the tool works against safe public URLs""")
+  selftest  Verify the tool works against safe public URLs"""
+)
 console = Console(stderr=True)
 
 
@@ -47,13 +49,17 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
     url_display = url or "<url>"
     if cmd == "url":
         console.print(f"[dim]sgw links {url_display}          # extract & index all links[/]")
-        console.print(f"[dim]sgw detect {url_display}         # find repeated elements & data patterns[/]")
+        console.print(
+            f"[dim]sgw detect {url_display}         # find repeated elements & data patterns[/]"
+        )
         console.print(f"[dim]sgw history {url_display}        # view change history[/]")
         console.print(f"[dim]sgw url {url_display} --render-js  # re-scrape with JS rendering[/]")
     elif cmd == "links":
         fmt = ctx.get("fmt", "rich")
         if fmt != "compact":
-            console.print(f"[dim]sgw links {url_display} -f compact  # LLM-optimized tree output[/]")
+            console.print(
+                f"[dim]sgw links {url_display} -f compact  # LLM-optimized tree output[/]"
+            )
         if fmt != "json":
             console.print(f"[dim]sgw links {url_display} -f json     # pipe to jq[/]")
         console.print(f"[dim]sgw follow {url_display} <id>        # scrape a link by index[/]")
@@ -65,7 +71,9 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print(f"[dim]sgw history {followed}        # view change history[/]")
     elif cmd == "detect":
         console.print(f"[dim]sgw extract {url_display}            # pull data from top pattern[/]")
-        console.print(f"[dim]sgw extract {url_display} -s 'sel'   # extract with custom selector[/]")
+        console.print(
+            f"[dim]sgw extract {url_display} -s 'sel'   # extract with custom selector[/]"
+        )
         console.print(f"[dim]sgw links {url_display}              # see all links indexed[/]")
         console.print(f"[dim]sgw history {url_display}            # track changes over time[/]")
     elif cmd == "extract":
@@ -74,17 +82,20 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print(f"[dim]sgw extract {url_display} -s 'sel'   # custom CSS selector[/]")
         console.print(f"[dim]sgw links {url_display}              # see all links indexed[/]")
     elif cmd == "history":
-        console.print(f"[dim]sgw url {url_display} --no-cache     # fresh scrape to update history[/]")
+        console.print(
+            f"[dim]sgw url {url_display} --no-cache     # fresh scrape to update history[/]"
+        )
         console.print(f"[dim]sgw detect {url_display}             # analyze current structure[/]")
         console.print(f"[dim]sgw links {url_display} -f compact   # LLM-optimized link tree[/]")
     elif cmd == "selftest":
-        console.print(f"[dim]sgw url <url>                   # scrape any URL[/]")
-        console.print(f"[dim]sgw links <url> -f compact      # extract links for LLM[/]")
+        console.print("[dim]sgw url <url>                   # scrape any URL[/]")
+        console.print("[dim]sgw links <url> -f compact      # extract links for LLM[/]")
 
 
 def _extract_og_meta(html: str) -> dict[str, str]:
     import re
     from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(html, "html.parser")
     og: dict[str, str] = {}
     for tag in soup.find_all("meta"):
@@ -159,15 +170,23 @@ def url(
     no_cache: bool = typer.Option(False, "--no-cache"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     mobile: bool = typer.Option(False, "--mobile", "-m"),
-    wait_event: str | None = typer.Option(None, "--wait-event", help="domcontentloaded|load|networkidle"),
-    wait_selector: str | None = typer.Option(None, "--wait-selector", help="CSS selector to wait for"),
+    wait_event: str | None = typer.Option(
+        None, "--wait-event", help="domcontentloaded|load|networkidle"
+    ),
+    wait_selector: str | None = typer.Option(
+        None, "--wait-selector", help="CSS selector to wait for"
+    ),
     extra_wait: int = typer.Option(0, "--extra-wait", help="Extra wait in ms after page load"),
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
-    tier: str | None = typer.Option(None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"),
+    tier: str | None = typer.Option(
+        None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
+    ),
     meta: bool = typer.Option(False, "--meta", help="Extract and print OpenGraph metadata as JSON"),
-    debug_artifacts: bool = typer.Option(False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"),
+    debug_artifacts: bool = typer.Option(
+        False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"
+    ),
 ) -> None:
     """Scrape one URL through the gateway.
 
@@ -326,13 +345,19 @@ def run(
     premium: bool = typer.Option(False, "--premium"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     mobile: bool = typer.Option(False, "--mobile", "-m"),
-    wait_event: str | None = typer.Option(None, "--wait-event", help="domcontentloaded|load|networkidle"),
-    wait_selector: str | None = typer.Option(None, "--wait-selector", help="CSS selector to wait for"),
+    wait_event: str | None = typer.Option(
+        None, "--wait-event", help="domcontentloaded|load|networkidle"
+    ),
+    wait_selector: str | None = typer.Option(
+        None, "--wait-selector", help="CSS selector to wait for"
+    ),
     extra_wait: int = typer.Option(0, "--extra-wait", help="Extra wait in ms after page load"),
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
     screenshot: bool = typer.Option(False, "--screenshot"),
-    tier: str | None = typer.Option(None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"),
+    tier: str | None = typer.Option(
+        None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
+    ),
 ) -> None:
     """Scrape URLs from a text file, one URL per line.
 
@@ -455,13 +480,15 @@ def _extract_links(html: str, base_url: str) -> tuple[list[dict], dict[str, list
 def _to_path(href: str, origins: set[str]) -> tuple[str, bool]:
     for o in origins:
         if href.startswith(o):
-            return (href[len(o):] or "/", True)
+            return (href[len(o) :] or "/", True)
     if href.startswith("/"):
         return (href, True)
     return (href, False)
 
 
-def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url: str, limit: int = 0) -> str:
+def _compact_links(
+    all_links: list[dict], groups: dict[str, list[int]], base_url: str, limit: int = 0
+) -> str:
     from urllib.parse import urlparse
 
     parsed = urlparse(base_url)
@@ -508,7 +535,7 @@ def _compact_links(all_links: list[dict], groups: dict[str, list[int]], base_url
                 remaining = len(items) - len(show)
                 lines.append(f"{prefix} ({len(items)})" if limit else prefix)
                 for idx, path, text in show:
-                    suffix = path[len(prefix):]
+                    suffix = path[len(prefix) :]
                     lines.append(f"  [{idx}] {suffix or '.'} {text}")
                 if remaining > 0:
                     lines.append(f"  ... +{remaining} more")
@@ -528,7 +555,9 @@ def links(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     no_cache: bool = typer.Option(False, "--no-cache"),
     output_format: str = typer.Option("rich", "--format", "-f", help="rich|compact|json"),
-    limit: int = typer.Option(0, "--limit", "-n", help="Max links per directory in compact mode (0=all)"),
+    limit: int = typer.Option(
+        0, "--limit", "-n", help="Max links per directory in compact mode (0=all)"
+    ),
 ) -> None:
     """Extract and group links from a page by semantic location.
 
@@ -564,12 +593,22 @@ def links(
 
         if output_format == "json":
             import json
+
             print(json.dumps(all_links, indent=2, ensure_ascii=False))
         elif output_format == "compact":
             print(_compact_links(all_links, groups, result.url, limit=limit))
         else:
             console.print(f"\n[bold]{len(all_links)}[/] links from [cyan]{result.url}[/]\n")
-            section_order = ["nav", "header", "main", "article", "section", "aside", "footer", "other"]
+            section_order = [
+                "nav",
+                "header",
+                "main",
+                "article",
+                "section",
+                "aside",
+                "footer",
+                "other",
+            ]
             by_id = {link["id"]: link for link in all_links}
             for section in section_order:
                 if section not in groups:
@@ -627,7 +666,7 @@ def follow(
             raise typer.Exit(1)
 
         all_links, _ = _extract_links(result.html, result.url)
-        match = next((l for l in all_links if l["id"] == link_id), None)
+        match = next((lnk for lnk in all_links if lnk["id"] == link_id), None)
         if not match:
             console.print(f"[red]Link [{link_id}] not found[/] (max: {len(all_links)})")
             raise typer.Exit(1)
@@ -648,10 +687,12 @@ def follow(
 import re as _re
 
 DATA_PATTERNS = {
-    "Prices": _re.compile(r'(?:[$€£¥₹]\s?\d[\d,. ]*\d|\d[\d,. ]*\d\s?(?:USD|EUR|GBP|RON|lei))', _re.IGNORECASE),
-    "Emails": _re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'),
-    "Phones": _re.compile(r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}'),
-    "Dates": _re.compile(r'\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2}'),
+    "Prices": _re.compile(
+        r"(?:[$€£¥₹]\s?\d[\d,. ]*\d|\d[\d,. ]*\d\s?(?:USD|EUR|GBP|RON|lei))", _re.IGNORECASE
+    ),
+    "Emails": _re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+    "Phones": _re.compile(r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}"),
+    "Dates": _re.compile(r"\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}[/.-]\d{1,2}[/.-]\d{1,2}"),
 }
 
 
@@ -684,10 +725,14 @@ def _detect_patterns(html: str) -> dict:
             parent_sel = parent.name + ("." + ".".join(parent_cls.split()) if parent_cls else "")
             sample_el = parent.find(tag, class_=cls.split() if cls else None)
             sample = sample_el.get_text(strip=True)[:100] if sample_el else ""
-            repeated.append({
-                "parent": parent_sel, "selector": selector,
-                "count": count, "sample": sample,
-            })
+            repeated.append(
+                {
+                    "parent": parent_sel,
+                    "selector": selector,
+                    "count": count,
+                    "sample": sample,
+                }
+            )
 
     # Deduplicate by selector, keep highest count
     seen: dict[str, dict] = {}
@@ -759,7 +804,12 @@ def detect(
             console.print(table)
             console.print()
 
-        for name, label in [("prices", "Prices"), ("emails", "Emails"), ("phones", "Phones"), ("dates", "Dates")]:
+        for name, label in [
+            ("prices", "Prices"),
+            ("emails", "Emails"),
+            ("phones", "Phones"),
+            ("dates", "Dates"),
+        ]:
             items = patterns.get(name, [])
             if items:
                 console.print(f"[bold]{label}[/] ({len(items)} found)")
@@ -767,7 +817,9 @@ def detect(
                     console.print(f"  [dim]•[/] {item}")
                 console.print()
 
-        if not patterns.get("repeated") and not any(patterns.get(k) for k in ("prices", "emails", "phones", "dates")):
+        if not patterns.get("repeated") and not any(
+            patterns.get(k) for k in ("prices", "emails", "phones", "dates")
+        ):
             console.print("[dim]No patterns detected.[/]")
         _hints("detect", target_url)
 
@@ -811,9 +863,29 @@ def _element_to_row(el) -> dict[str, str]:
     elif date_match := DATA_PATTERNS["Dates"].search(el_text):
         row["date"] = date_match.group()
 
-    skip_tags = {"script", "style", "img", "a", "h1", "h2", "h3",
-                  "h4", "h5", "h6", "time", "br", "hr", "i", "svg",
-                  "path", "button", "input", "form", "select", "noscript"}
+    skip_tags = {
+        "script",
+        "style",
+        "img",
+        "a",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "time",
+        "br",
+        "hr",
+        "i",
+        "svg",
+        "path",
+        "button",
+        "input",
+        "form",
+        "select",
+        "noscript",
+    }
     captured = set(row.values())
     for child in el.find_all(True, recursive=True):
         if child.name in skip_tags:
@@ -867,7 +939,9 @@ def _apply_field_map(rows: list[dict], field_map: dict[str, str]) -> list[dict]:
 
 
 def _llm_pick_pattern(
-    patterns: list[dict], html: str, domain: str,
+    patterns: list[dict],
+    html: str,
+    domain: str,
     model_id: str | None = None,
 ) -> tuple[str, dict[str, str]] | None:
     import json
@@ -875,6 +949,7 @@ def _llm_pick_pattern(
     import llm
 
     from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(html, "html.parser")
 
     lines = []
@@ -886,17 +961,15 @@ def _llm_pick_pattern(
             row = _element_to_row(elements[0])
             fields = list(row.keys())
         field_str = f"  fields: {', '.join(fields)}" if fields else ""
-        lines.append(
-            f"#{i}: {css} ({p['count']} items) — \"{p['sample'][:60]}\"\n{field_str}"
-        )
+        lines.append(f'#{i}: {css} ({p["count"]} items) — "{p["sample"][:60]}"\n{field_str}')
 
     prompt = (
         f"Domain: {domain}\n\nDetected patterns:\n"
         + "\n".join(lines)
-        + '\n\nPick the pattern that is the main content listing '
-        '(products, articles, results), not navigation or boilerplate.\n'
+        + "\n\nPick the pattern that is the main content listing "
+        "(products, articles, results), not navigation or boilerplate.\n"
         'Reply JSON: {"pick": <number>, "fields": {"<raw>": "<better>", ...}}\n'
-        'Only rename unclear field names. Keep title, price, image, href, date as-is.'
+        "Only rename unclear field names. Keep title, price, image, href, date as-is."
     )
 
     try:
@@ -911,11 +984,13 @@ def _llm_pick_pattern(
         selector = f"{p['parent']} > {p['selector']}"
         field_map = result.get("fields", {})
         return selector, field_map
-    except llm.UnknownModelError as exc:
+    except llm.UnknownModelError:
         console.print(f"[red]llm error:[/] unknown model: {model_id}\n  available: llm models list")
         return None
-    except llm.NeedsKeyException as exc:
-        console.print(f"[red]llm error:[/] no API key for {model_id or 'default model'}\n  run: llm keys set <name>")
+    except llm.NeedsKeyException:
+        console.print(
+            f"[red]llm error:[/] no API key for {model_id or 'default model'}\n  run: llm keys set <name>"
+        )
         return None
     except json.JSONDecodeError as exc:
         console.print(f"[dim]llm: model returned invalid JSON: {exc}[/]")
@@ -928,14 +1003,20 @@ def _llm_pick_pattern(
 @app.command()
 def extract(
     target_url: str,
-    selector: str | None = typer.Option(None, "--selector", "-s", help="CSS selector (auto-detect if omitted)"),
-    pick: int = typer.Option(1, "--pick", "-k", help="Which detected pattern to use (1=top, 2=second, ...)"),
+    selector: str | None = typer.Option(
+        None, "--selector", "-s", help="CSS selector (auto-detect if omitted)"
+    ),
+    pick: int = typer.Option(
+        1, "--pick", "-k", help="Which detected pattern to use (1=top, 2=second, ...)"
+    ),
     country: str | None = typer.Option(None, "--country", "-c"),
     render_js: bool = typer.Option(False, "--render-js"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
     no_cache: bool = typer.Option(False, "--no-cache"),
     no_llm: bool = typer.Option(False, "--no-llm", help="Skip LLM pattern picking"),
-    model: str | None = typer.Option(None, "--model", "-m", help="LLM model for pattern picking (default: llm default)"),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="LLM model for pattern picking (default: llm default)"
+    ),
     output_format: str = typer.Option("json", "--format", "-f", help="json|csv|rich"),
     limit: int = typer.Option(0, "--limit", "-n", help="Max rows (0=all)"),
 ) -> None:
@@ -1084,6 +1165,7 @@ def extract(
             console.print(table)
         else:
             import json
+
             print(json.dumps(rows, indent=2, ensure_ascii=False))
 
         _hints("extract", target_url)
@@ -1155,10 +1237,12 @@ def history(
 
     if entries:
         latest = entries[0]["fingerprint"]
-        console.print(f"\n[bold]Latest fingerprint:[/]")
+        console.print("\n[bold]Latest fingerprint:[/]")
         console.print(f"  title: [cyan]{latest.get('title', '')}[/]")
-        console.print(f"  links: {latest.get('link_count', 0)}  images: {latest.get('image_count', 0)}  "
-                       f"forms: {latest.get('form_count', 0)}  prices: {latest.get('price_count', 0)}")
+        console.print(
+            f"  links: {latest.get('link_count', 0)}  images: {latest.get('image_count', 0)}  "
+            f"forms: {latest.get('form_count', 0)}  prices: {latest.get('price_count', 0)}"
+        )
         heads = latest.get("headings", [])
         if heads:
             console.print(f"  headings: {', '.join(heads[:5])}")
@@ -1171,7 +1255,9 @@ def history(
 def recipe(
     recipe_file: Path,
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would run without scraping"),
-    output_file: str | None = typer.Option(None, "--output", "-o", help="Override output file path"),
+    output_file: str | None = typer.Option(
+        None, "--output", "-o", help="Override output file path"
+    ),
 ) -> None:
     """Run a saved scrape+extract recipe from a YAML file.
 
@@ -1457,7 +1543,9 @@ def providers():
 
     console.print(table)
     console.print(f"\n[dim]Extensions directory: {EXTENSIONS_DIR}[/]")
-    console.print("[dim]Drop a .py file there with a ProviderAdapter subclass to add a provider.[/]")
+    console.print(
+        "[dim]Drop a .py file there with a ProviderAdapter subclass to add a provider.[/]"
+    )
     console.print("[dim]sgw extensions                # browse the official extension registry[/]")
 
 
@@ -1493,6 +1581,7 @@ def extensions(
         pass
     if entries is None:
         from .config import _PROJECT_ROOT
+
         local = _PROJECT_ROOT / "registry.yml"
         if local.exists():
             entries = yaml.safe_load(local.read_text()) or []
@@ -1513,7 +1602,8 @@ def extensions(
         console.print(f"[cyan]Installing {pkg} into sgw's environment...[/]")
         result = subprocess.run(
             ["uv", "pip", "install", "--python", sys.executable, pkg],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode == 0:
             console.print(f"[green]Installed {pkg}. Run `sgw providers` to verify.[/]")
@@ -1542,7 +1632,7 @@ def extensions(
         table.add_row(name, entry.get("description", ""), status)
 
     console.print(table)
-    console.print(f"\n[dim]Install: sgw extensions <name>[/]")
+    console.print("\n[dim]Install: sgw extensions <name>[/]")
     console.print(f"[dim]Submit yours: {REGISTRY_URL.replace('/main/registry.yml', '')}[/]")
 
 
@@ -1600,7 +1690,7 @@ def setup():
         else:
             console.print(f"    [dim]✗ {name}[/]")
 
-    console.print(f"\n[bold yellow]Paid providers[/] (need API keys):")
+    console.print("\n[bold yellow]Paid providers[/] (need API keys):")
     for name, cls in paid_providers:
         env_var, signup_url = PROVIDER_API_KEYS[name]
         caps = ", ".join(sorted(cls.capabilities))
@@ -1645,7 +1735,8 @@ def setup():
         existing_lines = []
         if env_path.exists():
             existing_lines = [
-                line for line in env_path.read_text().splitlines()
+                line
+                for line in env_path.read_text().splitlines()
                 if not any(line.startswith(k + "=") for k in env_vars)
             ]
         all_lines = existing_lines + [f'{k}="{v}"' for k, v in env_vars.items()]

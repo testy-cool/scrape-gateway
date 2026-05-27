@@ -4,25 +4,28 @@ Ensures the ProviderAdapter API stays stable so extensions don't break,
 and that discovery finds providers from all three sources.
 """
 
-import importlib
 import inspect
-import tempfile
 from pathlib import Path
 
-import pytest
 
 from scrape_gateway.discovery import (
-    EXTENSIONS_DIR,
     _entrypoint_providers,
     _local_providers,
     discover_providers,
     discover_providers_with_sources,
 )
 
-SHIPPED_PROVIDERS = frozenset({
-    "raw_http", "wreq", "curl_cffi", "scrapedrive",
-    "scrape_do", "scrapingbee", "scraperapi",
-})
+SHIPPED_PROVIDERS = frozenset(
+    {
+        "raw_http",
+        "wreq",
+        "curl_cffi",
+        "scrapedrive",
+        "scrape_do",
+        "scrapingbee",
+        "scraperapi",
+    }
+)
 from scrape_gateway.models import ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
 
