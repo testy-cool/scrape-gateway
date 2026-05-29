@@ -49,7 +49,7 @@ If `SCRAPE_PROXY_URL` is set, HTTP providers (raw_http, wreq, curl_cffi) route t
 src/scrape_gateway/
   cli.py          — Typer CLI (all sgw commands)
   router.py       — Provider routing, fallback, validation
-  discovery.py    — Extension discovery (built-in, entry points, local dir)
+  discovery.py    — Extension discovery (built-in providers, command/provider entry points, local dirs)
   provider.py     — ProviderAdapter base class
   memory.py       — Domain memory (SQLite) + extraction pattern cache
   cache.py        — HTML/Markdown artifact cache

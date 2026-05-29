@@ -2,6 +2,10 @@
 
 The 7 built-in providers cover most scraping needs, but you can add your own — an Amazon Product API, a Wayback Machine fetcher, a headless browser, anything that takes a URL and returns content.
 
+You can also add custom CLI commands, such as a sitemap discovery command backed by Trafilatura.
+
+## Provider extensions
+
 Three ways to add providers, in order of effort:
 
 ## 1. Drop a file (easiest)
@@ -45,3 +49,51 @@ my_provider = "my_package:MyProvider"
 After `pip install my-package`, `sgw` discovers it automatically.
 
 See `examples/extension_example.py` for a complete template.
+
+## Command extensions
+
+Command extensions register additional `sgw` subcommands. They expose a callable named `register(app)`, either from a package entry point or a local Python file.
+
+### Local command file
+
+Put a `.py` file in `~/.config/scrape-gateway/commands/`:
+
+```python
+import typer
+
+
+def register(app: typer.Typer) -> None:
+    @app.command("hello")
+    def hello(name: str = "world") -> None:
+        print(f"hello {name}")
+```
+
+Run it:
+
+```bash
+sgw hello Vlad
+```
+
+### Package command extension
+
+Create a package that declares an entry point:
+
+```toml
+[project.entry-points."scrape_gateway.commands"]
+hello = "my_package:register"
+```
+
+After `pip install my-package`, `sgw` loads the command automatically.
+
+### Trafilatura sitemap extension
+
+This repo includes an example command extension at `extensions/sg-sitemap`:
+
+```bash
+uv pip install -e . -e extensions/sg-sitemap
+sgw sitemap https://example.com
+sgw sitemap https://example.com -f txt --limit 50
+sgw sitemap https://example.com --discover-only
+```
+
+`sgw sitemap` uses Trafilatura's `sitemap_search()` to expand sitemap files into page URLs. `--discover-only` reports sitemap URLs advertised in `robots.txt` without expanding them.

@@ -60,7 +60,7 @@ Add API keys in `.env` to enable paid providers. Without them, `sgw` uses free p
 
 ## Extend it
 
-Drop a `.py` file in `~/.config/scrape-gateway/providers/` or install from the registry with `sgw extensions`. See [docs/extensions.md](docs/extensions.md).
+Drop a provider `.py` file in `~/.config/scrape-gateway/providers/`, drop a command `.py` file in `~/.config/scrape-gateway/commands/`, or install from the registry with `sgw extensions`. See [docs/extensions.md](docs/extensions.md).
 
 ## Python API
 

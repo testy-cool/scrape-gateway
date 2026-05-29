@@ -5,10 +5,12 @@ import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from .provider import ProviderAdapter
 
 EXTENSIONS_DIR = Path("~/.config/scrape-gateway/providers").expanduser()
+COMMAND_EXTENSIONS_DIR = Path("~/.config/scrape-gateway/commands").expanduser()
 
 
 def _check_deps(cls: type[ProviderAdapter]) -> bool:
@@ -121,3 +123,72 @@ def discover_providers_with_sources() -> dict[str, tuple[type[ProviderAdapter], 
     for name, cls in _local_providers().items():
         result[name] = (cls, str(EXTENSIONS_DIR))
     return result
+
+
+def _entrypoint_command_extensions(app: Any) -> dict[str, str]:
+    """Load command extensions published as package entry points."""
+    from importlib.metadata import entry_points
+
+    loaded: dict[str, str] = {}
+    for ep in entry_points(group="scrape_gateway.commands"):
+        try:
+            register = ep.load()
+            if not callable(register):
+                print(
+                    f"  [extensions] command entry point {ep.name} is not callable",
+                    file=sys.stderr,
+                )
+                continue
+            register(app)
+            loaded[ep.name] = "package"
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"  [extensions] failed to load command entry point {ep.name}: {exc}",
+                file=sys.stderr,
+            )
+    return loaded
+
+
+def _local_command_extensions(app: Any) -> dict[str, str]:
+    """Load command extensions from ~/.config/scrape-gateway/commands."""
+    if not COMMAND_EXTENSIONS_DIR.is_dir():
+        return {}
+    loaded: dict[str, str] = {}
+    for f in sorted(COMMAND_EXTENSIONS_DIR.glob("*.py")):
+        if f.name.startswith("_"):
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location(f"sg_cmd_ext_{f.stem}", f)
+            if not spec or not spec.loader:
+                continue
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            register = getattr(mod, "register", None)
+            if not callable(register):
+                print(
+                    f"  [extensions] command extension {f.name} has no register(app) function",
+                    file=sys.stderr,
+                )
+                continue
+            register(app)
+            loaded[f.stem] = str(COMMAND_EXTENSIONS_DIR)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [extensions] failed to load command {f.name}: {exc}", file=sys.stderr)
+    return loaded
+
+
+def load_command_extensions(
+    app: Any, *, include_entry_points: bool = True, include_local: bool = True
+) -> dict[str, str]:
+    """Register CLI command extensions on a Typer app.
+
+    Command extensions expose a ``register(app)`` callable, either as a
+    ``scrape_gateway.commands`` package entry point or as a local Python file in
+    ``~/.config/scrape-gateway/commands``.
+    """
+    loaded: dict[str, str] = {}
+    if include_entry_points:
+        loaded.update(_entrypoint_command_extensions(app))
+    if include_local:
+        loaded.update(_local_command_extensions(app))
+    return loaded

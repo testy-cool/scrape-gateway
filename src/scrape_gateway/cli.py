@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .config import StrategyConfig
+from .discovery import load_command_extensions
 from .models import ScrapeRequest
 from .router import ScrapeGateway
 
@@ -1620,24 +1621,29 @@ def extensions(
             raise typer.Exit(1)
         return
 
+    from importlib.metadata import entry_points
+
     from .discovery import discover_providers
 
-    installed = set(discover_providers())
+    installed_providers = set(discover_providers())
+    installed_commands = {ep.name for ep in entry_points(group="scrape_gateway.commands")}
 
     table = Table(title="Extension Registry", show_lines=True)
     table.add_column("Name", style="cyan")
+    table.add_column("Type")
     table.add_column("Description")
     table.add_column("Status")
 
     for entry in entries:
         name = entry["name"]
-        if name in installed:
+        ext_type = entry.get("type", "provider")
+        if name in installed_providers or name in installed_commands:
             status = "[green]installed[/]"
         elif entry.get("status") == "planned":
             status = "[yellow]planned[/]"
         else:
             status = "[dim]available[/]"
-        table.add_row(name, entry.get("description", ""), status)
+        table.add_row(name, ext_type, entry.get("description", ""), status)
 
     console.print(table)
     console.print("\n[dim]Install: sgw extensions <name>[/]")
@@ -1754,3 +1760,6 @@ def setup():
     console.print(f"\n[bold]Ready![/] {len(enabled)} providers active.")
     console.print("[dim]sgw selftest    # verify everything works[/]")
     console.print("[dim]sgw providers   # see what's loaded[/]")
+
+
+load_command_extensions(app)
