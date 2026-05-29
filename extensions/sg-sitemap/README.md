@@ -1,6 +1,6 @@
 # sg-sitemap
 
-`sg-sitemap` adds a `sgw sitemap` command to scrape-gateway. It uses Trafilatura's sitemap discovery/parsing utilities to find page URLs from a site's sitemap files.
+`sg-sitemap` adds a `sgw sitemap` command to scrape-gateway. It fetches robots.txt and sitemap XML files through sgw's provider pipeline, so anti-bot bypass, proxies, and provider fallback all apply.
 
 ## Install locally
 
@@ -25,6 +25,7 @@ sgw sitemap https://example.com -f txt
 sgw sitemap https://example.com -f rich --limit 50
 sgw sitemap https://example.com --lang en
 sgw sitemap https://example.com --discover-only
+sgw sitemap https://example.com -p scrapedrive
 ```
 
 Formats:
