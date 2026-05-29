@@ -360,6 +360,10 @@ class ScrapeGateway:
             start = time.perf_counter()
             result = await provider.scrape(request)
             elapsed = time.perf_counter() - start
+            if request.skip_validation and not result.success and result.html:
+                if result.status_code and 200 <= result.status_code < 400:
+                    result.success = True
+                    result.failure_reason = None
             attempt = {
                 "provider": provider.name,
                 "status": result.status_code,
@@ -372,34 +376,35 @@ class ScrapeGateway:
             if result.metadata:
                 attempt["metadata"] = safe_metadata(result.metadata)
             if result.success:
-                validation = validate_content(result.html)
-                result.content_validated = validation.passed
-                result.block_type = validation.block_type
-                result.validation_detail = validation.detail
-                if not validation.passed:
-                    result.success = False
-                    self.memory.remember_failure(request.url, provider.name, validation.block_type)
-                    attempt["result"] = "validation_failed"
-                    attempt["block_type"] = validation.block_type
-                    attempt["validation_detail"] = validation.detail
-                    attempt["matched_pattern"] = validation.matched_pattern
-                    attempt["snippet"] = validation.snippet
-                    attempt["chars"] = len(result.html or "")
-                    artifact_path = self.telemetry.write_failed_artifact(
-                        run_id,
-                        len(attempts) + 1,
-                        provider.name,
-                        result,
-                        force=bool(request.metadata.get("debug_artifacts")),
-                    )
-                    if artifact_path:
-                        attempt["artifact_path"] = artifact_path
-                    attempts.append(attempt)
-                    _log(
-                        f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✗ {validation.block_type or 'failed'}"
-                    )
-                    last_result = result
-                    continue
+                if not request.skip_validation:
+                    validation = validate_content(result.html)
+                    result.content_validated = validation.passed
+                    result.block_type = validation.block_type
+                    result.validation_detail = validation.detail
+                    if not validation.passed:
+                        result.success = False
+                        self.memory.remember_failure(request.url, provider.name, validation.block_type)
+                        attempt["result"] = "validation_failed"
+                        attempt["block_type"] = validation.block_type
+                        attempt["validation_detail"] = validation.detail
+                        attempt["matched_pattern"] = validation.matched_pattern
+                        attempt["snippet"] = validation.snippet
+                        attempt["chars"] = len(result.html or "")
+                        artifact_path = self.telemetry.write_failed_artifact(
+                            run_id,
+                            len(attempts) + 1,
+                            provider.name,
+                            result,
+                            force=bool(request.metadata.get("debug_artifacts")),
+                        )
+                        if artifact_path:
+                            attempt["artifact_path"] = artifact_path
+                        attempts.append(attempt)
+                        _log(
+                            f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✗ {validation.block_type or 'failed'}"
+                        )
+                        last_result = result
+                        continue
                 if result.html and not result.markdown:
                     result.markdown = md(result.html)
                 self.cache.save(result, render_js=request.render_js)

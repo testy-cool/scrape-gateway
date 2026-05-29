@@ -36,6 +36,7 @@ class ScrapeRequest:
     output_format: str = "html"  # html, markdown
     timeout_seconds: float = 45
     referer: str | None = None  # None = auto (Google search), "" = no referer
+    skip_validation: bool = False
     headers: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
