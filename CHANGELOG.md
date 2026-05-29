@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-29
+
+### Added
+- CLI command extension loading via `scrape_gateway.commands` package entry points
+- Local command extensions from `~/.config/scrape-gateway/commands/`
+- Example `sg-sitemap` extension that adds `sgw sitemap` using Trafilatura
+- `sgw extensions` registry output now shows extension type and installed command extensions
+- 169 unit tests (up from 164)
+
 ## [0.3.0] - 2026-05-27
 
 ### Added
