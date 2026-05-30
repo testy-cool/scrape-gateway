@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-30
+
+### Added
+- `skip_validation` field on `ScrapeRequest` — skip content validation for non-HTML resources (robots.txt, sitemap XML)
+- `sg-sitemap` now fetches through the scrape gateway pipeline (anti-bot bypass, proxies, provider fallback)
+- `sgw sitemap --provider` and `--no-cache` flags
+
+### Changed
+- `sg-sitemap` no longer depends on trafilatura — uses stdlib XML parsing
+
 ## [0.4.0] - 2026-05-29
 
 ### Added
