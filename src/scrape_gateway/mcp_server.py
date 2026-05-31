@@ -7,6 +7,7 @@ import os
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 
 _TOKEN = os.environ.get("SGW_MCP_TOKEN", "")
@@ -24,9 +25,18 @@ class _BearerVerifier(TokenVerifier):
         return None
 
 
+from urllib.parse import urlparse
+
+_parsed_url = urlparse(_PUBLIC_URL)
+_allowed_host = _parsed_url.netloc or f"localhost:{_PORT}"
+
 _mcp_kwargs: dict = {
     "stateless_http": True,
     "json_response": True,
+    "transport_security": TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[_allowed_host, f"localhost:{_PORT}", f"127.0.0.1:{_PORT}"],
+    ),
 }
 if _TOKEN:
     _mcp_kwargs["token_verifier"] = _BearerVerifier()
