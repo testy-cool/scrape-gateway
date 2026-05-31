@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
@@ -16,6 +17,56 @@ _HOST = os.environ.get("SGW_MCP_HOST", "0.0.0.0")
 _PUBLIC_URL = os.environ.get("SGW_MCP_URL", f"http://localhost:{_PORT}")
 
 
+def _csv_env(name: str) -> list[str]:
+    value = os.environ.get(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _host_allowlist(public_url: str) -> list[str]:
+    parsed = urlparse(public_url)
+    hosts: list[str] = []
+
+    if parsed.netloc:
+        hosts.append(parsed.netloc)
+    if parsed.hostname:
+        hosts.append(parsed.hostname)
+        hosts.append(f"{parsed.hostname}:*")
+
+    hosts.extend(
+        [
+            f"localhost:{_PORT}",
+            "localhost:*",
+            f"127.0.0.1:{_PORT}",
+            "127.0.0.1:*",
+        ]
+    )
+    hosts.extend(_csv_env("SGW_MCP_ALLOWED_HOSTS"))
+    return _dedupe(hosts)
+
+
+def _origin_allowlist(public_url: str) -> list[str]:
+    parsed = urlparse(public_url)
+    origins: list[str] = []
+
+    if parsed.scheme and parsed.netloc:
+        origins.append(f"{parsed.scheme}://{parsed.netloc}")
+
+    origins.extend(
+        [
+            f"http://localhost:{_PORT}",
+            "http://localhost:*",
+            f"http://127.0.0.1:{_PORT}",
+            "http://127.0.0.1:*",
+        ]
+    )
+    origins.extend(_csv_env("SGW_MCP_ALLOWED_ORIGINS"))
+    return _dedupe(origins)
+
+
 class _BearerVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         if not _TOKEN:
@@ -25,17 +76,13 @@ class _BearerVerifier(TokenVerifier):
         return None
 
 
-from urllib.parse import urlparse
-
-_parsed_url = urlparse(_PUBLIC_URL)
-_allowed_host = _parsed_url.netloc or f"localhost:{_PORT}"
-
 _mcp_kwargs: dict = {
     "stateless_http": True,
     "json_response": True,
     "transport_security": TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[_allowed_host, f"localhost:{_PORT}", f"127.0.0.1:{_PORT}"],
+        allowed_hosts=_host_allowlist(_PUBLIC_URL),
+        allowed_origins=_origin_allowlist(_PUBLIC_URL),
     ),
 }
 if _TOKEN:
