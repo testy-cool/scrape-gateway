@@ -88,6 +88,11 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         )
         console.print(f"[dim]sgw detect {url_display}             # analyze current structure[/]")
         console.print(f"[dim]sgw links {url_display} -f compact   # LLM-optimized link tree[/]")
+    elif cmd == "search":
+        q = ctx.get("query", "<query>")
+        console.print(f"[dim]sgw search \"{q}\" --proxy        # route via residential proxy[/]")
+        console.print(f"[dim]sgw search \"{q}\" -f urls        # just URLs, pipe to sgw run[/]")
+        console.print(f"[dim]sgw search \"{q}\" -t w           # last week only[/]")
     elif cmd == "selftest":
         console.print("[dim]sgw url <url>                   # scrape any URL[/]")
         console.print("[dim]sgw links <url> -f compact      # extract links for LLM[/]")
@@ -1460,6 +1465,74 @@ def recipe(
             print(output_text, end="")
 
     asyncio.run(run_recipe())
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query"),
+    max_results: int = typer.Option(10, "--max", "-n", help="Max results to return"),
+    region: str = typer.Option("us-en", "--region", "-r", help="Region (us-en, wt-wt=global, uk-en, etc.)"),
+    timelimit: str | None = typer.Option(None, "--time", "-t", help="Time filter: d(ay), w(eek), m(onth), y(ear)"),
+    backend: str = typer.Option("auto", "--backend", "-b", help="Backend: auto, bing, duckduckgo, google, brave"),
+    proxy: bool = typer.Option(False, "--proxy", help="Route through SCRAPE_PROXY_URL (Evomi residential)"),
+    output_format: str = typer.Option("rich", "--format", "-f", help="rich|json|urls"),
+) -> None:
+    """Search the web via DuckDuckGo and return results.
+
+    Uses ddgs library for web search with optional proxy routing
+    through your configured residential proxy (SCRAPE_PROXY_URL).
+
+    Examples:
+      sgw search "python web scraping"
+      sgw search "site:github.com scraping" -n 20
+      sgw search "price tracker" --proxy          # via Evomi residential
+      sgw search "news today" -t d -f json        # today only, JSON output
+      sgw search "best laptops" -f urls            # just URLs, one per line
+    """
+    import os
+
+    from ddgs import DDGS
+
+    proxy_url = None
+    if proxy:
+        proxy_url = os.environ.get("SCRAPE_PROXY_URL")
+        if not proxy_url:
+            console.print("[red]--proxy requires SCRAPE_PROXY_URL in environment[/]")
+            raise typer.Exit(1)
+
+    with console.status("[bold cyan]Searching...", spinner="dots"):
+        ddgs = DDGS(proxy=proxy_url)
+        results = ddgs.text(
+            query,
+            region=region,
+            safesearch="moderate",
+            timelimit=timelimit,
+            max_results=max_results,
+            backend=backend,
+        )
+
+    if not results:
+        console.print("[yellow]No results found.[/]")
+        raise typer.Exit(1)
+
+    if output_format == "json":
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+    elif output_format == "urls":
+        for r in results:
+            print(r["href"])
+    else:
+        table = Table(show_lines=False)
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Title", style="cyan", max_width=50)
+        table.add_column("URL", max_width=60)
+        table.add_column("Snippet", style="dim", max_width=40)
+        for i, r in enumerate(results, 1):
+            table.add_row(str(i), r.get("title", ""), r.get("href", ""), r.get("body", "")[:80])
+        console.print(table)
+        console.print(f"\n[dim]{len(results)} results for[/] [bold]{query}[/]")
+        _hints("search", query=query)
+
+    raise typer.Exit(0)
 
 
 @app.command()

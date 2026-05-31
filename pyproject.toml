@@ -15,15 +15,18 @@ dependencies = [
   "llm>=0.31",
   "wreq>=0.1",
   "curl_cffi>=0.7",
+  "ddgs>=8.0",
 ]
 
 [project.optional-dependencies]
 server = ["fastapi>=0.115", "uvicorn[standard]>=0.34"]
+mcp = ["mcp[cli]>=1.12", "uvicorn[standard]>=0.34"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.25", "ruff>=0.8", "respx>=0.22"]
 
 [project.scripts]
 scrape-gateway = "scrape_gateway.cli:app"
 sgw = "scrape_gateway.cli:app"
+sgw-mcp = "scrape_gateway.mcp_server:mcp"
 
 [project.entry-points."scrape_gateway.providers"]
 raw_http = "scrape_gateway.providers.raw_http:RawHttpProvider"
