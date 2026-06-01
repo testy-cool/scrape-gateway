@@ -97,3 +97,17 @@ sgw sitemap https://example.com --discover-only
 ```
 
 `sgw sitemap` uses Trafilatura's `sitemap_search()` to expand sitemap files into page URLs. `--discover-only` reports sitemap URLs advertised in `robots.txt` without expanding them.
+
+### Cache inspection extension
+
+This repo includes a cache command extension at `extensions/sg-cache`:
+
+```bash
+uv pip install -e . -e extensions/sg-cache
+sgw cache stats
+sgw cache ls --domain example.com
+sgw cache show https://example.com
+sgw cache purge --expired --yes
+```
+
+`sgw cache` reads the configured artifact root, defaults to `.scrape-gateway/artifacts`, and is useful for long-lived MCP deployments where cache state persists across container redeploys.

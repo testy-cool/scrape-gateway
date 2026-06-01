@@ -17,6 +17,13 @@
   url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-sitemap
   status: planned
 
+- name: sg-cache
+  type: command
+  description: Cache inspection and cleanup — adds `sgw cache`
+  package: sg-cache
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-cache
+  status: planned
+
 - name: sg-amazon-paapi
   type: provider
   description: Amazon Product Advertising API — structured product data, no proxies needed

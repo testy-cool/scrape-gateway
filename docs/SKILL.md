@@ -12,6 +12,7 @@ Unified CLI for scraping web pages through multiple providers with cheapest-firs
 **Config**: `scrape-gateway.yml` (project root or CWD)
 **API keys**: `.env` (copy from `.env.example`)
 **Extensions dir**: `~/.config/scrape-gateway/providers/`
+**Remote MCP**: `https://sgw.voidxd.cloud/mcp` (Coolify app `sgw-mcp`)
 
 ## Setup
 
@@ -116,6 +117,33 @@ sgw providers                        # shows all: built-in + extensions
 ```bash
 sgw extensions                       # browse registry
 sgw extensions sg-playwright         # install one
+```
+
+### sgw cache — Inspect cached artifacts
+
+Available when `sg-cache` is installed:
+
+```bash
+sgw cache stats                      # size/count/provider summary
+sgw cache ls --domain example.com    # cached entries for a domain
+sgw cache show <url-or-key>          # print cached markdown
+sgw cache purge --expired --yes      # delete expired entries
+```
+
+## Remote MCP Ops
+
+Scrape Gateway also runs as a hosted MCP server on `coolify-gen2`. For deployment, proxy, token, persistence, and smoke-test details, read:
+
+```text
+docs/mcp-coolify-ops.md
+```
+
+Key rule: Caddy must route to the stable Docker network alias `sgw-mcp:8100`, not a container IP or timestamped Coolify container name. Normal redeploys change the container name.
+
+Use this helper after proxy/deploy changes:
+
+```bash
+scripts/sgw-mcp-smoke.sh
 ```
 
 ## Writing Extensions
