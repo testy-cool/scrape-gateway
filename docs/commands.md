@@ -149,6 +149,17 @@ sgw telemetry -d example.com          # filter by domain
 sgw telemetry --diagnosis validator_rejected
 ```
 
+## `sgw cache` — Inspect cached artifacts
+
+Available when the `sg-cache` extension is installed. Useful for hosted MCP deployments with persistent cache state.
+
+```bash
+sgw cache stats
+sgw cache ls --domain example.com
+sgw cache show https://example.com
+sgw cache purge --expired --yes
+```
+
 ## `sgw providers` — See what's available
 
 Lists all providers — built-in, pip packages, and local extensions — with cost, capabilities, and source.

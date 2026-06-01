@@ -7,8 +7,9 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY extensions/sg-sitemap/ extensions/sg-sitemap/
+COPY extensions/sg-cache/ extensions/sg-cache/
 
-RUN uv pip install --system ".[mcp]" ./extensions/sg-sitemap/
+RUN uv pip install --system ".[mcp]" ./extensions/sg-sitemap/ ./extensions/sg-cache/
 
 # Doppler CLI for secrets injection
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg \
