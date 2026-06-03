@@ -111,3 +111,26 @@ sgw cache purge --expired --yes
 ```
 
 `sgw cache` reads the configured artifact root, defaults to `.scrape-gateway/artifacts`, and is useful for long-lived MCP deployments where cache state persists across container redeploys.
+
+### Browserless provider extension
+
+This repo includes a Browserless provider extension at `extensions/sg-browserless`:
+
+```bash
+uv pip install -e . -e extensions/sg-browserless
+```
+
+Set credentials in `.env`:
+
+```bash
+BROWSERLESS_URL=https://browserless.example.com
+BROWSERLESS_TOKEN=your_token_here
+```
+
+Use it for rendered HTML or screenshots:
+
+```bash
+sgw providers
+sgw url https://example.com --render-js -p browserless
+sgw url https://example.com --render-js --screenshot -p browserless
+```
