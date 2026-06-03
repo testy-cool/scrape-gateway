@@ -48,3 +48,13 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - `premium` → `premium=true`
 - `country` → `country_code`
 - `screenshot` → `screenshot=true`
+
+## Extension providers
+
+### Browserless (`extensions/sg-browserless`)
+
+- Install: `uv pip install -e extensions/sg-browserless`
+- Auth: `BROWSERLESS_URL` and `BROWSERLESS_TOKEN`
+- Endpoint: `{BROWSERLESS_URL}/content?token=...`
+- Screenshots: `{BROWSERLESS_URL}/screenshot?token=...`
+- `wait_event=networkidle` maps to Browserless/Puppeteer `networkidle2`
