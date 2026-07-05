@@ -5,10 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.6.0] - 2026-07-05
 
 ### Added
 - `sg-browserless` provider extension for Browserless rendered HTML and screenshots
+- MCP Docker image now bundles `sg-browserless`, so hosted MCP deployments can route JS rendering and screenshot requests through Browserless.
 
 ## [0.5.0] - 2026-05-30
 
