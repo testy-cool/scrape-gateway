@@ -1,7 +1,9 @@
 import tempfile
 from pathlib import Path
 
-from scrape_gateway.config import GatewayConfig, _parse_ttl, load_config
+import pytest
+
+from scrape_gateway.config import EvaluationConfig, GatewayConfig, _parse_ttl, load_config
 
 
 def test_parse_ttl_seconds():
@@ -61,6 +63,12 @@ telemetry:
   enabled: true
   root: /tmp/test-runs
   debug_artifacts: true
+
+evaluation:
+  mode: audit
+  model: google/gemini-3.1-flash-lite
+  max_markdown_chars: 25000
+  include_screenshot: true
 """
         )
         cfg = load_config(p)
@@ -74,6 +82,22 @@ telemetry:
     assert cfg.strategy.max_cost_per_url == 0.05
     assert cfg.telemetry.root == "/tmp/test-runs"
     assert cfg.telemetry.debug_artifacts is True
+    assert cfg.evaluation.mode == "audit"
+    assert cfg.evaluation.model == "google/gemini-3.1-flash-lite"
+    assert cfg.evaluation.max_markdown_chars == 25000
+    assert cfg.evaluation.include_screenshot is True
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"mode": "gate"}, "mode must be 'off' or 'audit'"),
+        ({"max_markdown_chars": 0}, "max_markdown_chars must be positive"),
+    ],
+)
+def test_invalid_evaluation_config_fails_early(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        EvaluationConfig(**kwargs)
 
 
 def test_load_dotenv(monkeypatch, tmp_path):

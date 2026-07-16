@@ -251,16 +251,23 @@ class ScrapeGateway:
         memory: DomainMemory | None = None,
         strategy: StrategyConfig | None = None,
         telemetry: TelemetryRecorder | None = None,
+        evaluator=None,
     ) -> None:
         self.providers = list(providers if providers is not None else _default_providers())
         self.cache = cache or ArtifactCache()
         self.memory = memory or DomainMemory()
         self.strategy = strategy or StrategyConfig()
         self.telemetry = telemetry or TelemetryRecorder()
+        self.evaluator = evaluator
 
     @classmethod
     def from_config(cls, config: GatewayConfig | None = None) -> ScrapeGateway:
         config = config or load_config()
+        evaluator = None
+        if config.evaluation.mode != "off":
+            from .evaluation import OpenRouterEvaluator
+
+            evaluator = OpenRouterEvaluator(config.evaluation)
         return cls(
             providers=_providers_from_config(config),
             cache=ArtifactCache(root=config.cache.root, ttl_seconds=config.cache.ttl_seconds),
@@ -271,7 +278,53 @@ class ScrapeGateway:
                 enabled=config.telemetry.enabled,
                 debug_artifacts=config.telemetry.debug_artifacts,
             ),
+            evaluator=evaluator,
         )
+
+    async def _evaluate_result(
+        self,
+        *,
+        run_id: str,
+        request: ScrapeRequest,
+        result: ScrapeResult,
+        attempts: list[dict],
+        elapsed_ms: int,
+    ) -> dict | None:
+        if self.evaluator is None:
+            return None
+        try:
+            outcome = await self.evaluator.evaluate(
+                request=request,
+                result=result,
+                attempts=attempts,
+                elapsed_ms=elapsed_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - audit must not break a scrape
+            from .evaluation import EvaluationOutcome
+
+            model = getattr(getattr(self.evaluator, "config", None), "model", "unknown")
+            outcome = EvaluationOutcome(
+                status="failed",
+                model=model,
+                input_modalities=["markdown"] if result.markdown is not None else [],
+                markdown_evidence=result.markdown or "",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        try:
+            artifacts = self.telemetry.write_evaluation_artifacts(run_id, outcome, result)
+        except Exception as exc:  # noqa: BLE001 - preserve the primary scrape result
+            artifacts = {}
+            outcome.response_metadata["artifact_error"] = f"{type(exc).__name__}: {exc}"
+        summary = outcome.summary(artifacts)
+        result.metadata["evaluation"] = {
+            "status": summary["status"],
+            "calibration_status": summary["calibration_status"],
+            "verdict": summary["verdict"],
+            "needs_human_review": summary["needs_human_review"],
+            "recommended_action": summary["recommended_action"],
+            "report_artifacts": artifacts,
+        }
+        return summary
 
     async def scrape(
         self, request: ScrapeRequest, use_cache: bool = True, use_memory: bool = True
@@ -327,11 +380,19 @@ class ScrapeGateway:
                     route="cache",
                     metadata={"cache_hit": True, "run_id": run_id},
                 )
+                elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
+                evaluation = await self._evaluate_result(
+                    run_id=run_id,
+                    request=request,
+                    result=result,
+                    attempts=[],
+                    elapsed_ms=elapsed_ms,
+                )
                 report = self.telemetry.build_report(
                     run_id=run_id,
                     started_at=started_at,
                     finished_at=utc_now(),
-                    elapsed_ms=int((time.perf_counter() - scrape_start) * 1000),
+                    elapsed_ms=elapsed_ms,
                     request=request,
                     use_cache=use_cache,
                     use_memory=use_memory,
@@ -339,6 +400,7 @@ class ScrapeGateway:
                     final=result,
                     attempts=[],
                     skipped=[],
+                    evaluation=evaluation,
                 )
                 report_path = self.telemetry.write_report(report)
                 if report_path:
@@ -376,29 +438,45 @@ class ScrapeGateway:
             if result.metadata:
                 attempt["metadata"] = safe_metadata(result.metadata)
             if result.success:
-                if not request.skip_validation:
+                screenshot_only = bool(request.screenshot and result.screenshot and not result.html)
+                if not request.skip_validation and not screenshot_only:
                     validation = validate_content(result.html)
                     result.content_validated = validation.passed
                     result.block_type = validation.block_type
                     result.validation_detail = validation.detail
                     if not validation.passed:
                         result.success = False
-                        self.memory.remember_failure(request.url, provider.name, validation.block_type)
+                        self.memory.remember_failure(
+                            request.url, provider.name, validation.block_type
+                        )
                         attempt["result"] = "validation_failed"
                         attempt["block_type"] = validation.block_type
                         attempt["validation_detail"] = validation.detail
                         attempt["matched_pattern"] = validation.matched_pattern
                         attempt["snippet"] = validation.snippet
                         attempt["chars"] = len(result.html or "")
+                        force_artifacts = (
+                            bool(request.metadata.get("debug_artifacts"))
+                            or self.evaluator is not None
+                        )
                         artifact_path = self.telemetry.write_failed_artifact(
                             run_id,
                             len(attempts) + 1,
                             provider.name,
                             result,
-                            force=bool(request.metadata.get("debug_artifacts")),
+                            force=force_artifacts,
                         )
                         if artifact_path:
                             attempt["artifact_path"] = artifact_path
+                        screenshot_artifact_path = self.telemetry.write_failed_screenshot_artifact(
+                            run_id,
+                            len(attempts) + 1,
+                            provider.name,
+                            result,
+                            force=force_artifacts,
+                        )
+                        if screenshot_artifact_path:
+                            attempt["screenshot_artifact_path"] = screenshot_artifact_path
                         attempts.append(attempt)
                         _log(
                             f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✗ {validation.block_type or 'failed'}"
@@ -407,6 +485,17 @@ class ScrapeGateway:
                         continue
                 if result.html and not result.markdown:
                     result.markdown = md(result.html)
+                attempt["result"] = "success"
+                attempt["chars"] = len(result.html or "")
+                elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
+                result.metadata["run_id"] = run_id
+                evaluation = await self._evaluate_result(
+                    run_id=run_id,
+                    request=request,
+                    result=result,
+                    attempts=[*attempts, attempt],
+                    elapsed_ms=elapsed_ms,
+                )
                 self.cache.save(result, render_js=request.render_js)
                 self.memory.remember_success(
                     request.url,
@@ -435,11 +524,8 @@ class ScrapeGateway:
                         _log(f"  [history] {'; '.join(changes)}")
                     elif changes == ["no changes"]:
                         _log("  [history] no changes since last scrape")
-                attempt["result"] = "success"
-                attempt["chars"] = len(result.html or "")
                 attempts.append(attempt)
                 _log(f"  [{provider.name}] {result.status_code} {elapsed:.1f}s → ✓ pass")
-                elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
                 report = self.telemetry.build_report(
                     run_id=run_id,
                     started_at=started_at,
@@ -452,9 +538,9 @@ class ScrapeGateway:
                     final=result,
                     attempts=attempts,
                     skipped=skipped,
+                    evaluation=evaluation,
                 )
                 report_path = self.telemetry.write_report(report)
-                result.metadata["run_id"] = run_id
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
                 _log_event(
@@ -488,15 +574,27 @@ class ScrapeGateway:
                 attempt["error"] = result.error
             if result.html:
                 attempt["chars"] = len(result.html)
-                artifact_path = self.telemetry.write_failed_artifact(
-                    run_id,
-                    len(attempts) + 1,
-                    provider.name,
-                    result,
-                    force=bool(request.metadata.get("debug_artifacts")),
-                )
-                if artifact_path:
-                    attempt["artifact_path"] = artifact_path
+            force_artifacts = (
+                bool(request.metadata.get("debug_artifacts")) or self.evaluator is not None
+            )
+            artifact_path = self.telemetry.write_failed_artifact(
+                run_id,
+                len(attempts) + 1,
+                provider.name,
+                result,
+                force=force_artifacts,
+            )
+            if artifact_path:
+                attempt["artifact_path"] = artifact_path
+            screenshot_artifact_path = self.telemetry.write_failed_screenshot_artifact(
+                run_id,
+                len(attempts) + 1,
+                provider.name,
+                result,
+                force=force_artifacts,
+            )
+            if screenshot_artifact_path:
+                attempt["screenshot_artifact_path"] = screenshot_artifact_path
             attempts.append(attempt)
             _log(f"  [{provider.name}] {result.status_code or 'ERR'} {elapsed:.1f}s → ✗ {reason}")
             self.memory.remember_failure(request.url, provider.name)
@@ -515,6 +613,13 @@ class ScrapeGateway:
         )
         final.metadata["run_id"] = run_id
         elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
+        evaluation = await self._evaluate_result(
+            run_id=run_id,
+            request=request,
+            result=final,
+            attempts=attempts,
+            elapsed_ms=elapsed_ms,
+        )
         report = self.telemetry.build_report(
             run_id=run_id,
             started_at=started_at,
@@ -527,6 +632,7 @@ class ScrapeGateway:
             final=final,
             attempts=attempts,
             skipped=skipped,
+            evaluation=evaluation,
         )
         report_path = self.telemetry.write_report(report)
         if report_path:

@@ -44,11 +44,27 @@ class TelemetryConfig:
 
 
 @dataclass(slots=True)
+class EvaluationConfig:
+    mode: str = "off"
+    model: str = "google/gemini-3.1-flash-lite"
+    max_markdown_chars: int = 30_000
+    include_screenshot: bool = True
+    cache_root: str = ".scrape-gateway/evaluations"
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"off", "audit"}:
+            raise ValueError("evaluation mode must be 'off' or 'audit'")
+        if self.max_markdown_chars <= 0:
+            raise ValueError("evaluation max_markdown_chars must be positive")
+
+
+@dataclass(slots=True)
 class GatewayConfig:
     providers: list[ProviderConfig] = field(default_factory=list)
     cache: CacheConfig = field(default_factory=CacheConfig)
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     memory_path: str = ".scrape-gateway/memory.sqlite"
 
 
@@ -145,10 +161,20 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         debug_artifacts=telemetry_raw.get("debug_artifacts", False),
     )
 
+    evaluation_raw = raw.get("evaluation", {})
+    evaluation = EvaluationConfig(
+        mode=evaluation_raw.get("mode", "off"),
+        model=evaluation_raw.get("model", "google/gemini-3.1-flash-lite"),
+        max_markdown_chars=evaluation_raw.get("max_markdown_chars", 30_000),
+        include_screenshot=evaluation_raw.get("include_screenshot", True),
+        cache_root=evaluation_raw.get("cache_root", ".scrape-gateway/evaluations"),
+    )
+
     return GatewayConfig(
         providers=providers,
         cache=cache,
         strategy=strategy,
         telemetry=telemetry,
+        evaluation=evaluation,
         memory_path=raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
     )
