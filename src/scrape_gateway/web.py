@@ -188,6 +188,287 @@ def _result_payload(result: ScrapeResult) -> dict[str, Any]:
     }
 
 
+def _recorded_milliseconds(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return max(int(value), 0)
+
+
+def _trace_step(
+    step_id: str,
+    name: str,
+    kind: str,
+    status: str,
+    outcome: str,
+    summary: str,
+    *,
+    offset_ms: int,
+    duration_ms: int | None = None,
+    parent_id: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": step_id,
+        "parent_id": parent_id,
+        "name": name,
+        "kind": kind,
+        "status": status,
+        "outcome": outcome,
+        "summary": summary,
+        "offset_ms": offset_ms,
+        "duration_ms": duration_ms,
+        "timing": "recorded" if duration_ms is not None else "order_only",
+        "attributes": attributes or {},
+    }
+
+
+def _trace_payload(
+    report: dict[str, Any], artifacts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    request = report.get("request") if isinstance(report.get("request"), dict) else {}
+    final = report.get("final") if isinstance(report.get("final"), dict) else {}
+    attempts = report.get("attempts") if isinstance(report.get("attempts"), list) else []
+    skipped = report.get("skipped") if isinstance(report.get("skipped"), list) else []
+    evaluation = report.get("evaluation")
+    total_ms = _recorded_milliseconds(report.get("elapsed_ms")) or 0
+    steps: list[dict[str, Any]] = []
+    cursor_ms = 0
+
+    steps.append(
+        _trace_step(
+            "request",
+            "Request accepted",
+            "request",
+            "ok",
+            "accepted",
+            str(report.get("url") or request.get("url") or "Scrape request"),
+            offset_ms=0,
+            attributes=request,
+        )
+    )
+
+    if request.get("cache_read_enabled") is True:
+        cache_hit = final.get("provider") == "cache"
+        steps.append(
+            _trace_step(
+                "cache",
+                "Cache lookup",
+                "cache",
+                "ok" if cache_hit else "info",
+                "hit" if cache_hit else "miss",
+                (
+                    "A reusable response satisfied the request."
+                    if cache_hit
+                    else "No reusable response satisfied the request."
+                ),
+                offset_ms=0,
+                attributes={
+                    "enabled": True,
+                    "source_provider": final.get("metadata", {}).get("cache_source_provider")
+                    if isinstance(final.get("metadata"), dict)
+                    else None,
+                },
+            )
+        )
+
+    for index, attempt_value in enumerate(attempts, start=1):
+        if not isinstance(attempt_value, dict):
+            continue
+        attempt = attempt_value
+        provider_id = f"provider-{index}"
+        result = str(attempt.get("result") or attempt.get("failure_reason") or "failed")
+        succeeded = result == "success"
+        duration_ms = _recorded_milliseconds(attempt.get("elapsed_ms"))
+        route = attempt.get("route") or "No route recorded"
+        http_status = f"HTTP {attempt['status']}" if attempt.get("status") else "No HTTP status"
+        failure = attempt.get("reason") or attempt.get("error") or attempt.get("block_type")
+        summary = " · ".join(str(value) for value in (route, http_status, failure) if value)
+        steps.append(
+            _trace_step(
+                provider_id,
+                str(attempt.get("provider") or "Unknown provider"),
+                "provider",
+                "ok" if succeeded else "error",
+                result,
+                summary,
+                offset_ms=cursor_ms,
+                duration_ms=duration_ms,
+                attributes=attempt,
+            )
+        )
+        cursor_ms += duration_ms or 0
+
+        if result in {"success", "validation_failed"}:
+            rejected = result == "validation_failed"
+            steps.append(
+                _trace_step(
+                    f"{provider_id}-validation",
+                    "Content validation",
+                    "validation",
+                    "error" if rejected else "ok",
+                    "rejected" if rejected else "passed",
+                    str(
+                        attempt.get("validation_detail")
+                        or attempt.get("block_type")
+                        or "Content passed deterministic checks."
+                    ),
+                    offset_ms=cursor_ms,
+                    parent_id=provider_id,
+                    attributes={
+                        key: attempt.get(key)
+                        for key in (
+                            "block_type",
+                            "validation_detail",
+                            "matched_pattern",
+                            "snippet",
+                            "chars",
+                        )
+                        if attempt.get(key) is not None
+                    },
+                )
+            )
+
+    for index, skipped_value in enumerate(skipped, start=1):
+        label = str(skipped_value)
+        match = re.fullmatch(r"(.+?)\((.+)\)", label)
+        provider = match.group(1) if match else label
+        reason = match.group(2) if match else "not selected"
+        steps.append(
+            _trace_step(
+                f"skipped-{index}",
+                provider,
+                "provider",
+                "skipped",
+                reason.replace(" ", "_"),
+                f"Provider skipped: {reason}.",
+                offset_ms=cursor_ms,
+                attributes={"reason": reason},
+            )
+        )
+
+    markdown_chars = _recorded_milliseconds(final.get("markdown_chars"))
+    if markdown_chars:
+        html_chars = _recorded_milliseconds(final.get("chars")) or 0
+        steps.append(
+            _trace_step(
+                "transform",
+                "Content normalized",
+                "transform",
+                "ok",
+                str(request.get("output_format") or "markdown"),
+                f"Produced {markdown_chars:,} Markdown characters from {html_chars:,} HTML characters.",
+                offset_ms=cursor_ms,
+                attributes={
+                    "html_chars": html_chars,
+                    "markdown_chars": markdown_chars,
+                    "output_format": request.get("output_format"),
+                },
+            )
+        )
+
+    audit_verdict = None
+    if isinstance(evaluation, dict):
+        audit_verdict = evaluation.get("verdict")
+        evaluation_duration = _recorded_milliseconds(evaluation.get("elapsed_ms"))
+        evaluation_offset = max(
+            cursor_ms,
+            total_ms - evaluation_duration if evaluation_duration is not None else cursor_ms,
+        )
+        evaluation_status = str(evaluation.get("status") or "unknown")
+        if evaluation_status in {"error", "failed"}:
+            status = "error"
+        elif audit_verdict == "fail" or evaluation.get("needs_human_review") is True:
+            status = "warning"
+        elif audit_verdict == "pass":
+            status = "ok"
+        else:
+            status = "info"
+        root_cause = evaluation.get("root_cause")
+        action = evaluation.get("recommended_action")
+        summary = " · ".join(
+            str(value)
+            for value in (
+                f"Verdict: {audit_verdict}" if audit_verdict else evaluation_status,
+                f"Root cause: {root_cause}" if root_cause else None,
+                f"Action: {action}" if action else None,
+            )
+            if value
+        )
+        steps.append(
+            _trace_step(
+                "evaluation",
+                "AI quality evaluation",
+                "evaluation",
+                status,
+                str(audit_verdict or evaluation_status),
+                summary,
+                offset_ms=evaluation_offset,
+                duration_ms=evaluation_duration,
+                attributes=evaluation,
+            )
+        )
+
+    final_status = "ok" if report.get("success") is True else "error"
+    diagnosis = str(report.get("diagnosis") or ("success" if final_status == "ok" else "failed"))
+    steps.append(
+        _trace_step(
+            "result",
+            "Result finalized",
+            "result",
+            final_status,
+            diagnosis,
+            " · ".join(
+                str(value)
+                for value in (
+                    final.get("provider"),
+                    final.get("route"),
+                    f"HTTP {final['status']}" if final.get("status") else None,
+                )
+                if value
+            )
+            or diagnosis,
+            offset_ms=total_ms,
+            attributes={
+                "diagnosis": diagnosis,
+                "recommended_next_action": report.get("recommended_next_action"),
+                **final,
+            },
+        )
+    )
+
+    artifact_bytes = sum(
+        artifact.get("size", 0)
+        for artifact in artifacts
+        if isinstance(artifact.get("size"), int)
+    )
+    steps.append(
+        _trace_step(
+            "persistence",
+            "Evidence persisted",
+            "persistence",
+            "ok" if artifacts else "info",
+            "saved" if artifacts else "none",
+            f"Saved {len(artifacts)} artifact{'s' if len(artifacts) != 1 else ''} for inspection.",
+            offset_ms=total_ms,
+            attributes={
+                "artifact_count": len(artifacts),
+                "total_bytes": artifact_bytes,
+                "paths": [artifact.get("path") for artifact in artifacts],
+            },
+        )
+    )
+
+    return {
+        "run_id": report.get("run_id"),
+        "started_at": report.get("started_at"),
+        "finished_at": report.get("finished_at"),
+        "duration_ms": total_ms,
+        "status": final_status,
+        "audit_verdict": audit_verdict,
+        "steps": steps,
+    }
+
+
 def create_console_routes(
     *,
     token: str = "",
@@ -302,7 +583,14 @@ def create_console_routes(
             report = json.loads(report_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return _json_error("Run report is unavailable.", 404)
-        return JSONResponse({"report": report, "artifacts": _list_artifacts(root, run_id)})
+        artifacts = _list_artifacts(root, run_id)
+        return JSONResponse(
+            {
+                "report": report,
+                "trace": _trace_payload(report, artifacts),
+                "artifacts": artifacts,
+            }
+        )
 
     async def artifact(request: Request) -> Response:
         if not _is_authorized(request, token):
