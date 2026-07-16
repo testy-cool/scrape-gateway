@@ -32,3 +32,17 @@ providers:
 strategy:
   mode: cheapest_successful
   # max_cost_per_url: 0.10
+
+telemetry:
+  enabled: true
+  root: .scrape-gateway/runs
+  debug_artifacts: false
+
+# Optional, non-blocking AI scrape-usability audit through OpenRouter.
+# Set OPENROUTER_API_KEY in .env before changing mode to audit.
+evaluation:
+  mode: "off"
+  model: google/gemini-3.1-flash-lite
+  max_markdown_chars: 30000
+  include_screenshot: true
+  cache_root: .scrape-gateway/evaluations

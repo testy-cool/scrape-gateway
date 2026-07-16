@@ -162,8 +162,12 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
     )
 
     evaluation_raw = raw.get("evaluation", {})
+    evaluation_mode = evaluation_raw.get("mode", "off")
+    if evaluation_mode is False:
+        # PyYAML treats the common unquoted spelling `off` as a boolean.
+        evaluation_mode = "off"
     evaluation = EvaluationConfig(
-        mode=evaluation_raw.get("mode", "off"),
+        mode=evaluation_mode,
         model=evaluation_raw.get("model", "google/gemini-3.1-flash-lite"),
         max_markdown_chars=evaluation_raw.get("max_markdown_chars", 30_000),
         include_screenshot=evaluation_raw.get("include_screenshot", True),
