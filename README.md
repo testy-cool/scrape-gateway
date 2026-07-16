@@ -22,6 +22,36 @@ sgw selftest           # verify installation
 sgw url https://example.com
 ```
 
+## Browser console
+
+The HTTP service includes a browser console at `/`. The MCP endpoint stays at
+`/mcp`, so one process serves both surfaces.
+
+Run the console locally:
+
+```bash
+pip install -e ".[mcp]"
+export SGW_MCP_TOKEN="choose-a-local-token"  # optional for local use
+SGW_MCP_PORT=8100 SGW_MCP_URL=http://localhost:8100 \
+  python -m scrape_gateway.mcp_server
+```
+
+Open `http://localhost:8100/`. If `SGW_MCP_TOKEN` is set, enter the same token
+in the connection dialog. The browser keeps it in the current tab's
+`sessionStorage` and sends it only in API authorization headers.
+
+You can use the console to:
+
+- Start a scrape and set an evaluation goal.
+- Request JavaScript rendering, screenshot evidence, mobile rendering, premium routing, and a fresh fetch.
+- Filter the latest 500 runs by URL or audit result.
+- Review AI checks, provider attempts, recurring improvements, token use, and cost.
+- Read saved Markdown, HTML source, JSON, and screenshots without running scraped page scripts.
+
+The console reads the same `.scrape-gateway/runs/` evidence used by
+`sgw evaluations`. It does not change prompts, validators, or routing based on
+an AI verdict.
+
 ## Commands
 
 | Command | What it does |
