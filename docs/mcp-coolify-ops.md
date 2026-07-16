@@ -4,6 +4,7 @@ Date: 2026-05-31
 
 ## Service
 
+- Browser console: `https://sgw.voidxd.cloud/`
 - Public endpoint: `https://sgw.voidxd.cloud/mcp`
 - Coolify app name: `sgw-mcp`
 - Coolify app UUID: `hxz97tein5tfpmw2n3ur9uza`
@@ -81,6 +82,21 @@ ssh coolify-gen2 'docker restart coolify-proxy'
 Avoid loading only `/dynamic/Caddyfile` manually; that can temporarily drop generated Coolify routes such as Langfuse.
 
 ## Expected Checks
+
+The browser console should load without a token. Its operational API should
+require the same bearer token as MCP:
+
+```bash
+curl -fsS https://sgw.voidxd.cloud/ | grep "Scrape Gateway"
+curl -i https://sgw.voidxd.cloud/api/session
+curl -fsS https://sgw.voidxd.cloud/api/session \
+  -H "Authorization: Bearer $SGW_MCP_TOKEN"
+```
+
+The second command should return `401`. The authenticated response should show
+the enabled evaluation mode and provider names. The console stores the token
+only in browser `sessionStorage`. It reads run history and evidence from the
+persistent `/data/.scrape-gateway/` directory.
 
 Unauthenticated MCP should return `401`, not `502`:
 
