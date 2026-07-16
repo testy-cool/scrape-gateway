@@ -300,6 +300,16 @@ def load_recent_reports(
     return reports[:limit]
 
 
+def _is_actionable_opportunity(text: str) -> bool:
+    normalized = text.strip().lower().rstrip(".")
+    if normalized in {"none", "n/a", "not applicable"}:
+        return False
+    return re.search(
+        r"\bno (?:specific )?improvements? (?:are )?(?:needed|required|necessary)\b",
+        normalized,
+    ) is None
+
+
 def summarize_evaluations(
     reports: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -363,7 +373,11 @@ def summarize_evaluations(
                 issue_severity_counts[str(issue["severity"])] += 1
 
         for opportunity in evaluation.get("improvement_opportunities") or []:
-            if isinstance(opportunity, str) and opportunity.strip():
+            if (
+                isinstance(opportunity, str)
+                and opportunity.strip()
+                and _is_actionable_opportunity(opportunity)
+            ):
                 opportunity_counts[opportunity.strip()] += 1
 
         failed_checks: list[str] = []
