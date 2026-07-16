@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+from io import StringIO
 from unittest.mock import AsyncMock, patch
 
+from rich.console import Console
 from typer.testing import CliRunner
 
-from scrape_gateway.cli import app
+from scrape_gateway.cli import _print_result, app
 from scrape_gateway.models import FailureReason, ScrapeResult
 
 runner = CliRunner()
@@ -61,6 +64,125 @@ def test_debug_artifacts_flag_sets_metadata():
     result, req = _run_url("https://example.com", "--debug-artifacts")
     assert result.exit_code == 0
     assert req.metadata["debug_artifacts"] is True
+
+
+def test_evaluation_goal_flag_sets_metadata():
+    result, req = _run_url(
+        "https://example.com/products",
+        "--evaluation-goal",
+        "Capture every visible product and price",
+    )
+    assert result.exit_code == 0
+    assert req.metadata["evaluation_goal"] == "Capture every visible product and price"
+
+
+def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkeypatch):
+    output = StringIO()
+    monkeypatch.setattr(
+        "scrape_gateway.cli.console",
+        Console(file=output, force_terminal=False, color_system=None),
+    )
+    result = _fake_result("https://example.com/products")
+    result.metadata["evaluation"] = {
+        "status": "completed",
+        "verdict": "fail",
+        "needs_human_review": True,
+        "recommended_action": "retry_with_wait",
+    }
+
+    _print_result(result)
+
+    rendered = output.getvalue()
+    assert "SUCCESS" in rendered
+    assert "AI audit" in rendered
+    assert "fail" in rendered
+    assert "human review" in rendered
+    assert "retry_with_wait" in rendered
+
+
+def test_evaluations_command_prints_aggregate_json(tmp_path):
+    run_dir = tmp_path / "runs" / "run-123"
+    run_dir.mkdir(parents=True)
+    (run_dir / "report.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run-123",
+                "started_at": "2026-07-16T10:00:00+00:00",
+                "url": "https://example.com/products",
+                "domain": "example.com",
+                "evaluation": {
+                    "status": "completed",
+                    "model": "google/gemini-3.1-flash-lite",
+                    "provider": "Google Vertex",
+                    "prompt_version": "scrape-usability-v2",
+                    "verdict": "fail",
+                    "needs_human_review": False,
+                    "root_cause": "incomplete_content",
+                    "recommended_action": "retry_provider",
+                    "checks": {
+                        "access": {
+                            "result": "pass",
+                            "evidence": "The page is accessible.",
+                        },
+                        "goal_coverage": {
+                            "result": "fail",
+                            "evidence": "The listing stops early.",
+                        },
+                        "extractability": {
+                            "result": "fail",
+                            "evidence": "Only part of the listing was extracted.",
+                        },
+                        "visual_state": {
+                            "result": "not_applicable",
+                            "evidence": "No screenshot was supplied.",
+                        },
+                    },
+                    "issues": [
+                        {
+                            "code": "truncated_content",
+                            "severity": "high",
+                            "source": "markdown",
+                            "evidence": "The listing stops abruptly.",
+                        }
+                    ],
+                    "improvement_opportunities": ["Try a rendered provider."],
+                    "usage": {"cost": 0.0003, "total_tokens": 800},
+                    "cached": False,
+                },
+            }
+        )
+    )
+    newer_run_dir = tmp_path / "runs" / "run-without-evaluation"
+    newer_run_dir.mkdir(parents=True)
+    (newer_run_dir / "report.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run-without-evaluation",
+                "started_at": "2026-07-16T11:00:00+00:00",
+                "url": "https://example.com/about",
+                "domain": "example.com",
+            }
+        )
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "evaluations",
+            "--root",
+            str(tmp_path / "runs"),
+            "--limit",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["runs_scanned"] == 1
+    assert payload["verdict_counts"] == {"fail": 1}
+    assert payload["review_queue"][0]["run_id"] == "run-123"
 
 
 def test_url_exits_nonzero_on_failure():
