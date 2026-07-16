@@ -100,6 +100,15 @@ def test_invalid_evaluation_config_fails_early(kwargs, message):
         EvaluationConfig(**kwargs)
 
 
+def test_unquoted_yaml_off_disables_evaluation(tmp_path):
+    config_path = tmp_path / "scrape-gateway.yml"
+    config_path.write_text("evaluation:\n  mode: off\n")
+
+    config = load_config(config_path)
+
+    assert config.evaluation.mode == "off"
+
+
 def test_load_dotenv(monkeypatch, tmp_path):
     dotenv = tmp_path / ".env"
     dotenv.write_text("TEST_KEY_XYZ=hello123\n")
