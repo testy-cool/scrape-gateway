@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
 import re
+import secrets
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Callable
@@ -485,6 +488,14 @@ def create_console_routes(
     get_config: Callable[[], GatewayConfig] = load_config,
     asset_root: Path = ASSET_ROOT,
 ) -> list:
+    active_scrapes: dict[str, dict[str, Any]] = {}
+    active_tasks: set[asyncio.Task[Any]] = set()
+
+    def release_active_task(task: asyncio.Task[Any]) -> None:
+        active_tasks.discard(task)
+        if not task.cancelled():
+            task.exception()
+
     async def homepage(request: Request) -> Response:
         markup = (asset_root / "index.html").read_text(encoding="utf-8")
         markup = markup.replace("__ASSET_VERSION__", _asset_version(asset_root))
@@ -556,12 +567,44 @@ def create_console_routes(
             metadata=metadata,
         )
         use_cache = payload.get("use_cache", True) is not False
+
+        active_id = secrets.token_hex(8)
+        active_entry = {
+            "pending": True,
+            "run_id": active_id,
+            "url": scrape_request.url,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "status": "running",
+            "diagnosis": "in_progress",
+            "payload": {
+                "url": scrape_request.url,
+                "evaluation_goal": metadata.get("evaluation_goal", ""),
+                "output_format": output_format,
+                "screenshot": scrape_request.screenshot,
+                "render_js": scrape_request.render_js,
+                "mobile": scrape_request.mobile,
+                "premium": scrape_request.premium,
+                "block_ads": scrape_request.block_ads,
+                "use_cache": use_cache,
+            },
+        }
+        active_scrapes[active_id] = active_entry
+
+        async def execute_scrape() -> ScrapeResult:
+            try:
+                return await get_gateway().scrape(
+                    scrape_request,
+                    use_cache=use_cache,
+                    use_memory=use_cache,
+                )
+            finally:
+                active_scrapes.pop(active_id, None)
+
+        scrape_task = asyncio.create_task(execute_scrape())
+        active_tasks.add(scrape_task)
+        scrape_task.add_done_callback(release_active_task)
         try:
-            result = await get_gateway().scrape(
-                scrape_request,
-                use_cache=use_cache,
-                use_memory=use_cache,
-            )
+            result = await asyncio.shield(scrape_task)
         except Exception as exc:  # noqa: BLE001 - return an operator-visible API error
             return _json_error(f"Scrape failed before producing a result: {exc}", 500)
         return JSONResponse(_result_payload(result))
@@ -579,7 +622,22 @@ def create_console_routes(
             domain=request.query_params.get("domain") or None,
             evaluated_only=request.query_params.get("evaluated") == "true",
         )
-        return JSONResponse({"runs": [_run_summary(report) for report in reports]})
+        active = sorted(
+            active_scrapes.values(),
+            key=lambda item: item["started_at"],
+            reverse=True,
+        )
+        if request.query_params.get("evaluated") == "true":
+            active = []
+        domain = request.query_params.get("domain")
+        if domain:
+            active = [item for item in active if domain in item["url"]]
+        return JSONResponse(
+            {
+                "runs": [_run_summary(report) for report in reports],
+                "active_runs": active,
+            }
+        )
 
     async def run_detail(request: Request) -> Response:
         if not _is_authorized(request, token):

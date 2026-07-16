@@ -43,6 +43,7 @@ in the connection dialog. The browser keeps it in the current tab's
 You can use the console to:
 
 - Browse the latest 500 runs in a live-refreshing trace inventory and filter by URL, provider, scrape status, or audit status.
+- Refresh or reopen the console while a scrape is running without losing it; active requests are tracked by the service and restored into the trace inventory.
 - Follow each run from request and cache lookup through provider attempts, validation, content normalization, AI evaluation, final result, and evidence persistence.
 - Select any trace step to inspect its outcome, timing, summary, and complete saved attributes. Recorded durations use waterfall bars; steps without timing data are clearly marked as order-only.
 - Open scraped Markdown/HTML, AI checks and improvement signals, saved artifacts and screenshots, or the complete raw telemetry report without running scraped page scripts.
