@@ -14,6 +14,17 @@ from .models import FailureReason, ScrapeRequest, ScrapeResult
 MAX_ERROR_CHARS = 1_000
 MAX_SNIPPET_CHARS = 600
 MAX_METADATA_CHARS = 2_000
+SENSITIVE_METADATA_KEY_PARTS = {
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "passwd",
+    "privatekey",
+    "secret",
+    "token",
+}
 
 
 @dataclass(slots=True)
@@ -61,26 +72,32 @@ def evidence_snippet(
     return truncate(snippet, limit)
 
 
+def _is_sensitive_metadata_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "", key.lower())
+    return any(part in normalized for part in SENSITIVE_METADATA_KEY_PARTS)
+
+
+def _safe_metadata_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return truncate(value, MAX_METADATA_CHARS)
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return safe_metadata(value)
+    if isinstance(value, list):
+        return [_safe_metadata_value(item) for item in value[:20]]
+    return truncate(str(value), MAX_METADATA_CHARS)
+
+
 def safe_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     if not metadata:
         return {}
     result: dict[str, Any] = {}
     for key, value in metadata.items():
-        if key.lower() in {"api_key", "token", "authorization", "password"}:
+        if _is_sensitive_metadata_key(key):
             result[key] = "<redacted>"
-        elif isinstance(value, str):
-            result[key] = truncate(value, MAX_METADATA_CHARS)
-        elif isinstance(value, (int, float, bool)) or value is None:
-            result[key] = value
-        elif isinstance(value, dict):
-            result[key] = safe_metadata(value)
-        elif isinstance(value, list):
-            result[key] = [
-                truncate(item, MAX_METADATA_CHARS) if isinstance(item, str) else item
-                for item in value[:20]
-            ]
         else:
-            result[key] = truncate(str(value), MAX_METADATA_CHARS)
+            result[key] = _safe_metadata_value(value)
     return result
 
 
