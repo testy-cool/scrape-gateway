@@ -134,3 +134,6 @@ sgw providers
 sgw url https://example.com --render-js -p browserless
 sgw url https://example.com --render-js --screenshot -p browserless
 ```
+
+With `--screenshot`, the extension fetches `/content` and `/screenshot` concurrently
+so the result contains both rendered HTML and visual evidence for validation or AI audit.

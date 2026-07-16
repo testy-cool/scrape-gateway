@@ -149,6 +149,26 @@ sgw telemetry -d example.com          # filter by domain
 sgw telemetry --diagnosis validator_rejected
 ```
 
+## `sgw evaluations` — Review AI scrape-quality audits
+
+Aggregates the structured evaluation data saved with telemetry. It shows verdicts,
+root causes, issue codes, cost, recurring improvement opportunities, and runs that
+need review. It never changes scraping behavior automatically.
+
+```bash
+sgw evaluations
+sgw evaluations --format json
+sgw evaluations --domain example.com -n 100
+```
+
+Add a task-specific goal and optional visual evidence when scraping:
+
+```bash
+sgw url https://example.com/products \
+  --evaluation-goal "Capture every visible product and price" \
+  --screenshot
+```
+
 ## `sgw cache` — Inspect cached artifacts
 
 Available when the `sg-cache` extension is installed. Useful for hosted MCP deployments with persistent cache state.

@@ -1,6 +1,6 @@
 ---
 name: scrape-gateway
-description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sgw", "add a scraping provider", "write an sgw extension", "sgw url", "sgw extract", "sgw recipe", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, extract structured data from listing pages, or build custom scraping providers.
+description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sgw", "add a scraping provider", "write an sgw extension", "sgw url", "sgw extract", "sgw recipe", "sgw evaluations", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, audit scrape quality, extract structured data from listing pages, or build custom scraping providers.
 ---
 
 # scrape-gateway (sgw)
@@ -54,6 +54,8 @@ sgw url <url> --no-cache             # skip cache
 sgw url <url> -f markdown            # markdown output
 sgw url <url> --country us           # geo-target
 sgw url <url> --premium              # use highest tier
+sgw url <url> --screenshot           # request visual evidence
+sgw url <url> --evaluation-goal "Capture visible products and prices"
 ```
 
 ### sgw extract — Structured data from listing pages
@@ -130,6 +132,36 @@ sgw cache show <url-or-key>          # print cached markdown
 sgw cache purge --expired --yes      # delete expired entries
 ```
 
+### sgw evaluations — Review AI scrape-quality audits
+
+Enable the optional OpenRouter evaluator in `scrape-gateway.yml`:
+
+```yaml
+evaluation:
+  mode: audit
+  model: google/gemini-3.1-flash-lite
+  include_screenshot: true
+```
+
+Set `OPENROUTER_API_KEY`, then inspect saved results:
+
+```bash
+sgw url <url> --evaluation-goal "Capture the main product listing" --screenshot
+sgw evaluations
+sgw evaluations --format json
+```
+
+Audit mode saves the exact evaluator request, strict JSON response, final HTML and
+Markdown, screenshot when captured, hashes, attempts, tokens, OpenRouter billed cost,
+BYOK upstream cost, and provider metadata under
+`.scrape-gateway/runs/<run-id>/evaluation/`. Evaluator failures never change primary
+scrape success. Identical evidence and provider context reuse a content-addressed
+evaluation cache.
+
+The binary judge is `uncalibrated_audit`: use its categorical checks, structured
+issue/root-cause counts, and review queue to find recurring improvements, but do not
+automatically change prompts, validators, or routing from its verdicts.
+
 ## Remote MCP Ops
 
 Scrape Gateway also runs as a hosted MCP server on `coolify-gen2`. For deployment, proxy, token, persistence, and smoke-test details, read:
@@ -199,3 +231,4 @@ asyncio.run(main())
 | `sgw` works in project dir but not elsewhere | Config was CWD-relative | Update to latest — fixed to fall back to project root |
 | Extension not showing in `sgw providers` | File not in right dir or has errors | Check `~/.config/scrape-gateway/providers/`, run `sgw providers` for error messages |
 | `sgw extract` picks wrong pattern | LLM chose nav instead of content | Use `-s "selector"` to specify manually, or `--no-llm` for heuristic |
+| Evaluation is skipped | OpenRouter key is unavailable | Set `OPENROUTER_API_KEY` or add the `openrouter` key to the `llm` CLI key store |
