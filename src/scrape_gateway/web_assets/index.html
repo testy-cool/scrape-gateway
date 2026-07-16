@@ -3,11 +3,258 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Scrape Gateway</title>
+    <meta name="theme-color" content="#11140f">
+    <meta name="color-scheme" content="dark">
+    <title>Scrape Gateway · Flight Recorder</title>
     <link rel="stylesheet" href="/assets/app.css">
   </head>
   <body>
-    <main><h1>Scrape Gateway</h1></main>
+    <a class="skip-link" href="#main-content">Skip to workspace</a>
+    <div class="ambient-grid" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Scrape Gateway home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 42 42" role="img">
+            <path d="M4 24h7l3-10 5 20 5-27 5 17h9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span>
+          <strong>Scrape Gateway</strong>
+          <small>Flight recorder</small>
+        </span>
+      </a>
+
+      <div class="topbar-actions">
+        <div class="service-state" id="service-state" aria-live="polite">
+          <span class="state-light"></span>
+          <span id="service-state-label">Connecting</span>
+          <span class="version-label" id="version-label">—</span>
+        </div>
+        <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh runs" title="Refresh runs">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
+        </button>
+        <button class="quiet-button" id="auth-button" type="button">Connect</button>
+      </div>
+    </header>
+
+    <main id="main-content" class="main-shell">
+      <section class="metric-strip" id="audit-summary" aria-label="Audit summary">
+        <article class="metric-card metric-card--primary">
+          <span class="metric-label">Runs scanned</span>
+          <strong class="metric-value" id="metric-runs">—</strong>
+          <span class="metric-foot" id="metric-evaluated">Awaiting records</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Audit pass rate</span>
+          <strong class="metric-value" id="metric-pass-rate">—</strong>
+          <span class="metric-foot" id="metric-verdicts">No evaluations loaded</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Review queue</span>
+          <strong class="metric-value metric-value--warn" id="metric-review">—</strong>
+          <span class="metric-foot" id="metric-failed-check">Most failed check: —</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Judge spend</span>
+          <strong class="metric-value" id="metric-cost">—</strong>
+          <span class="metric-foot" id="metric-tokens">0 tokens recorded</span>
+        </article>
+        <article class="watch-card">
+          <span class="watch-label">Recurring signals</span>
+          <div class="opportunity-ticker" id="opportunity-ticker">
+            <span class="watch-empty">No recurring improvements yet.</span>
+          </div>
+        </article>
+      </section>
+
+      <div class="workbench">
+        <aside class="launch-panel panel">
+          <header class="panel-heading">
+            <div>
+              <span class="eyebrow">New capture</span>
+              <h1>Send a page through the stack.</h1>
+            </div>
+            <span class="sequence-mark">01</span>
+          </header>
+
+          <form id="scrape-form" class="scrape-form">
+            <label class="field-label" for="url-input">Target URL</label>
+            <div class="url-field">
+              <span aria-hidden="true">↗</span>
+              <input id="url-input" name="url" type="text" inputmode="url" autocomplete="url" placeholder="example.com/products" required>
+            </div>
+
+            <label class="field-label" for="evaluation-goal">
+              Evaluation goal
+              <span>Optional, but useful</span>
+            </label>
+            <textarea id="evaluation-goal" name="evaluation_goal" rows="4" maxlength="4000" placeholder="e.g. Capture every visible product name, current price, and stock state."></textarea>
+
+            <fieldset class="capture-options">
+              <legend>Capture profile</legend>
+              <label class="switch-row">
+                <span><strong>Visual evidence</strong><small>Save a rendered screenshot</small></span>
+                <input name="screenshot" type="checkbox" checked>
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
+              <label class="switch-row">
+                <span><strong>Render JavaScript</strong><small>Wait for client-side content</small></span>
+                <input name="render_js" type="checkbox">
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
+              <label class="switch-row">
+                <span><strong>Mobile viewport</strong><small>Request the compact page state</small></span>
+                <input name="mobile" type="checkbox">
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
+              <label class="switch-row">
+                <span><strong>Premium route</strong><small>Allow residential escalation</small></span>
+                <input name="premium" type="checkbox">
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
+              <label class="switch-row">
+                <span><strong>Block ads</strong><small>Reduce visual and network noise</small></span>
+                <input name="block_ads" type="checkbox">
+                <span class="switch-control" aria-hidden="true"></span>
+              </label>
+            </fieldset>
+
+            <div class="form-row">
+              <fieldset class="format-picker">
+                <legend>Primary output</legend>
+                <label><input type="radio" name="output_format" value="markdown" checked><span>Markdown</span></label>
+                <label><input type="radio" name="output_format" value="html"><span>HTML</span></label>
+              </fieldset>
+              <label class="fresh-check">
+                <input name="fresh" type="checkbox">
+                <span>Bypass cache</span>
+              </label>
+            </div>
+
+            <button class="launch-button" id="launch-button" type="submit">
+              <span>Start capture</span>
+              <span class="launch-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="launch-status" id="launch-status" aria-live="polite">
+              <span class="status-track"><span></span></span>
+              <span id="launch-status-text">Ready for a URL</span>
+              <time id="launch-timer">00:00</time>
+            </div>
+          </form>
+        </aside>
+
+        <section class="archive-panel panel">
+          <header class="archive-heading">
+            <div>
+              <span class="eyebrow">Evidence archive</span>
+              <h2>Every attempt leaves a trace.</h2>
+            </div>
+            <div class="archive-tools">
+              <label class="search-field">
+                <span class="sr-only">Filter runs</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                <input id="run-search" type="search" placeholder="Filter URL, domain, run ID">
+              </label>
+              <label class="select-field">
+                <span class="sr-only">Filter by audit verdict</span>
+                <select id="verdict-filter">
+                  <option value="all">All records</option>
+                  <option value="fail">Failed audits</option>
+                  <option value="review">Needs review</option>
+                  <option value="pass">Passed audits</option>
+                  <option value="unevaluated">Not evaluated</option>
+                </select>
+              </label>
+            </div>
+          </header>
+
+          <div class="archive-grid">
+            <section class="run-library" aria-label="Saved scrape runs">
+              <header class="run-library-heading">
+                <span id="run-count">0 records</span>
+                <span>Newest first</span>
+              </header>
+              <div class="run-list" id="run-list" role="listbox" aria-label="Scrape runs">
+                <div class="loading-stack" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </section>
+
+            <article class="run-inspector" id="run-inspector" tabindex="-1">
+              <div class="inspector-empty" id="inspector-empty">
+                <span class="empty-orbit" aria-hidden="true"><i></i></span>
+                <span class="eyebrow">Run inspector</span>
+                <h3>Select a record to open its evidence.</h3>
+                <p>The scrape output, provider route, AI judgment, attempts, and saved artifacts will appear here.</p>
+              </div>
+
+              <div class="inspector-content" id="inspector-content" hidden>
+                <header class="inspector-heading">
+                  <div class="inspector-title">
+                    <div class="title-line">
+                      <span class="verdict-beacon" id="inspector-beacon"></span>
+                      <span class="eyebrow" id="inspector-domain">—</span>
+                    </div>
+                    <h3 id="inspector-url">—</h3>
+                    <div class="inspector-meta" id="inspector-meta"></div>
+                  </div>
+                  <div class="inspector-actions">
+                    <button class="icon-button" id="copy-url-button" type="button" title="Copy URL" aria-label="Copy URL">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                    </button>
+                    <a class="icon-button" id="open-url-button" href="#" target="_blank" rel="noopener noreferrer" title="Open target" aria-label="Open target">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+                    </a>
+                  </div>
+                </header>
+
+                <div class="audit-ribbon" id="audit-ribbon"></div>
+
+                <nav class="inspector-tabs" aria-label="Run detail views" role="tablist">
+                  <button type="button" role="tab" aria-selected="true" aria-controls="overview-panel" data-tab="overview">Overview</button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="content-panel" data-tab="content">Content</button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="artifacts-panel" data-tab="artifacts">Artifacts <span id="artifact-count">0</span></button>
+                </nav>
+
+                <section class="tab-panel" id="overview-panel" role="tabpanel">
+                  <div id="evaluation-body"></div>
+                  <div id="attempts-body"></div>
+                </section>
+
+                <section class="tab-panel" id="content-panel" role="tabpanel" hidden>
+                  <div class="content-toolbar" id="content-toolbar"></div>
+                  <pre class="evidence-reader" id="content-viewer"><code>Select a Markdown or HTML artifact.</code></pre>
+                </section>
+
+                <section class="tab-panel artifact-panel" id="artifacts-panel" role="tabpanel" hidden>
+                  <div class="artifact-list" id="artifact-list"></div>
+                  <div class="artifact-viewer" id="artifact-viewer">
+                    <div class="artifact-placeholder">Choose an artifact to inspect it safely.</div>
+                  </div>
+                </section>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-title">
+      <form id="auth-form" class="auth-card">
+        <span class="auth-signal" aria-hidden="true"></span>
+        <span class="eyebrow">Operator access</span>
+        <h2 id="auth-title">Connect to the recorder.</h2>
+        <p>The same bearer token used by the MCP endpoint unlocks scrape controls and saved evidence. It stays in this browser tab only.</p>
+        <label class="field-label" for="token-input">Bearer token</label>
+        <input id="token-input" name="sgw_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore="true" placeholder="Paste SGW_MCP_TOKEN" required>
+        <p class="form-error" id="auth-error" role="alert"></p>
+        <button class="launch-button" type="submit"><span>Connect</span><span aria-hidden="true">→</span></button>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/assets/app.js" defer></script>
   </body>
 </html>

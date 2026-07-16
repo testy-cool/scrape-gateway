@@ -243,6 +243,39 @@ async def test_console_serves_packaged_assets_without_authentication(tmp_path: P
     assert script.status_code == 200
 
 
+async def test_console_shell_exposes_the_full_operator_workflow(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    app = create_console_app(
+        token="operator-secret",
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        page = await client.get("/")
+        css = await client.get("/assets/app.css")
+        script = await client.get("/assets/app.js")
+
+    for element_id in (
+        "auth-dialog",
+        "scrape-form",
+        "url-input",
+        "evaluation-goal",
+        "audit-summary",
+        "run-list",
+        "run-inspector",
+        "artifact-viewer",
+    ):
+        assert f'id="{element_id}"' in page.text
+    assert "sessionStorage" in script.text
+    assert 'fetchJson("/api/runs' in script.text
+    assert 'fetchJson("/api/evaluations' in script.text
+    assert "textContent" in script.text
+    assert "@media (max-width: 760px)" in css.text
+    assert "prefers-reduced-motion" in css.text
+
+
 def test_service_app_keeps_the_mcp_endpoint_and_console_routes() -> None:
     from scrape_gateway.mcp_server import app
 
