@@ -96,7 +96,9 @@ curl -fsS https://sgw.voidxd.cloud/api/session \
 The second command should return `401`. The authenticated response should show
 the enabled evaluation mode and provider names. The console stores the token
 only in browser `sessionStorage`. It reads run history and evidence from the
-persistent `/data/.scrape-gateway/` directory.
+persistent `/data/.scrape-gateway/` directory. Opening a saved run should show
+its ordered trace, step attributes, output, AI evaluation, artifacts, and raw
+report; recorded timings are kept distinct from order-only lifecycle steps.
 
 Unauthenticated MCP should return `401`, not `502`:
 
