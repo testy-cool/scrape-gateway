@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-16
+
+### Added
+- An observability-style trace explorer with a live run inventory, ordered lifecycle timeline, recorded-duration waterfall, selectable step attributes, and dedicated output, AI evaluation, artifact, and raw-report views.
+- Normalized trace data on run-detail API responses for request, cache, provider, validation, transformation, evaluation, result, and persistence steps, including explicit recorded-versus-order-only timing semantics.
+- Compact in-flight feedback while a console scrape is running and an optional 15-second live refresh for saved traces.
+
+### Changed
+- Scrape controls now open in a conventional responsive dialog so trace history and the active inspection surface remain the primary workspace.
+
+### Fixed
+- Browserless credentials now use bearer headers instead of query parameters, preventing ordinary HTTP request logs from persisting the token.
+
 ## [0.8.1] - 2026-07-16
 
 ### Fixed
