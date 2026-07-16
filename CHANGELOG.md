@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-16
+
+### Added
+- Optional, non-blocking OpenRouter scrape-usability audits with `google/gemini-3.1-flash-lite`, a strict binary verdict, categorical diagnostic checks, task-specific goals, and Markdown plus screenshot evidence.
+- Complete per-run evaluation bundles containing the evaluator request/response, final HTML and Markdown, screenshots, hashes, usage, costs, provider details, and failed-provider artifacts.
+- `sgw evaluations` aggregation with failed checks, page types, root causes, actionable improvements, usage totals, and a manual review queue.
+- CLI and MCP support for evaluation goals, screenshot evidence, and returning audit results and report pointers.
+
+### Changed
+- Browserless screenshot requests now fetch rendered HTML and the screenshot concurrently so validation and audits keep both evidence types.
+- Cached results restore coherent HTML, Markdown, and screenshot artifacts, preserving visual evidence without repeated provider calls.
+- Telemetry redaction recognizes nested credential-key variants before request context is persisted.
+
+### Fixed
+- Unquoted YAML `evaluation.mode: off` is accepted despite PyYAML parsing it as boolean false.
+- No-op evaluator phrases such as “no improvements needed” no longer pollute aggregate improvement suggestions.
+- 202 unit tests (up from 194 before this release).
+
 ## [0.6.0] - 2026-07-05
 
 ### Added
