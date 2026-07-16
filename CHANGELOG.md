@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-16
+
+### Fixed
+- OpenRouter audits now reuse complete provider, BYOK, and upstream-cost details from the completion response, avoiding redundant generation-detail retries and their eventual-consistency 404s.
+
 ## [0.7.0] - 2026-07-16
 
 ### Added
