@@ -86,9 +86,12 @@ class TestBrowserlessProvider:
         }
 
     @respx.mock
-    async def test_screenshot_response(self):
+    async def test_screenshot_response_includes_rendered_html_for_evaluation(self):
         png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
-        respx.post(f"{self.BASE}/screenshot").mock(
+        content_route = respx.post(f"{self.BASE}/content").mock(
+            return_value=httpx.Response(200, text=GOOD_HTML)
+        )
+        screenshot_route = respx.post(f"{self.BASE}/screenshot").mock(
             return_value=httpx.Response(
                 200,
                 content=png_bytes,
@@ -103,9 +106,12 @@ class TestBrowserlessProvider:
 
         assert result.success is True
         assert result.screenshot == png_bytes
-        assert result.html is None
+        assert result.html == GOOD_HTML
         assert result.failure_reason is None
-        assert result.route == "browserless:screenshot"
+        assert result.route == "browserless:content+screenshot"
+        assert result.cost_units == 10
+        assert content_route.called
+        assert screenshot_route.called
 
     @respx.mock
     async def test_timeout(self):

@@ -40,3 +40,8 @@ The provider uses Browserless REST endpoints:
 
 - `POST /content?token=...` for rendered HTML
 - `POST /screenshot?token=...` for screenshots
+
+Screenshot requests call both endpoints concurrently and return rendered HTML and image
+evidence for the same URL and render settings instead of an image with no extractable
+body. Browserless handles them as separate requests, so highly dynamic pages can still
+change slightly between the two captures.
