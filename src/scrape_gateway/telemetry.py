@@ -304,6 +304,8 @@ def _is_actionable_opportunity(text: str) -> bool:
     normalized = text.strip().lower().rstrip(".")
     if normalized in {"none", "n/a", "not applicable"}:
         return False
+    if re.match(r"^none(?:\s+(?:is|are))?\s+(?:needed|required|necessary)\b", normalized):
+        return False
     return re.search(
         r"\bno (?:specific )?improvements? (?:are )?(?:needed|required|necessary)\b",
         normalized,
