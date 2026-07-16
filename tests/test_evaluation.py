@@ -179,6 +179,63 @@ async def test_openrouter_evaluator_sends_strict_schema_and_image(tmp_path: Path
 
 
 @respx.mock
+async def test_evaluator_skips_generation_lookup_when_completion_has_usage_details(
+    tmp_path: Path,
+) -> None:
+    from scrape_gateway.evaluation import OpenRouterEvaluator
+
+    respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "gen-inline-metadata",
+                "model": "google/gemini-3.1-flash-lite",
+                "provider": "Google",
+                "choices": [
+                    {"message": {"content": json.dumps(GOOD_JUDGMENT)}}
+                ],
+                "usage": {
+                    "prompt_tokens": 1200,
+                    "completion_tokens": 120,
+                    "total_tokens": 1320,
+                    "cost": 0,
+                    "is_byok": True,
+                    "cost_details": {
+                        "upstream_inference_cost": 0.00048,
+                    },
+                },
+            },
+        )
+    )
+    generation = respx.get("https://openrouter.ai/api/v1/generation").mock(
+        return_value=httpx.Response(404, json={"error": {"message": "not found"}})
+    )
+    evaluator = OpenRouterEvaluator(
+        EvaluationConfig(mode="audit", cache_root=str(tmp_path / "cache")),
+        api_key="test-openrouter-key",
+    )
+
+    outcome = await evaluator.evaluate(
+        request=ScrapeRequest("https://example.com"),
+        result=ScrapeResult(
+            url="https://example.com",
+            provider="raw_http",
+            success=True,
+            status_code=200,
+            markdown="# Example Domain",
+            route="raw_http",
+        ),
+        attempts=[{"provider": "raw_http", "result": "success"}],
+        elapsed_ms=100,
+    )
+
+    assert outcome.status == "completed"
+    assert outcome.provider == "Google"
+    assert outcome.usage["cost_details"]["upstream_inference_cost"] == 0.00048
+    assert generation.call_count == 0
+
+
+@respx.mock
 async def test_generation_metadata_retries_eventual_404(
     tmp_path: Path, monkeypatch
 ) -> None:
