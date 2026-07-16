@@ -42,11 +42,11 @@ in the connection dialog. The browser keeps it in the current tab's
 
 You can use the console to:
 
-- Start a scrape and set an evaluation goal.
-- Request JavaScript rendering, screenshot evidence, mobile rendering, premium routing, and a fresh fetch.
-- Filter the latest 500 runs by URL or audit result.
-- Review AI checks, provider attempts, recurring improvements, token use, and cost.
-- Read saved Markdown, HTML source, JSON, and screenshots without running scraped page scripts.
+- Browse the latest 500 runs in a live-refreshing trace inventory and filter by URL, provider, scrape status, or audit status.
+- Follow each run from request and cache lookup through provider attempts, validation, content normalization, AI evaluation, final result, and evidence persistence.
+- Select any trace step to inspect its outcome, timing, summary, and complete saved attributes. Recorded durations use waterfall bars; steps without timing data are clearly marked as order-only.
+- Open scraped Markdown/HTML, AI checks and improvement signals, saved artifacts and screenshots, or the complete raw telemetry report without running scraped page scripts.
+- Start a scrape from the `New scrape` dialog with an evaluation goal, JavaScript rendering, screenshot evidence, mobile rendering, premium routing, ad blocking, or a cache bypass.
 
 The console reads the same `.scrape-gateway/runs/` evidence used by
 `sgw evaluations`. It does not change prompts, validators, or routing based on
