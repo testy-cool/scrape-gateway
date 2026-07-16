@@ -220,6 +220,37 @@ async def test_validator_marks_block_type(tmp_dir):
     assert result.content_validated is False
 
 
+async def test_screenshot_only_result_is_not_rejected_as_empty_html(tmp_dir):
+    class ScreenshotProvider(ProviderAdapter):
+        name = "screenshot"
+        capabilities = frozenset({"screenshot"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                screenshot=b"\x89PNG\r\n\x1a\nimage-bytes",
+                route="screenshot:screenshot",
+            )
+
+    gw = ScrapeGateway(
+        providers=[ScreenshotProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+    result = await gw.scrape(
+        ScrapeRequest("https://example.com", screenshot=True),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert result.screenshot
+    assert result.content_validated is None
+
+
 async def test_telemetry_report_records_validation_evidence(tmp_dir):
     gw = ScrapeGateway(
         providers=[CloudflareProvider()],
