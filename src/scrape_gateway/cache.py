@@ -49,6 +49,52 @@ class ArtifactCache:
                 pass
         return html_path.read_text(encoding="utf-8")
 
+    def get_result(
+        self,
+        url: str,
+        render_js: bool = False,
+        *,
+        require_screenshot: bool = False,
+    ) -> ScrapeResult | None:
+        """Restore a complete cached result without mixing artifact generations."""
+
+        html = self.get_html(url, render_js=render_js)
+        if html is None:
+            return None
+
+        paths = self.paths_for_url(url, render_js=render_js)
+        screenshot = paths["screenshot"].read_bytes() if paths["screenshot"].exists() else None
+        if require_screenshot and not screenshot:
+            return None
+
+        if paths["markdown"].exists():
+            markdown = paths["markdown"].read_text(encoding="utf-8")
+        else:
+            markdown = md(html)
+
+        source: dict = {}
+        if paths["meta"].exists():
+            try:
+                source = json.loads(paths["meta"].read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                source = {}
+
+        return ScrapeResult(
+            url=url,
+            provider="cache",
+            success=True,
+            html=html,
+            markdown=markdown,
+            screenshot=screenshot,
+            cost_units=0,
+            route="cache",
+            metadata={
+                "cache_hit": True,
+                "cache_source_provider": source.get("provider"),
+                "cache_source_route": source.get("route"),
+            },
+        )
+
     def save(self, result: ScrapeResult, render_js: bool = False) -> None:
         paths = self.paths_for_url(result.url, render_js=render_js)
         paths["folder"].mkdir(parents=True, exist_ok=True)
@@ -56,8 +102,13 @@ class ArtifactCache:
             paths["html"].write_text(result.html, encoding="utf-8")
             markdown = result.markdown or md(result.html)
             paths["markdown"].write_text(markdown, encoding="utf-8")
+        else:
+            paths["html"].unlink(missing_ok=True)
+            paths["markdown"].unlink(missing_ok=True)
         if result.screenshot:
             paths["screenshot"].write_bytes(result.screenshot)
+        else:
+            paths["screenshot"].unlink(missing_ok=True)
         meta = {
             "url": result.url,
             "provider": result.provider,

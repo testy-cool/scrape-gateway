@@ -130,6 +130,32 @@ async def test_cache_hit(tmp_dir):
     assert result.provider == "cache"
 
 
+async def test_cache_hit_restores_requested_screenshot(tmp_dir):
+    cache = ArtifactCache(root=tmp_dir / "cache")
+    cache.save(
+        ScrapeResult(
+            url="https://cached.com",
+            provider="browserless",
+            success=True,
+            html="<html>cached with visual evidence</html>",
+            screenshot=b"cached-screenshot",
+            route="browserless:content+screenshot",
+        )
+    )
+    gw = ScrapeGateway(
+        providers=[FailProvider()],
+        cache=cache,
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+
+    result = await gw.scrape(ScrapeRequest("https://cached.com", screenshot=True))
+
+    assert result.success is True
+    assert result.provider == "cache"
+    assert result.screenshot == b"cached-screenshot"
+    assert result.metadata["cache_source_provider"] == "browserless"
+
+
 async def test_remembers_successful_provider(tmp_dir):
     mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
     gw = ScrapeGateway(

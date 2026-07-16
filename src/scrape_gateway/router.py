@@ -366,20 +366,15 @@ class ScrapeGateway:
         _log_event("scrape_start", **req_data)
 
         if use_cache:
-            html = self.cache.get_html(request.url, render_js=request.render_js)
-            if html:
+            result = self.cache.get_result(
+                request.url,
+                render_js=request.render_js,
+                require_screenshot=request.screenshot,
+            )
+            if result:
                 _log("  [cache] HIT")
                 _log_event("cache_hit", url=request.url, run_id=run_id)
-                result = ScrapeResult(
-                    url=request.url,
-                    provider="cache",
-                    success=True,
-                    html=html,
-                    markdown=md(html),
-                    cost_units=0,
-                    route="cache",
-                    metadata={"cache_hit": True, "run_id": run_id},
-                )
+                result.metadata["run_id"] = run_id
                 elapsed_ms = int((time.perf_counter() - scrape_start) * 1000)
                 evaluation = await self._evaluate_result(
                     run_id=run_id,

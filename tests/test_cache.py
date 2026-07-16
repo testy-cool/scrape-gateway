@@ -54,6 +54,72 @@ def test_saves_meta_json():
         assert "fetched_at" in meta
 
 
+def test_get_result_restores_saved_markdown_and_screenshot():
+    with tempfile.TemporaryDirectory() as tmp:
+        cache = ArtifactCache(root=tmp)
+        cache.save(
+            ScrapeResult(
+                url="https://example.com",
+                provider="browserless",
+                success=True,
+                html="<html><body><h1>Current page</h1></body></html>",
+                markdown="# Current page",
+                screenshot=b"current-screenshot",
+                route="browserless:content+screenshot",
+            )
+        )
+
+        result = cache.get_result("https://example.com", require_screenshot=True)
+
+        assert result is not None
+        assert result.provider == "cache"
+        assert result.route == "cache"
+        assert result.markdown == "# Current page"
+        assert result.screenshot == b"current-screenshot"
+        assert result.metadata["cache_source_provider"] == "browserless"
+        assert result.metadata["cache_source_route"] == "browserless:content+screenshot"
+
+
+def test_get_result_rejects_html_only_entry_when_screenshot_is_required():
+    with tempfile.TemporaryDirectory() as tmp:
+        cache = ArtifactCache(root=tmp)
+        cache.save(
+            ScrapeResult(
+                url="https://example.com",
+                provider="raw_http",
+                success=True,
+                html="<html><body>HTML only</body></html>",
+            )
+        )
+
+        assert cache.get_result("https://example.com", require_screenshot=True) is None
+
+
+def test_save_does_not_pair_new_html_with_a_stale_screenshot():
+    with tempfile.TemporaryDirectory() as tmp:
+        cache = ArtifactCache(root=tmp)
+        cache.save(
+            ScrapeResult(
+                url="https://example.com",
+                provider="browserless",
+                success=True,
+                html="<html>old page</html>",
+                screenshot=b"old-screenshot",
+            )
+        )
+        cache.save(
+            ScrapeResult(
+                url="https://example.com",
+                provider="raw_http",
+                success=True,
+                html="<html>new page</html>",
+            )
+        )
+
+        assert cache.get_html("https://example.com") == "<html>new page</html>"
+        assert cache.get_result("https://example.com", require_screenshot=True) is None
+
+
 def test_ttl_expired():
     with tempfile.TemporaryDirectory() as tmp:
         cache = ArtifactCache(root=tmp, ttl_seconds=1)
