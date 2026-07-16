@@ -204,6 +204,126 @@ async def test_run_api_lists_summaries_and_serves_contained_artifacts(tmp_path: 
     assert image_response.headers["content-type"] == "image/png"
 
 
+async def test_run_detail_exposes_an_ordered_trace_without_inventing_step_timings(
+    tmp_path: Path,
+) -> None:
+    from scrape_gateway.web import create_console_app
+
+    run_id = "trace123"
+    run_dir = tmp_path / run_id
+    evaluation_dir = run_dir / "evaluation"
+    evaluation_dir.mkdir(parents=True)
+    report = {
+        "run_id": run_id,
+        "started_at": "2026-07-16T12:00:00+00:00",
+        "finished_at": "2026-07-16T12:00:01.500000+00:00",
+        "elapsed_ms": 1500,
+        "url": "https://example.com/products",
+        "success": True,
+        "diagnosis": "success",
+        "recommended_next_action": "none",
+        "request": {
+            "url": "https://example.com/products",
+            "cache_read_enabled": True,
+            "output_format": "markdown",
+            "skip_validation": False,
+        },
+        "attempts": [
+            {
+                "provider": "raw_http",
+                "status": 200,
+                "elapsed_ms": 120,
+                "route": "raw_http",
+                "result": "validation_failed",
+                "block_type": "empty_content",
+                "validation_detail": "The response body was empty.",
+            },
+            {
+                "provider": "browserless",
+                "status": 200,
+                "elapsed_ms": 900,
+                "route": "browserless:content+screenshot",
+                "result": "success",
+                "chars": 4200,
+            },
+        ],
+        "skipped": ["scrapedrive(bad history)"],
+        "final": {
+            "provider": "browserless",
+            "status": 200,
+            "route": "browserless:content+screenshot",
+            "chars": 4200,
+            "markdown_chars": 1800,
+            "content_validated": True,
+        },
+        "evaluation": {
+            "status": "completed",
+            "verdict": "fail",
+            "needs_human_review": True,
+            "elapsed_ms": 260,
+            "model": "google/gemini-3.1-flash-lite",
+            "root_cause": "missing prices",
+            "recommended_action": "retry_rendered",
+        },
+    }
+    (run_dir / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    (run_dir / "attempts.jsonl").write_text("", encoding="utf-8")
+    (evaluation_dir / "final.md").write_text("# Products", encoding="utf-8")
+
+    app = create_console_app(
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        response = await client.get(f"/api/runs/{run_id}")
+
+    assert response.status_code == 200
+    trace = response.json()["trace"]
+    assert trace == {
+        **trace,
+        "run_id": run_id,
+        "status": "ok",
+        "audit_verdict": "fail",
+        "duration_ms": 1500,
+    }
+    assert len({step["id"] for step in trace["steps"]}) == len(trace["steps"])
+    assert [step["kind"] for step in trace["steps"]] == [
+        "request",
+        "cache",
+        "provider",
+        "validation",
+        "provider",
+        "validation",
+        "provider",
+        "transform",
+        "evaluation",
+        "result",
+        "persistence",
+    ]
+
+    raw_http = next(step for step in trace["steps"] if step["id"] == "provider-1")
+    raw_validation = next(
+        step for step in trace["steps"] if step["id"] == "provider-1-validation"
+    )
+    browserless = next(step for step in trace["steps"] if step["id"] == "provider-2")
+    evaluation = next(step for step in trace["steps"] if step["kind"] == "evaluation")
+    persistence = next(step for step in trace["steps"] if step["kind"] == "persistence")
+
+    assert raw_http["status"] == "error"
+    assert raw_http["duration_ms"] == 120
+    assert raw_http["timing"] == "recorded"
+    assert raw_validation["parent_id"] == raw_http["id"]
+    assert raw_validation["outcome"] == "rejected"
+    assert raw_validation["duration_ms"] is None
+    assert raw_validation["timing"] == "order_only"
+    assert browserless["status"] == "ok"
+    assert browserless["offset_ms"] == 120
+    assert evaluation["status"] == "warning"
+    assert evaluation["duration_ms"] == 260
+    assert persistence["attributes"]["artifact_count"] == 3
+
+
 async def test_artifact_api_rejects_paths_outside_the_run_directory(tmp_path: Path) -> None:
     from scrape_gateway.web import create_console_app
 
