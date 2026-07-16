@@ -38,8 +38,11 @@ sgw url https://example.com --render-js --screenshot -p browserless
 
 The provider uses Browserless REST endpoints:
 
-- `POST /content?token=...` for rendered HTML
-- `POST /screenshot?token=...` for screenshots
+- `POST /content` for rendered HTML
+- `POST /screenshot` for screenshots
+
+Both requests send `BROWSERLESS_TOKEN` in the `Authorization: Bearer` header so
+the credential does not appear in request URLs or HTTP client logs.
 
 Screenshot requests call both endpoints concurrently and return rendered HTML and image
 evidence for the same URL and render settings instead of an image with no extractable

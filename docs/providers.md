@@ -55,6 +55,6 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 
 - Install: `uv pip install -e extensions/sg-browserless`
 - Auth: `BROWSERLESS_URL` and `BROWSERLESS_TOKEN`
-- Endpoint: `{BROWSERLESS_URL}/content?token=...`
-- Screenshots: `{BROWSERLESS_URL}/screenshot?token=...`
+- Endpoints: `{BROWSERLESS_URL}/content` and `{BROWSERLESS_URL}/screenshot`
+- Request auth: `Authorization: Bearer <BROWSERLESS_TOKEN>` keeps credentials out of request URLs and logs
 - `wait_event=networkidle` maps to Browserless/Puppeteer `networkidle2`
