@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
@@ -10,6 +12,7 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
+from starlette.applications import Starlette
 
 _TOKEN = os.environ.get("SGW_MCP_TOKEN", "")
 _PORT = int(os.environ.get("SGW_MCP_PORT", "8100"))
@@ -106,6 +109,25 @@ def _get_gateway():
 
         _gateway = ScrapeGateway.from_config()
     return _gateway
+
+
+def _create_service_app() -> Starlette:
+    from .web import create_console_routes
+
+    mcp_app = mcp.streamable_http_app()
+
+    @asynccontextmanager
+    async def lifespan(application: Starlette) -> AsyncIterator[None]:
+        async with mcp.session_manager.run():
+            yield
+
+    return Starlette(
+        routes=[
+            *create_console_routes(token=_TOKEN, get_gateway=_get_gateway),
+            *mcp_app.routes,
+        ],
+        lifespan=lifespan,
+    )
 
 
 @mcp.tool()
@@ -395,7 +417,10 @@ async def sitemap(
     }
 
 
+app = _create_service_app()
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(mcp.streamable_http_app(), host=_HOST, port=_PORT)
+    uvicorn.run(app, host=_HOST, port=_PORT)
