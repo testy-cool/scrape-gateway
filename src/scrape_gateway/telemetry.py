@@ -354,7 +354,10 @@ def summarize_evaluations(
             prompt_version_counts[str(prompt_version)] += 1
         page_type = evaluation.get("page_type")
         if page_type:
-            page_type_counts[str(page_type)] += 1
+            normalized_page_type = re.sub(
+                r"[\s_-]+", " ", str(page_type).strip().lower()
+            )
+            page_type_counts[normalized_page_type] += 1
         for field, counter in (
             ("verdict", verdict_counts),
             ("root_cause", root_cause_counts),

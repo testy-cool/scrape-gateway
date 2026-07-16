@@ -1028,3 +1028,17 @@ def test_summarize_evaluations_surfaces_recurring_improvements() -> None:
         "run-failed-eval",
     ]
     assert summary["calibration_status"] == "uncalibrated_audit"
+
+
+def test_summarize_evaluations_normalizes_page_type_categories() -> None:
+    from scrape_gateway.telemetry import summarize_evaluations
+
+    reports = [
+        {"evaluation": {"page_type": "Informational landing page"}},
+        {"evaluation": {"page_type": "informational_landing_page"}},
+        {"evaluation": {"page_type": "informational-landing-page"}},
+    ]
+
+    summary = summarize_evaluations(reports)
+
+    assert summary["page_type_counts"] == {"informational landing page": 3}
