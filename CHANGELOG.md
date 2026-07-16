@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-07-16
+
+### Fixed
+- In-flight console scrapes are now tracked by the service, remain running when the initiating browser request disconnects, and reappear with the same active ID after a page refresh.
+- Live refresh now follows active work until its persisted trace is available while preserving an operator's selection when they inspect an older run.
+
 ## [0.9.1] - 2026-07-16
 
 ### Fixed
