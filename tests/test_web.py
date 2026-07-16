@@ -363,7 +363,7 @@ async def test_console_serves_packaged_assets_without_authentication(tmp_path: P
     assert script.status_code == 200
 
 
-async def test_console_shell_exposes_the_full_operator_workflow(tmp_path: Path) -> None:
+async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> None:
     from scrape_gateway.web import create_console_app
 
     app = create_console_app(
@@ -379,20 +379,36 @@ async def test_console_shell_exposes_the_full_operator_workflow(tmp_path: Path) 
 
     for element_id in (
         "auth-dialog",
+        "new-scrape-button",
+        "new-scrape-dialog",
         "scrape-form",
         "url-input",
         "evaluation-goal",
-        "audit-summary",
+        "live-toggle",
         "run-list",
-        "run-inspector",
+        "trace-workspace",
+        "trace-timeline",
+        "step-inspector",
+        "output-panel",
+        "evaluation-panel",
+        "artifacts-panel",
         "artifact-viewer",
+        "raw-panel",
     ):
         assert f'id="{element_id}"' in page.text
+    assert "Trace timeline" in page.text
+    assert "ambient-grid" not in page.text
+    assert "metric-card" not in page.text
     assert "sessionStorage" in script.text
     assert 'fetchJson("/api/runs' in script.text
     assert 'fetchJson("/api/evaluations' in script.text
+    assert "renderTraceTimeline" in script.text
+    assert "renderStepInspector" in script.text
+    assert "setInterval" in script.text
     assert "textContent" in script.text
-    assert "@media (max-width: 760px)" in css.text
+    assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text
+    assert "@media (max-width: 900px)" in css.text
+    assert "font-size: 12px" not in css.text
     assert "prefers-reduced-motion" in css.text
 
 

@@ -1,6 +1,7 @@
 "use strict";
 
 const TOKEN_KEY = "scrape-gateway.operator-token";
+const LIVE_REFRESH_MS = 15000;
 
 const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || "",
@@ -10,11 +11,17 @@ const state = {
   summary: null,
   selectedRunId: null,
   selectedDetail: null,
+  selectedStepId: null,
+  activeView: "trace",
   previews: new Map(),
-  activeTab: "overview",
   artifactObjectUrl: null,
-  launchInterval: null,
+  activeArtifactPath: null,
+  activeOutputLabel: null,
+  autoRefresh: true,
+  refreshInterval: null,
   toastTimer: null,
+  launchInterval: null,
+  pendingRun: null,
 };
 
 const nodes = {};
@@ -57,6 +64,12 @@ function formatDuration(milliseconds) {
   return `${Math.floor(value / 60000)}m ${Math.round((value % 60000) / 1000)}s`;
 }
 
+function formatOffset(milliseconds) {
+  const value = Number(milliseconds);
+  if (!Number.isFinite(value) || value <= 0) return "+0 ms";
+  return `+${formatDuration(value)}`;
+}
+
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
   if (value < 1024) return `${value} B`;
@@ -73,14 +86,27 @@ function formatDate(value) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   }).format(date);
 }
 
 function formatCost(value) {
   const cost = Number(value || 0);
-  if (cost === 0) return "$0";
+  if (!Number.isFinite(cost) || cost === 0) return "$0";
   if (cost < 0.001) return `<$${cost.toFixed(4).replace(/^0/, "")}`;
   return `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
+}
+
+function urlParts(value) {
+  try {
+    const url = new URL(value);
+    return {
+      domain: url.hostname,
+      path: `${url.pathname}${url.search}` || "/",
+    };
+  } catch (_error) {
+    return { domain: value || "Unknown URL", path: "" };
+  }
 }
 
 function authHeaders(json = false) {
@@ -115,7 +141,7 @@ async function fetchArtifact(artifact) {
       const payload = await response.json();
       message = payload.error || message;
     } catch (_error) {
-      // The artifact endpoint may return a non-JSON proxy error.
+      // Proxy errors and image responses are not guaranteed to be JSON.
     }
     throw new ApiError(message, response.status);
   }
@@ -127,7 +153,7 @@ function showToast(message, error = false) {
   nodes.toast.textContent = message;
   nodes.toast.classList.toggle("is-error", error);
   nodes.toast.classList.add("is-visible");
-  state.toastTimer = window.setTimeout(() => nodes.toast.classList.remove("is-visible"), 3800);
+  state.toastTimer = window.setTimeout(() => nodes.toast.classList.remove("is-visible"), 3500);
 }
 
 function setConnection(kind, label) {
@@ -144,16 +170,37 @@ function showAuth(message = "") {
   window.setTimeout(() => nodes.tokenInput.focus(), 30);
 }
 
+function stopLiveRefresh() {
+  window.clearInterval(state.refreshInterval);
+  state.refreshInterval = null;
+}
+
+function configureLiveRefresh() {
+  stopLiveRefresh();
+  nodes.liveToggle.setAttribute("aria-pressed", String(state.autoRefresh));
+  setText(nodes.liveToggleLabel, state.autoRefresh ? "Live" : "Paused");
+  if (!state.autoRefresh || !state.session) return;
+  state.refreshInterval = window.setInterval(() => {
+    if (document.visibilityState === "visible" && !state.pendingRun) {
+      refreshData({ background: true });
+    }
+  }, LIVE_REFRESH_MS);
+}
+
 function disconnect() {
+  stopLiveRefresh();
   state.token = "";
   state.session = null;
   state.runs = [];
   state.summary = null;
+  state.selectedRunId = null;
+  state.selectedDetail = null;
   sessionStorage.removeItem(TOKEN_KEY);
   nodes.authButton.textContent = "Connect";
   setConnection("error", "Locked");
   renderRuns();
-  renderMetrics();
+  renderSummary();
+  showEmptyWorkspace();
   showAuth();
 }
 
@@ -178,154 +225,128 @@ async function connect(token = state.token) {
   else sessionStorage.removeItem(TOKEN_KEY);
   if (nodes.authDialog.open) nodes.authDialog.close();
   nodes.authButton.textContent = state.service?.token_required ? "Disconnect" : "Local access";
-  const auditLabel = state.session.evaluation?.mode === "audit" ? "Audit ready" : "Connected";
-  setConnection("online", auditLabel);
+  setConnection("online", state.session.evaluation?.mode === "audit" ? "Audit enabled" : "Connected");
+  configureLiveRefresh();
   await refreshData();
   return true;
 }
 
-function runDisplayVerdict(run) {
-  const evaluation = run.evaluation;
-  if (!evaluation) return "unevaluated";
+function auditVerdict(run) {
+  const evaluation = run?.evaluation;
+  if (!evaluation) return "unaudited";
   if (evaluation.verdict === "fail") return "fail";
   if (evaluation.needs_human_review) return "review";
   if (evaluation.verdict === "pass") return "pass";
-  return "unevaluated";
+  return "unaudited";
 }
 
-function verdictLabel(verdict) {
-  return {
-    pass: "Pass",
-    fail: "Fail",
-    review: "Review",
-    unevaluated: "No audit",
-  }[verdict] || "Unknown";
+function runStatus(run) {
+  if (run?.pending) return "running";
+  if (run?.success === false) return "error";
+  const verdict = auditVerdict(run);
+  if (verdict === "fail") return "audit-fail";
+  if (verdict === "review") return "review";
+  return "ok";
+}
+
+function statusFilterMatches(run, filter) {
+  if (filter === "all") return true;
+  if (filter === "unaudited") return auditVerdict(run) === "unaudited";
+  if (filter === "audit-fail") return auditVerdict(run) === "fail";
+  if (filter === "review") return run.evaluation?.needs_human_review === true;
+  return runStatus(run) === filter;
 }
 
 function matchesRunFilters(run) {
   const query = nodes.runSearch.value.trim().toLowerCase();
-  const filter = nodes.verdictFilter.value;
-  const verdict = runDisplayVerdict(run);
-  const haystack = `${run.url || ""} ${run.domain || ""} ${run.run_id || ""} ${run.provider || ""}`.toLowerCase();
-  const queryMatches = !query || haystack.includes(query);
-  let verdictMatches = filter === "all" || filter === verdict;
-  if (filter === "review") verdictMatches = run.evaluation?.needs_human_review === true;
-  return queryMatches && verdictMatches;
+  const haystack = `${run.url || ""} ${run.domain || ""} ${run.run_id || ""} ${run.provider || ""} ${run.route || ""}`.toLowerCase();
+  return (!query || haystack.includes(query)) && statusFilterMatches(run, nodes.statusFilter.value);
 }
 
-function badge(verdict) {
-  const node = element("span", `badge badge--${verdict}`, verdictLabel(verdict));
-  return node;
+function compactAuditBadge(run) {
+  const verdict = auditVerdict(run);
+  const labels = { pass: "Pass", fail: "Audit fail", review: "Review", unaudited: "No audit" };
+  const badge = element("span", "compact-badge", labels[verdict]);
+  badge.dataset.verdict = verdict;
+  return badge;
 }
 
-function renderRunCard(run) {
-  const verdict = runDisplayVerdict(run);
-  const card = element("button", "run-card");
-  card.type = "button";
-  card.dataset.runId = run.run_id;
-  card.dataset.verdict = verdict;
-  card.setAttribute("role", "option");
-  card.setAttribute("aria-selected", String(run.run_id === state.selectedRunId));
-  if (run.run_id === state.selectedRunId) card.classList.add("is-selected");
+function renderRunRow(run) {
+  const row = element("button", "run-row");
+  row.type = "button";
+  row.dataset.runId = run.run_id;
+  row.dataset.status = runStatus(run);
+  row.setAttribute("role", "option");
+  const selected = run.run_id === state.selectedRunId;
+  row.setAttribute("aria-selected", String(selected));
+  row.classList.toggle("is-selected", selected);
 
-  const top = element("div", "run-card-top");
-  top.append(element("span", "run-card-domain", run.domain || "Unknown domain"));
-  top.append(badge(verdict));
+  row.append(element("span", "run-status"));
+  const body = element("span", "run-row-body");
+  const parts = urlParts(run.url);
+  const title = element("span", "run-row-title");
+  title.append(element("strong", "", run.domain || parts.domain));
+  title.append(run.pending ? element("span", "compact-badge", "Running") : compactAuditBadge(run));
+  body.append(title);
+  body.append(element("span", "run-row-path", parts.path || run.url || "Unknown target"));
 
-  const url = element("span", "run-card-url", run.url || "Unknown URL");
-
-  const meta = element("div", "run-card-meta");
-  meta.append(element("span", "", run.provider || "no provider"));
-  meta.append(element("span", "", formatDuration(run.elapsed_ms)));
+  const meta = element("span", "run-row-meta");
+  meta.append(element("span", "", run.provider || (run.pending ? "gateway" : "no provider")));
+  meta.append(element("span", "", run.pending ? "in progress" : formatDuration(run.elapsed_ms)));
   if (run.status_code) meta.append(element("span", "", `HTTP ${run.status_code}`));
+  body.append(meta);
 
-  const foot = element("div", "run-card-foot");
+  const foot = element("span", "run-row-foot");
   foot.append(element("time", "", formatDate(run.started_at)));
-  foot.append(element("span", "", run.diagnosis ? titleCase(run.diagnosis) : "No diagnosis"));
-
-  card.append(top, url, meta, foot);
-  return card;
+  foot.append(element("span", "", run.pending ? "Awaiting trace" : titleCase(run.diagnosis || "unknown")));
+  body.append(foot);
+  row.append(body);
+  return row;
 }
 
 function renderRuns() {
-  const filtered = state.runs.filter(matchesRunFilters);
   nodes.runList.replaceChildren();
-  setText(nodes.runCount, `${filtered.length} ${filtered.length === 1 ? "record" : "records"}`);
+  const filtered = state.runs.filter(matchesRunFilters);
+  const pendingMatches = state.pendingRun && matchesRunFilters(state.pendingRun);
+  const count = filtered.length + (pendingMatches ? 1 : 0);
+  setText(nodes.runCount, `${count} ${count === 1 ? "run" : "runs"}`);
+
   if (!state.session) {
-    nodes.runList.append(element("div", "empty-note", "Connect to load saved runs."));
+    nodes.runList.append(element("div", "empty-note", "Connect to load saved traces."));
     return;
   }
-  if (!filtered.length) {
-    nodes.runList.append(element("div", "empty-note", "No runs match these filters."));
+  if (pendingMatches) nodes.runList.append(renderRunRow(state.pendingRun));
+  if (!count) {
+    nodes.runList.append(element("div", "empty-note", "No traces match the current filters."));
     return;
   }
   const fragment = document.createDocumentFragment();
-  filtered.forEach((run) => fragment.append(renderRunCard(run)));
+  filtered.forEach((run) => fragment.append(renderRunRow(run)));
   nodes.runList.append(fragment);
 }
 
-function updateRunSelection() {
-  nodes.runList.querySelectorAll("[data-run-id]").forEach((card) => {
-    const selected = card.dataset.runId === state.selectedRunId;
-    card.classList.toggle("is-selected", selected);
-    card.setAttribute("aria-selected", String(selected));
-  });
-}
-
-function mostFrequent(counts = {}) {
-  return Object.entries(counts).sort((left, right) => right[1] - left[1])[0] || null;
-}
-
-function renderMetrics() {
-  const summary = state.summary;
-  if (!summary) {
-    [nodes.metricRuns, nodes.metricPassRate, nodes.metricReview, nodes.metricCost].forEach((node) => setText(node, "—"));
-    setText(nodes.metricEvaluated, "Awaiting records");
-    setText(nodes.metricVerdicts, "No evaluations loaded");
-    setText(nodes.metricFailedCheck, "Most failed check: —");
-    setText(nodes.metricTokens, "0 tokens recorded");
-    renderImprovementWatch([]);
+function renderSummary() {
+  if (!state.session) {
+    setText(nodes.metricSuccess, "—");
+    setText(nodes.metricAuditFail, "—");
+    setText(nodes.metricReview, "—");
+    setText(nodes.judgeCost, "Judge cost —");
     return;
   }
-
-  const passes = Number(summary.verdict_counts?.pass || 0);
-  const failures = Number(summary.verdict_counts?.fail || 0);
-  const judged = passes + failures;
-  const rate = judged ? `${Math.round((passes / judged) * 100)}%` : "—";
-  const reviewCount = summary.review_queue?.length || 0;
-  const failedCheck = mostFrequent(summary.check_failure_counts);
-  const usage = summary.usage || {};
+  const successful = state.runs.filter((run) => run.success === true).length;
+  const failedAudits = Number(state.summary?.verdict_counts?.fail || 0);
+  const reviewCount = state.summary?.review_queue?.length || 0;
+  const usage = state.summary?.usage || {};
   const cost = usage.upstream_inference_cost || usage.cost || 0;
-
-  setText(nodes.metricRuns, formatNumber(summary.runs_scanned));
-  setText(nodes.metricEvaluated, `${formatNumber(summary.evaluated_runs)} evaluated · ${formatNumber(summary.unevaluated_runs)} pending`);
-  setText(nodes.metricPassRate, rate);
-  setText(nodes.metricVerdicts, `${formatNumber(passes)} pass · ${formatNumber(failures)} fail`);
+  setText(nodes.metricSuccess, formatNumber(successful));
+  setText(nodes.metricAuditFail, formatNumber(failedAudits));
   setText(nodes.metricReview, formatNumber(reviewCount));
-  setText(nodes.metricFailedCheck, failedCheck ? `Most failed: ${titleCase(failedCheck[0])} (${failedCheck[1]})` : "Most failed check: none");
-  setText(nodes.metricCost, formatCost(cost));
-  setText(nodes.metricTokens, `${formatNumber(usage.total_tokens)} tokens · ${formatNumber(usage.cached_runs)} cached`);
-  renderImprovementWatch(summary.improvement_opportunities || []);
+  setText(nodes.judgeCost, `Judge cost ${formatCost(cost)}`);
 }
 
-function renderImprovementWatch(opportunities) {
-  if (!nodes.opportunityTicker) return;
-  nodes.opportunityTicker.replaceChildren();
-  if (!opportunities.length) {
-    nodes.opportunityTicker.append(element("span", "watch-empty", "No recurring improvements yet."));
-    return;
-  }
-  opportunities.slice(0, 4).forEach((item) => {
-    const signal = element("span", "watch-signal");
-    signal.append(element("strong", "", `${item.count}×`));
-    signal.append(document.createTextNode(` ${item.text}`));
-    nodes.opportunityTicker.append(signal);
-  });
-}
-
-async function refreshData({ selectNewest = false } = {}) {
+async function refreshData({ selectNewest = false, background = false } = {}) {
   if (!state.session) return;
-  nodes.refreshButton.classList.add("is-refreshing");
+  if (!background) nodes.refreshButton.classList.add("is-refreshing");
   try {
     const [runsPayload, auditPayload] = await Promise.all([
       fetchJson("/api/runs?limit=500"),
@@ -333,162 +354,189 @@ async function refreshData({ selectNewest = false } = {}) {
     ]);
     state.runs = runsPayload.runs || [];
     state.summary = auditPayload.summary || null;
+    setText(nodes.lastUpdated, `Updated ${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`);
     renderRuns();
-    renderMetrics();
+    renderSummary();
 
+    if (state.pendingRun) return;
     const selectionExists = state.runs.some((run) => run.run_id === state.selectedRunId);
-    if (selectNewest || !selectionExists) {
-      state.selectedRunId = state.runs[0]?.run_id || null;
-    }
-    if (state.selectedRunId) await selectRun(state.selectedRunId, { keepScroll: true });
-    else showEmptyInspector();
+    if (selectNewest || !selectionExists) state.selectedRunId = state.runs[0]?.run_id || null;
+    if (state.selectedRunId) await selectRun(state.selectedRunId, { keepView: background });
+    else showEmptyWorkspace();
   } catch (error) {
     if (error.status === 401) {
       disconnect();
       return;
     }
     setConnection("error", "Read error");
-    showToast(error.message, true);
+    if (!background) showToast(error.message, true);
   } finally {
     nodes.refreshButton.classList.remove("is-refreshing");
   }
 }
 
-function showEmptyInspector() {
+function showEmptyWorkspace() {
   state.selectedDetail = null;
-  nodes.inspectorEmpty.hidden = false;
-  nodes.inspectorContent.hidden = true;
+  state.selectedStepId = null;
+  nodes.workspaceEmpty.hidden = false;
+  nodes.workspaceContent.hidden = true;
 }
 
-function metaChip(text) {
-  return element("span", "meta-chip", text);
+function metadataItem(label, value) {
+  const item = element("span");
+  item.append(element("strong", "", `${label} `));
+  item.append(document.createTextNode(value || "—"));
+  return item;
 }
 
-function addRibbonCell(parent, label, value) {
-  const cell = element("div", "ribbon-cell");
-  cell.append(element("span", "", label));
-  cell.append(element("strong", "", value || "—"));
-  parent.append(cell);
+function renderTraceHeader(detail, pending = false) {
+  const report = detail.report || {};
+  const trace = detail.trace || {};
+  const final = report.final || {};
+  const verdict = auditVerdict({ evaluation: report.evaluation });
+  const status = pending ? "running" : trace.status === "ok" ? "ok" : "error";
+  nodes.traceStatusBadge.dataset.status = status;
+  setText(nodes.traceStatusBadge, pending ? "Running" : status === "ok" ? "Success" : "Failed");
+  nodes.traceAuditBadge.dataset.verdict = verdict;
+  setText(nodes.traceAuditBadge, { pass: "Audit pass", fail: "Audit fail", review: "Needs review", unaudited: pending ? "Audit pending" : "No audit" }[verdict]);
+  setText(nodes.copyRunIdButton, `run ${report.run_id || "pending"}`);
+  nodes.copyRunIdButton.dataset.runId = pending ? "" : report.run_id || "";
+  setText(nodes.traceUrl, report.url || "Unknown target");
+  nodes.copyUrlButton.dataset.url = report.url || "";
+  nodes.openUrlButton.href = /^https?:\/\//i.test(report.url || "") ? report.url : "#";
+  nodes.traceMetadata.replaceChildren();
+  const metadata = [
+    ["Started", formatDate(report.started_at)],
+    ["Duration", pending ? "In progress" : formatDuration(trace.duration_ms ?? report.elapsed_ms)],
+    ["Provider", final.provider || (pending ? "Routing" : "—")],
+    ["Route", final.route || "—"],
+    ["Status", final.status ? `HTTP ${final.status}` : "—"],
+  ];
+  metadata.forEach(([label, value]) => nodes.traceMetadata.append(metadataItem(label, value)));
 }
 
-function sectionBlock(title, hint = "") {
-  const section = element("section", "section-block");
-  const heading = element("header", "section-heading");
-  heading.append(element("h4", "", title));
-  if (hint) heading.append(element("span", "", hint));
-  const body = element("div", "section-body");
-  section.append(heading, body);
-  return { section, body };
+function stepSymbol(status) {
+  return { ok: "✓", error: "!", warning: "!", skipped: "–", running: "•", info: "i" }[status] || "i";
 }
 
-function renderEvaluation(report) {
-  nodes.evaluationBody.replaceChildren();
-  const evaluation = report.evaluation;
+function traceTotal(trace) {
+  const recorded = Number(trace?.duration_ms || 0);
+  const stepEnd = Math.max(0, ...(trace?.steps || []).map((step) => Number(step.offset_ms || 0) + Number(step.duration_ms || 0)));
+  return Math.max(recorded, stepEnd, 1);
+}
 
-  if (!evaluation) {
-    const deterministic = sectionBlock("Deterministic result", "AI audit not recorded");
-    deterministic.body.append(
-      element(
-        "div",
-        "critique-box",
-        `The gateway classified this run as ${titleCase(report.diagnosis)}. ${report.recommended_next_action && report.recommended_next_action !== "none" ? `Recommended next action: ${titleCase(report.recommended_next_action)}.` : "No follow-up action was recorded."}`,
-      ),
-    );
-    nodes.evaluationBody.append(deterministic.section);
+function renderTraceRow(step, total) {
+  const row = element("button", "trace-row");
+  row.type = "button";
+  row.dataset.stepId = step.id;
+  row.dataset.status = step.status || "info";
+  row.classList.toggle("is-child", Boolean(step.parent_id));
+  row.classList.toggle("is-selected", step.id === state.selectedStepId);
+  row.setAttribute("aria-pressed", String(step.id === state.selectedStepId));
+
+  const main = element("span", "trace-step-main");
+  main.append(element("span", "step-state-icon", stepSymbol(step.status)));
+  const copy = element("span", "step-copy");
+  const nameLine = element("span", "step-name-line");
+  nameLine.append(element("strong", "", step.name || "Unnamed step"));
+  nameLine.append(element("span", "step-outcome", step.outcome || "unknown"));
+  copy.append(nameLine, element("span", "step-summary", step.summary || "No step summary recorded."));
+  main.append(copy);
+
+  const duration = element("span", "step-duration", step.duration_ms === null || step.duration_ms === undefined ? "—" : formatDuration(step.duration_ms));
+  const waterfall = element("span", "waterfall");
+  const start = Math.max(0, Math.min(98, (Number(step.offset_ms || 0) / total) * 100));
+  waterfall.style.setProperty("--start", `${start}%`);
+  if (step.duration_ms === null || step.duration_ms === undefined) {
+    waterfall.append(element("i", "waterfall-tick"));
+  } else {
+    const width = Math.max(1.2, Math.min(100 - start, (Number(step.duration_ms || 0) / total) * 100));
+    waterfall.style.setProperty("--width", `${width}%`);
+    waterfall.append(element("i", "waterfall-bar"));
+  }
+  row.append(main, duration, waterfall);
+  return row;
+}
+
+function defaultStepId(steps) {
+  const current = steps.find((step) => step.id === state.selectedStepId);
+  if (current) return current.id;
+  return (
+    steps.find((step) => step.status === "error") ||
+    steps.find((step) => step.status === "warning") ||
+    steps.find((step) => step.kind === "provider") ||
+    steps[0]
+  )?.id || null;
+}
+
+function renderTraceTimeline(trace) {
+  const steps = trace?.steps || [];
+  state.selectedStepId = defaultStepId(steps);
+  setText(nodes.traceStepCount, `${steps.length} ${steps.length === 1 ? "step" : "steps"}`);
+  nodes.traceTimeline.replaceChildren();
+  if (!steps.length) {
+    nodes.traceTimeline.append(element("div", "empty-note", "No lifecycle steps were recorded."));
+    renderStepInspector(null);
+    return;
+  }
+  const total = traceTotal(trace);
+  const fragment = document.createDocumentFragment();
+  steps.forEach((step) => fragment.append(renderTraceRow(step, total)));
+  nodes.traceTimeline.append(fragment);
+  renderStepInspector(steps.find((step) => step.id === state.selectedStepId));
+}
+
+function attributeValue(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function renderStepInspector(step) {
+  nodes.stepInspector.replaceChildren();
+  if (!step) {
+    nodes.stepInspector.append(element("div", "inspector-placeholder", "Select a step to inspect its result and attributes."));
     return;
   }
 
-  const judgment = sectionBlock("Evaluator judgment", `${evaluation.model || "Unknown model"} · ${evaluation.cached ? "cached" : "fresh"}`);
-  judgment.body.append(element("div", "critique-box", evaluation.critique || evaluation.error || "No critique was returned."));
-  nodes.evaluationBody.append(judgment.section);
+  const heading = element("header", "step-heading");
+  const top = element("div", "step-heading-top");
+  const status = element("span", "status-badge", titleCase(step.status));
+  status.dataset.status = step.status;
+  top.append(status, element("span", "kind-badge", titleCase(step.kind)));
+  heading.append(top, element("h3", "", step.name), element("p", "", step.summary || "No step summary recorded."));
 
-  const checks = sectionBlock("Quality checks", evaluation.prompt_version || "audit schema");
-  const checksGrid = element("div", "checks-grid");
-  const checkEntries = Object.entries(evaluation.checks || {});
-  if (!checkEntries.length) {
-    checksGrid.append(element("div", "empty-note", "No check-level evidence was saved."));
-  }
-  checkEntries.forEach(([name, check]) => {
-    const card = element("article", "check-card");
-    const top = element("div", "check-card-top");
-    top.append(element("h5", "", titleCase(name)));
-    const result = String(check?.result || "unknown").replace(/_/g, "-");
-    top.append(element("span", `result-chip result-chip--${result}`, titleCase(check?.result || "unknown")));
-    card.append(top, element("p", "", check?.evidence || "No evidence supplied."));
-    checksGrid.append(card);
+  const facts = element("dl", "step-facts");
+  const factValues = [
+    ["Outcome", titleCase(step.outcome)],
+    ["Timing", step.timing === "recorded" ? "Recorded" : "Order only"],
+    ["Offset", formatOffset(step.offset_ms)],
+    ["Duration", step.duration_ms === null || step.duration_ms === undefined ? "Not recorded" : formatDuration(step.duration_ms)],
+  ];
+  factValues.forEach(([label, value]) => {
+    const wrapper = element("div");
+    wrapper.append(element("dt", "", label), element("dd", "", value));
+    facts.append(wrapper);
   });
-  checks.body.append(checksGrid);
-  nodes.evaluationBody.append(checks.section);
 
-  const opportunities = evaluation.improvement_opportunities || [];
-  if (opportunities.length) {
-    const improvement = sectionBlock("Improvement opportunities", `${opportunities.length} signal${opportunities.length === 1 ? "" : "s"}`);
-    const list = element("ul", "improvement-list");
-    opportunities.forEach((opportunity) => list.append(element("li", "", opportunity)));
-    improvement.body.append(list);
-    nodes.evaluationBody.append(improvement.section);
-  }
-
-  const issues = evaluation.issues || [];
-  if (issues.length) {
-    const issueBlock = sectionBlock("Detected issues", `${issues.length} issue${issues.length === 1 ? "" : "s"}`);
-    const list = element("ul", "issue-list");
-    issues.forEach((issue) => {
-      const item = element("li");
-      const name = issue.code || issue.category || "Issue";
-      item.append(element("strong", "", `${titleCase(name)}${issue.severity ? ` · ${titleCase(issue.severity)}` : ""}`));
-      if (issue.evidence || issue.detail || issue.message) {
-        item.append(document.createTextNode(` — ${issue.evidence || issue.detail || issue.message}`));
-      }
-      list.append(item);
-    });
-    issueBlock.body.append(list);
-    nodes.evaluationBody.append(issueBlock.section);
-  }
-}
-
-function renderAttempts(report) {
-  nodes.attemptsBody.replaceChildren();
-  const attempts = report.attempts || [];
-  const block = sectionBlock("Provider attempts", `${attempts.length} attempted · ${(report.skipped || []).length} skipped`);
-  if (!attempts.length) {
-    block.body.append(element("div", "empty-note", report.final?.provider === "cache" ? "Served from cache; no provider call was needed." : "No provider attempts were recorded."));
+  const attributes = element("section", "attribute-section");
+  attributes.append(element("h4", "", "Attributes"));
+  const entries = Object.entries(step.attributes || {});
+  if (!entries.length) {
+    attributes.append(element("div", "empty-note", "No attributes were recorded for this step."));
   } else {
-    const list = element("div", "attempt-list");
-    attempts.forEach((attempt) => {
-      const row = element("div", "attempt-row");
-      row.dataset.result = attempt.result || "failed";
-      row.append(element("span", "attempt-provider", attempt.provider || "unknown"));
-      row.append(element("span", "attempt-result", titleCase(attempt.result || attempt.failure_reason || "failed")));
-      row.append(element("span", "", formatDuration(attempt.elapsed_ms)));
-      row.append(element("span", "", attempt.route || attempt.reason || attempt.block_type || (attempt.status ? `HTTP ${attempt.status}` : "—")));
+    const list = element("div", "attribute-list");
+    entries.forEach(([key, value]) => {
+      const row = element("div", "attribute-row");
+      row.append(element("span", "attribute-key", titleCase(key)));
+      const output = element("pre", "attribute-value");
+      output.textContent = attributeValue(value);
+      row.append(output);
       list.append(row);
     });
-    block.body.append(list);
+    attributes.append(list);
   }
-  nodes.attemptsBody.append(block.section);
-}
-
-function contentSources(detail) {
-  const sources = [];
-  const artifacts = detail.artifacts || [];
-  const preferredPaths = [
-    "evaluation/final.md",
-    "evaluation/input.md",
-    "evaluation/final.html",
-  ];
-  preferredPaths.forEach((path) => {
-    const artifact = artifacts.find((item) => item.path === path);
-    if (artifact) sources.push({ artifact, kind: artifact.kind, label: artifact.name });
-  });
-  const preview = state.previews.get(detail.report.run_id);
-  if (preview?.markdown && !sources.some((source) => source.kind === "markdown")) {
-    sources.push({ preview: preview.markdown, kind: "markdown", label: "Live Markdown" });
-  }
-  if (preview?.html && !sources.some((source) => source.kind === "html")) {
-    sources.push({ preview: preview.html, kind: "html", label: "Live HTML" });
-  }
-  return sources;
+  nodes.stepInspector.append(heading, facts, attributes);
 }
 
 function codeLine(text, kind) {
@@ -522,10 +570,32 @@ function renderCode(target, text, kind) {
   target.append(fragment);
 }
 
+function contentSources(detail) {
+  const sources = [];
+  const artifacts = detail.artifacts || [];
+  [
+    ["evaluation/final.md", "Final Markdown"],
+    ["evaluation/input.md", "Evaluator input"],
+    ["evaluation/final.html", "Final HTML"],
+  ].forEach(([path, label]) => {
+    const artifact = artifacts.find((item) => item.path === path);
+    if (artifact) sources.push({ artifact, kind: artifact.kind, label });
+  });
+  const preview = state.previews.get(detail.report?.run_id);
+  if (preview?.markdown && !sources.some((source) => source.kind === "markdown")) {
+    sources.push({ preview: preview.markdown, kind: "markdown", label: "Live Markdown" });
+  }
+  if (preview?.html && !sources.some((source) => source.kind === "html")) {
+    sources.push({ preview: preview.html, kind: "html", label: "Live HTML" });
+  }
+  return sources;
+}
+
 async function loadContentSource(source, button) {
   nodes.contentToolbar.querySelectorAll("button").forEach((item) => item.classList.toggle("is-selected", item === button));
+  state.activeOutputLabel = source.label;
   nodes.contentViewer.setAttribute("aria-busy", "true");
-  renderCode(nodes.contentViewer, "Loading evidence…", "text");
+  renderCode(nodes.contentViewer, "Loading saved output…", "text");
   try {
     let text = source.preview;
     if (source.artifact) {
@@ -541,12 +611,13 @@ async function loadContentSource(source, button) {
   }
 }
 
-function renderContentChoices(detail) {
+function renderOutput(detail) {
   nodes.contentToolbar.replaceChildren();
-  renderCode(nodes.contentViewer, "Select a Markdown or HTML artifact.", "text");
+  renderCode(nodes.contentViewer, "Select an output source.", "text");
+  state.activeOutputLabel = null;
   const sources = contentSources(detail);
   if (!sources.length) {
-    nodes.contentToolbar.append(element("span", "empty-note", "This run has no saved page body."));
+    nodes.contentToolbar.append(element("span", "empty-note", "No saved page body"));
     return;
   }
   sources.forEach((source) => {
@@ -557,16 +628,79 @@ function renderContentChoices(detail) {
   });
 }
 
-function revokeArtifactUrl() {
-  if (state.artifactObjectUrl) {
-    URL.revokeObjectURL(state.artifactObjectUrl);
-    state.artifactObjectUrl = null;
+function evaluationOverviewCell(label, value) {
+  const cell = element("div");
+  cell.append(element("span", "evaluation-label", label), element("strong", "", value || "—"));
+  return cell;
+}
+
+function renderEvaluation(report) {
+  nodes.evaluationContent.replaceChildren();
+  const evaluation = report.evaluation;
+  if (!evaluation) {
+    nodes.evaluationContent.append(element("div", "empty-note", `No AI evaluation was saved. Deterministic diagnosis: ${titleCase(report.diagnosis)}.`));
+    setText(nodes.evaluationSubtitle, "No AI audit recorded");
+    return;
   }
+  setText(nodes.evaluationSubtitle, `${evaluation.model || "Unknown model"} · ${evaluation.cached ? "cached" : "fresh"}`);
+  const usage = evaluation.usage || {};
+  const overview = element("div", "evaluation-overview");
+  overview.append(
+    evaluationOverviewCell("Verdict", titleCase(evaluation.verdict || evaluation.status)),
+    evaluationOverviewCell("Page type", titleCase(evaluation.page_type || "unknown")),
+    evaluationOverviewCell("Duration", formatDuration(evaluation.elapsed_ms)),
+    evaluationOverviewCell("Cost", formatCost(usage.upstream_inference_cost || usage.cost || 0)),
+  );
+  nodes.evaluationContent.append(overview);
+  if (evaluation.critique || evaluation.error) {
+    nodes.evaluationContent.append(element("p", "evaluation-critique", evaluation.critique || evaluation.error));
+  }
+
+  const checks = Object.entries(evaluation.checks || {});
+  if (checks.length) {
+    const section = element("section", "evaluation-section");
+    section.append(element("h4", "", "Quality checks"));
+    const list = element("div", "check-list");
+    checks.forEach(([name, check]) => {
+      const row = element("div", "check-row");
+      row.append(element("strong", "", titleCase(name)));
+      const result = element("span", "check-result", titleCase(check?.result || "unknown"));
+      result.dataset.result = check?.result || "unknown";
+      row.append(result, element("p", "", check?.evidence || "No evidence was supplied."));
+      list.append(row);
+    });
+    section.append(list);
+    nodes.evaluationContent.append(section);
+  }
+
+  const signalGroups = [
+    ["Improvement opportunities", evaluation.improvement_opportunities || []],
+    ["Detected issues", evaluation.issues || []],
+  ];
+  signalGroups.forEach(([title, values]) => {
+    if (!values.length) return;
+    const section = element("section", "evaluation-section");
+    section.append(element("h4", "", title));
+    const list = element("ul", "signal-list");
+    values.forEach((value) => {
+      const text = typeof value === "string" ? value : value.evidence || value.detail || value.message || JSON.stringify(value);
+      list.append(element("li", "", text));
+    });
+    section.append(list);
+    nodes.evaluationContent.append(section);
+  });
+}
+
+function revokeArtifactUrl() {
+  if (!state.artifactObjectUrl) return;
+  URL.revokeObjectURL(state.artifactObjectUrl);
+  state.artifactObjectUrl = null;
 }
 
 async function loadArtifact(artifact, button) {
   nodes.artifactList.querySelectorAll("button").forEach((item) => item.classList.toggle("is-selected", item === button));
-  nodes.artifactViewer.replaceChildren(element("div", "artifact-placeholder", "Loading artifact…"));
+  state.activeArtifactPath = artifact.path;
+  nodes.artifactViewer.replaceChildren(element("div", "panel-placeholder", "Loading artifact…"));
   revokeArtifactUrl();
   try {
     const response = await fetchArtifact(artifact);
@@ -584,22 +718,23 @@ async function loadArtifact(artifact, button) {
       try {
         text = JSON.stringify(JSON.parse(text), null, 2);
       } catch (_error) {
-        // JSONL and partial diagnostic files remain readable as raw text.
+        // Keep JSONL and partial diagnostics readable as raw text.
       }
     }
     const reader = element("pre", "artifact-code");
     renderCode(reader, text, artifact.kind);
     nodes.artifactViewer.replaceChildren(reader);
   } catch (error) {
-    nodes.artifactViewer.replaceChildren(element("div", "artifact-placeholder", error.message));
+    nodes.artifactViewer.replaceChildren(element("div", "panel-placeholder", error.message));
     if (error.status === 401) disconnect();
   }
 }
 
 function renderArtifacts(detail) {
-  nodes.artifactList.replaceChildren();
-  nodes.artifactViewer.replaceChildren(element("div", "artifact-placeholder", "Choose an artifact to inspect it safely."));
   revokeArtifactUrl();
+  state.activeArtifactPath = null;
+  nodes.artifactList.replaceChildren();
+  nodes.artifactViewer.replaceChildren(element("div", "panel-placeholder", "Select an artifact to preview it safely."));
   const artifacts = detail.artifacts || [];
   setText(nodes.artifactCount, artifacts.length, "0");
   if (!artifacts.length) {
@@ -607,96 +742,156 @@ function renderArtifacts(detail) {
     return;
   }
   artifacts.forEach((artifact) => {
-    const button = element("button", "artifact-button");
+    const button = element("button", "artifact-row");
     button.type = "button";
-    button.append(element("span", "", artifact.path));
-    button.append(element("small", "", formatBytes(artifact.size)));
+    button.dataset.artifactPath = artifact.path;
+    button.append(element("span", "", artifact.path), element("small", "", formatBytes(artifact.size)));
     button.addEventListener("click", () => loadArtifact(artifact, button));
     nodes.artifactList.append(button);
   });
 }
 
-function showTab(tabName) {
-  state.activeTab = tabName;
-  nodes.tabButtons.forEach((button) => {
-    const selected = button.dataset.tab === tabName;
+function renderRaw(report) {
+  renderCode(nodes.rawViewer, JSON.stringify(report || {}, null, 2), "json");
+}
+
+function showView(viewName) {
+  state.activeView = viewName;
+  nodes.viewButtons.forEach((button) => {
+    const selected = button.dataset.view === viewName;
     button.setAttribute("aria-selected", String(selected));
     button.tabIndex = selected ? 0 : -1;
   });
-  Object.entries(nodes.tabPanels).forEach(([name, panel]) => {
-    panel.hidden = name !== tabName;
+  Object.entries(nodes.viewPanels).forEach(([name, panel]) => {
+    panel.hidden = name !== viewName;
   });
-  if (tabName === "content" && state.selectedDetail) {
-    const first = nodes.contentToolbar.querySelector("button");
-    if (first && !nodes.contentToolbar.querySelector(".is-selected")) first.click();
+  if (viewName === "output" && state.selectedDetail && !state.activeOutputLabel) {
+    nodes.contentToolbar.querySelector("button")?.click();
+  }
+  if (viewName === "artifacts" && state.selectedDetail && !state.activeArtifactPath) {
+    const screenshot = Array.from(nodes.artifactList.querySelectorAll("button")).find((button) => /screenshot\.(png|jpe?g|webp)$/i.test(button.dataset.artifactPath));
+    (screenshot || nodes.artifactList.querySelector("button"))?.click();
   }
 }
 
-function renderInspector(detail) {
+function renderInspector(detail, { pending = false, keepView = false } = {}) {
   state.selectedDetail = detail;
-  const report = detail.report;
-  const final = report.final || {};
-  const evaluation = report.evaluation;
-  const verdict = runDisplayVerdict({ evaluation });
-
-  nodes.inspectorEmpty.hidden = true;
-  nodes.inspectorContent.hidden = false;
-  setText(nodes.inspectorDomain, report.domain || "Unknown domain");
-  setText(nodes.inspectorUrl, report.url || "Unknown URL");
-  nodes.inspectorMeta.replaceChildren();
-  [
-    final.provider && `provider · ${final.provider}`,
-    final.route && `route · ${final.route}`,
-    `duration · ${formatDuration(report.elapsed_ms)}`,
-    final.status && `HTTP ${final.status}`,
-    report.run_id && `run · ${report.run_id}`,
-    final.markdown_chars && `${formatNumber(final.markdown_chars)} md chars`,
-  ].filter(Boolean).forEach((item) => nodes.inspectorMeta.append(metaChip(item)));
-
-  nodes.inspectorBeacon.dataset.verdict = verdict;
-  nodes.openUrlButton.href = /^https?:\/\//i.test(report.url || "") ? report.url : "#";
-  nodes.copyUrlButton.dataset.url = report.url || "";
-
-  nodes.auditRibbon.replaceChildren();
-  nodes.auditRibbon.dataset.verdict = verdict;
-  addRibbonCell(nodes.auditRibbon, "Audit verdict", verdictLabel(verdict));
-  addRibbonCell(nodes.auditRibbon, "Page type", evaluation?.page_type ? titleCase(evaluation.page_type) : "Not classified");
-  addRibbonCell(nodes.auditRibbon, "Recommended action", evaluation?.recommended_action ? titleCase(evaluation.recommended_action) : titleCase(report.recommended_next_action || "none"));
-
-  renderEvaluation(report);
-  renderAttempts(report);
-  renderContentChoices(detail);
+  state.activeArtifactPath = null;
+  state.activeOutputLabel = null;
+  nodes.workspaceEmpty.hidden = true;
+  nodes.workspaceContent.hidden = false;
+  renderTraceHeader(detail, pending);
+  renderTraceTimeline(detail.trace);
+  renderOutput(detail);
+  renderEvaluation(detail.report || {});
   renderArtifacts(detail);
-  showTab("overview");
+  renderRaw(detail.report || {});
+  if (!keepView || pending) showView("trace");
+  else showView(state.activeView);
 }
 
-async function selectRun(runId, { keepScroll = false } = {}) {
-  if (!runId) return;
+async function selectRun(runId, { keepView = false } = {}) {
+  if (!runId || runId === "pending") return;
+  if (state.selectedRunId !== runId) state.selectedStepId = null;
   state.selectedRunId = runId;
-  updateRunSelection();
-  nodes.inspectorEmpty.hidden = false;
-  nodes.inspectorContent.hidden = true;
-  nodes.inspectorEmpty.querySelector("h3").textContent = "Opening the evidence bundle…";
+  renderRuns();
+  nodes.workspaceEmpty.hidden = false;
+  nodes.workspaceContent.hidden = true;
+  nodes.workspaceEmpty.querySelector("h2").textContent = "Loading trace…";
   try {
     const detail = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
-    renderInspector(detail);
-    if (!keepScroll && window.matchMedia("(max-width: 840px)").matches) {
-      nodes.runInspector.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    renderInspector(detail, { keepView });
+    nodes.workspaceEmpty.querySelector("h2").textContent = "Select a trace";
   } catch (error) {
-    nodes.inspectorEmpty.querySelector("h3").textContent = "This evidence bundle could not be opened.";
-    nodes.inspectorEmpty.querySelector("p").textContent = error.message;
+    nodes.workspaceEmpty.querySelector("h2").textContent = "Trace unavailable";
+    nodes.workspaceEmpty.querySelector("p").textContent = error.message;
     if (error.status === 401) disconnect();
   }
 }
 
+function openScrapeDialog() {
+  if (!state.session) {
+    showAuth("Connect before starting a scrape.");
+    return;
+  }
+  if (!nodes.newScrapeDialog.open) nodes.newScrapeDialog.showModal();
+  window.setTimeout(() => nodes.urlInput.focus(), 30);
+}
+
+function closeScrapeDialog() {
+  if (nodes.newScrapeDialog.open) nodes.newScrapeDialog.close();
+}
+
+function pendingTrace(url, payload, status = "running", error = null) {
+  const elapsed = state.pendingRun ? Date.now() - new Date(state.pendingRun.started_at).getTime() : 0;
+  return {
+    report: {
+      run_id: "pending",
+      started_at: state.pendingRun?.started_at,
+      elapsed_ms: elapsed,
+      url,
+      success: status === "error" ? false : null,
+      diagnosis: status === "error" ? "request_failed" : "in_progress",
+      request: payload,
+      final: {},
+    },
+    trace: {
+      run_id: "pending",
+      status: status === "error" ? "error" : "running",
+      audit_verdict: null,
+      duration_ms: elapsed,
+      steps: [
+        {
+          id: "request",
+          parent_id: null,
+          name: "Request submitted",
+          kind: "request",
+          status: "ok",
+          outcome: "accepted",
+          summary: url,
+          offset_ms: 0,
+          duration_ms: null,
+          timing: "order_only",
+          attributes: payload,
+        },
+        {
+          id: "gateway",
+          parent_id: null,
+          name: status === "error" ? "Gateway request failed" : "Gateway processing",
+          kind: "provider",
+          status,
+          outcome: status === "error" ? "failed" : "in_progress",
+          summary: error || "Provider, validation, evaluation, and persistence steps appear when telemetry is saved.",
+          offset_ms: 0,
+          duration_ms: null,
+          timing: "order_only",
+          attributes: {},
+        },
+      ],
+    },
+    artifacts: [],
+  };
+}
+
+function renderPendingWorkspace(status = "running", error = null) {
+  if (!state.pendingRun) return;
+  state.selectedRunId = "pending";
+  state.selectedStepId = "gateway";
+  renderRuns();
+  renderInspector(pendingTrace(state.pendingRun.url, state.pendingRun.payload, status, error), { pending: status !== "error" });
+  nodes.activityBar.hidden = false;
+  nodes.activityBar.classList.toggle("is-error", status === "error");
+  setText(nodes.activityTitle, status === "error" ? "Scrape request failed" : "Scrape in progress");
+  setText(nodes.activityDetail, error || "Detailed steps will appear when the run report is persisted.");
+}
+
 function startLaunchTimer() {
-  const startedAt = Date.now();
   window.clearInterval(state.launchInterval);
   const tick = () => {
-    const seconds = Math.floor((Date.now() - startedAt) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    setText(nodes.launchTimer, `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`);
+    if (!state.pendingRun) return;
+    const elapsed = Date.now() - new Date(state.pendingRun.started_at).getTime();
+    const seconds = Math.floor(elapsed / 1000);
+    setText(nodes.activityTimer, `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`);
   };
   tick();
   state.launchInterval = window.setInterval(tick, 1000);
@@ -719,7 +914,6 @@ async function submitScrape(event) {
     nodes.urlInput.focus();
     return;
   }
-
   const payload = {
     url,
     evaluation_goal: String(formData.get("evaluation_goal") || "").trim(),
@@ -732,34 +926,58 @@ async function submitScrape(event) {
     use_cache: !formData.has("fresh"),
   };
 
+  state.pendingRun = {
+    pending: true,
+    run_id: "pending",
+    url,
+    domain: urlParts(url).domain,
+    started_at: new Date().toISOString(),
+    payload,
+  };
   nodes.launchButton.disabled = true;
-  nodes.launchStatus.className = "launch-status is-running";
-  setText(nodes.launchStatusText, payload.render_js ? "Rendering and validating…" : "Fetching and validating…");
+  closeScrapeDialog();
+  renderPendingWorkspace();
   startLaunchTimer();
 
   try {
-    const result = await fetchJson("/api/scrapes", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const result = await fetchJson("/api/scrapes", { method: "POST", body: JSON.stringify(payload) });
     if (result.run_id && result.preview) state.previews.set(result.run_id, result.preview);
-    nodes.launchStatus.className = "launch-status is-complete";
-    setText(nodes.launchStatusText, result.success ? `Captured via ${result.provider}` : "Capture failed — evidence saved");
-    showToast(result.success ? `Run ${result.run_id} completed.` : `Run ${result.run_id} failed; open it for evidence.`, !result.success);
-    if (result.run_id) state.selectedRunId = result.run_id;
-    await refreshData({ selectNewest: !result.run_id });
+    const runId = result.run_id;
+    state.pendingRun = null;
+    nodes.activityBar.hidden = true;
+    state.selectedRunId = runId || null;
+    showToast(result.success ? `Trace ${runId} completed.` : `Trace ${runId} failed; evidence was saved.`, !result.success);
+    await refreshData({ selectNewest: !runId });
   } catch (error) {
-    nodes.launchStatus.className = "launch-status";
-    setText(nodes.launchStatusText, "Capture did not start");
+    renderPendingWorkspace("error", error.message);
     showToast(error.message, true);
-    if (error.status === 401) disconnect();
+    if (error.status === 401) {
+      state.pendingRun = null;
+      disconnect();
+    } else {
+      await refreshData({ background: true });
+    }
   } finally {
     stopLaunchTimer();
     nodes.launchButton.disabled = false;
   }
 }
 
+async function copyText(value, successMessage) {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast(successMessage);
+  } catch (_error) {
+    showToast("Clipboard access was unavailable.", true);
+  }
+}
+
 function bindEvents() {
+  nodes.newScrapeButton.addEventListener("click", openScrapeDialog);
+  nodes.emptyNewScrapeButton.addEventListener("click", openScrapeDialog);
+  nodes.closeScrapeDialog.addEventListener("click", closeScrapeDialog);
+  nodes.cancelScrapeButton.addEventListener("click", closeScrapeDialog);
   nodes.scrapeForm.addEventListener("submit", submitScrape);
   nodes.authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -775,47 +993,64 @@ function bindEvents() {
     else refreshData();
   });
   nodes.refreshButton.addEventListener("click", () => refreshData());
+  nodes.liveToggle.addEventListener("click", () => {
+    state.autoRefresh = !state.autoRefresh;
+    configureLiveRefresh();
+    showToast(state.autoRefresh ? "Live refresh enabled." : "Live refresh paused.");
+  });
   nodes.runSearch.addEventListener("input", renderRuns);
-  nodes.verdictFilter.addEventListener("change", renderRuns);
+  nodes.statusFilter.addEventListener("change", renderRuns);
   nodes.runList.addEventListener("click", (event) => {
-    const card = event.target.closest("[data-run-id]");
-    if (card) selectRun(card.dataset.runId);
+    const row = event.target.closest("[data-run-id]");
+    if (row && row.dataset.runId !== "pending") selectRun(row.dataset.runId);
   });
-  nodes.copyUrlButton.addEventListener("click", async () => {
-    const url = nodes.copyUrlButton.dataset.url;
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast("URL copied to clipboard.");
-    } catch (_error) {
-      showToast("Clipboard access was unavailable.", true);
-    }
+  nodes.traceTimeline.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-step-id]");
+    if (!row || !state.selectedDetail) return;
+    state.selectedStepId = row.dataset.stepId;
+    nodes.traceTimeline.querySelectorAll("[data-step-id]").forEach((item) => {
+      const selected = item.dataset.stepId === state.selectedStepId;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-pressed", String(selected));
+    });
+    renderStepInspector(state.selectedDetail.trace?.steps?.find((step) => step.id === state.selectedStepId));
   });
-  nodes.tabButtons.forEach((button) => button.addEventListener("click", () => showTab(button.dataset.tab)));
-  window.addEventListener("beforeunload", revokeArtifactUrl);
+  nodes.viewButtons.forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+  nodes.copyUrlButton.addEventListener("click", () => copyText(nodes.copyUrlButton.dataset.url, "Target URL copied."));
+  nodes.copyRunIdButton.addEventListener("click", () => copyText(nodes.copyRunIdButton.dataset.runId, "Run ID copied."));
+  nodes.copyRawButton.addEventListener("click", () => copyText(JSON.stringify(state.selectedDetail?.report || {}, null, 2), "Raw report copied."));
+  window.addEventListener("beforeunload", () => {
+    revokeArtifactUrl();
+    stopLiveRefresh();
+    stopLaunchTimer();
+  });
 }
 
 function collectNodes() {
   const ids = [
-    "service-state", "service-state-label", "version-label", "refresh-button", "auth-button",
-    "metric-runs", "metric-evaluated", "metric-pass-rate", "metric-verdicts", "metric-review",
-    "metric-failed-check", "metric-cost", "metric-tokens", "opportunity-ticker", "scrape-form",
-    "url-input", "evaluation-goal", "launch-button", "launch-status", "launch-status-text",
-    "launch-timer", "run-search", "verdict-filter", "run-count", "run-list", "run-inspector",
-    "inspector-empty", "inspector-content", "inspector-domain", "inspector-url", "inspector-meta",
-    "inspector-beacon", "open-url-button", "copy-url-button", "audit-ribbon", "artifact-count",
-    "evaluation-body", "attempts-body", "content-toolbar", "content-viewer", "artifact-list",
-    "artifact-viewer", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",
+    "service-state", "service-state-label", "version-label", "live-toggle", "live-toggle-label",
+    "refresh-button", "new-scrape-button", "auth-button", "run-count", "last-updated",
+    "metric-success", "metric-audit-fail", "metric-review", "judge-cost", "run-search",
+    "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
+    "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
+    "trace-status-badge", "trace-audit-badge", "copy-run-id-button", "trace-url", "trace-metadata",
+    "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
+    "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
+    "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
+    "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal",
+    "launch-button", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",
   ];
   ids.forEach((id) => {
     const key = id.replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
     nodes[key] = document.getElementById(id);
   });
-  nodes.tabButtons = Array.from(document.querySelectorAll("[data-tab]"));
-  nodes.tabPanels = {
-    overview: document.getElementById("overview-panel"),
-    content: document.getElementById("content-panel"),
+  nodes.viewButtons = Array.from(document.querySelectorAll("[data-view]"));
+  nodes.viewPanels = {
+    trace: document.getElementById("trace-panel"),
+    output: document.getElementById("output-panel"),
+    evaluation: document.getElementById("evaluation-panel"),
     artifacts: document.getElementById("artifacts-panel"),
+    raw: document.getElementById("raw-panel"),
   };
 }
 
@@ -823,7 +1058,7 @@ async function initialize() {
   collectNodes();
   bindEvents();
   renderRuns();
-  renderMetrics();
+  renderSummary();
   try {
     state.service = await fetchJson("/api/status");
     setText(nodes.versionLabel, `v${state.service.version}`);

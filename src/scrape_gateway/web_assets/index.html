@@ -3,254 +3,230 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#11140f">
+    <meta name="theme-color" content="#111318">
     <meta name="color-scheme" content="dark">
-    <title>Scrape Gateway · Flight Recorder</title>
+    <title>Scrape Gateway · Traces</title>
     <link rel="stylesheet" href="/assets/app.css">
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to workspace</a>
-    <div class="ambient-grid" aria-hidden="true"></div>
+    <a class="skip-link" href="#trace-workspace">Skip to trace workspace</a>
 
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Scrape Gateway home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 42 42" role="img">
-            <path d="M4 24h7l3-10 5 20 5-27 5 17h9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span>
-          <strong>Scrape Gateway</strong>
-          <small>Flight recorder</small>
-        </span>
+      <a class="brand" href="/" aria-label="Scrape Gateway traces">
+        <span class="brand-mark" aria-hidden="true">SG</span>
+        <span class="brand-name">Scrape Gateway</span>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <span class="section-name">Traces</span>
       </a>
 
       <div class="topbar-actions">
         <div class="service-state" id="service-state" aria-live="polite">
-          <span class="state-light"></span>
+          <span class="status-dot"></span>
           <span id="service-state-label">Connecting</span>
           <span class="version-label" id="version-label">—</span>
         </div>
-        <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh runs" title="Refresh runs">
+        <button class="toolbar-button live-toggle" id="live-toggle" type="button" aria-pressed="true" title="Toggle automatic refresh">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="live-toggle-label">Live</span>
+        </button>
+        <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh traces" title="Refresh traces">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
         </button>
-        <button class="quiet-button" id="auth-button" type="button">Connect</button>
+        <button class="primary-button" id="new-scrape-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          New scrape
+        </button>
+        <button class="toolbar-button" id="auth-button" type="button">Connect</button>
       </div>
     </header>
 
-    <main id="main-content" class="main-shell">
-      <section class="metric-strip" id="audit-summary" aria-label="Audit summary">
-        <article class="metric-card metric-card--primary">
-          <span class="metric-label">Runs scanned</span>
-          <strong class="metric-value" id="metric-runs">—</strong>
-          <span class="metric-foot" id="metric-evaluated">Awaiting records</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Audit pass rate</span>
-          <strong class="metric-value" id="metric-pass-rate">—</strong>
-          <span class="metric-foot" id="metric-verdicts">No evaluations loaded</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Review queue</span>
-          <strong class="metric-value metric-value--warn" id="metric-review">—</strong>
-          <span class="metric-foot" id="metric-failed-check">Most failed check: —</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Judge spend</span>
-          <strong class="metric-value" id="metric-cost">—</strong>
-          <span class="metric-foot" id="metric-tokens">0 tokens recorded</span>
-        </article>
-        <article class="watch-card">
-          <span class="watch-label">Recurring signals</span>
-          <div class="opportunity-ticker" id="opportunity-ticker">
-            <span class="watch-empty">No recurring improvements yet.</span>
+    <main class="app-grid">
+      <aside class="trace-browser" aria-label="Trace inventory">
+        <header class="browser-header">
+          <div>
+            <h1>Traces</h1>
+            <span id="run-count">0 runs</span>
           </div>
-        </article>
-      </section>
+          <time id="last-updated">Not loaded</time>
+        </header>
 
-      <div class="workbench">
-        <aside class="launch-panel panel">
-          <header class="panel-heading">
-            <div>
-              <span class="eyebrow">New capture</span>
-              <h1>Send a page through the stack.</h1>
+        <section class="summary-strip" id="audit-summary" aria-label="Trace summary">
+          <div><strong id="metric-success">—</strong><span>successful</span></div>
+          <div><strong id="metric-audit-fail">—</strong><span>audit failed</span></div>
+          <div><strong id="metric-review">—</strong><span>review</span></div>
+        </section>
+
+        <div class="trace-filters">
+          <label class="search-control">
+            <span class="sr-only">Search traces</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+            <input id="run-search" type="search" placeholder="Search URL, provider, run ID">
+          </label>
+          <label class="select-control">
+            <span class="sr-only">Filter traces by status</span>
+            <select id="status-filter">
+              <option value="all">All statuses</option>
+              <option value="error">Scrape errors</option>
+              <option value="audit-fail">Audit failures</option>
+              <option value="review">Needs review</option>
+              <option value="ok">Successful</option>
+              <option value="unaudited">Not audited</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="run-list" id="run-list" role="listbox" aria-label="Scrape traces">
+          <div class="loading-list" aria-hidden="true"><span></span><span></span><span></span></div>
+        </div>
+
+        <footer class="browser-footer">
+          <span>Showing up to 500 runs</span>
+          <span id="judge-cost">Judge cost —</span>
+        </footer>
+      </aside>
+
+      <section class="trace-workspace" id="trace-workspace" tabindex="-1">
+        <div class="workspace-empty" id="workspace-empty">
+          <div class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="17" r="3"/></svg>
+          </div>
+          <h2>Select a trace</h2>
+          <p>Inspect each provider attempt, validation decision, AI evaluation, output, and saved artifact.</p>
+          <button class="secondary-button" id="empty-new-scrape-button" type="button">Start a scrape</button>
+        </div>
+
+        <div class="workspace-content" id="workspace-content" hidden>
+          <div class="activity-bar" id="activity-bar" hidden aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <div><strong id="activity-title">Scrape in progress</strong><span id="activity-detail">Waiting for recorded telemetry</span></div>
+            <time id="activity-timer">00:00</time>
+          </div>
+
+          <header class="trace-header">
+            <div class="trace-title-block">
+              <div class="trace-kicker">
+                <span class="status-badge" id="trace-status-badge" data-status="info">Unknown</span>
+                <span class="audit-badge" id="trace-audit-badge">No audit</span>
+                <button class="run-id-button" id="copy-run-id-button" type="button" title="Copy run ID">run —</button>
+              </div>
+              <h2 id="trace-url">—</h2>
+              <div class="trace-metadata" id="trace-metadata"></div>
             </div>
-            <span class="sequence-mark">01</span>
-          </header>
-
-          <form id="scrape-form" class="scrape-form">
-            <label class="field-label" for="url-input">Target URL</label>
-            <div class="url-field">
-              <span aria-hidden="true">↗</span>
-              <input id="url-input" name="url" type="text" inputmode="url" autocomplete="url" placeholder="example.com/products" required>
-            </div>
-
-            <label class="field-label" for="evaluation-goal">
-              Evaluation goal
-              <span>Optional, but useful</span>
-            </label>
-            <textarea id="evaluation-goal" name="evaluation_goal" rows="4" maxlength="4000" placeholder="e.g. Capture every visible product name, current price, and stock state."></textarea>
-
-            <fieldset class="capture-options">
-              <legend>Capture profile</legend>
-              <label class="switch-row">
-                <span><strong>Visual evidence</strong><small>Save a rendered screenshot</small></span>
-                <input name="screenshot" type="checkbox" checked>
-                <span class="switch-control" aria-hidden="true"></span>
-              </label>
-              <label class="switch-row">
-                <span><strong>Render JavaScript</strong><small>Wait for client-side content</small></span>
-                <input name="render_js" type="checkbox">
-                <span class="switch-control" aria-hidden="true"></span>
-              </label>
-              <label class="switch-row">
-                <span><strong>Mobile viewport</strong><small>Request the compact page state</small></span>
-                <input name="mobile" type="checkbox">
-                <span class="switch-control" aria-hidden="true"></span>
-              </label>
-              <label class="switch-row">
-                <span><strong>Premium route</strong><small>Allow residential escalation</small></span>
-                <input name="premium" type="checkbox">
-                <span class="switch-control" aria-hidden="true"></span>
-              </label>
-              <label class="switch-row">
-                <span><strong>Block ads</strong><small>Reduce visual and network noise</small></span>
-                <input name="block_ads" type="checkbox">
-                <span class="switch-control" aria-hidden="true"></span>
-              </label>
-            </fieldset>
-
-            <div class="form-row">
-              <fieldset class="format-picker">
-                <legend>Primary output</legend>
-                <label><input type="radio" name="output_format" value="markdown" checked><span>Markdown</span></label>
-                <label><input type="radio" name="output_format" value="html"><span>HTML</span></label>
-              </fieldset>
-              <label class="fresh-check">
-                <input name="fresh" type="checkbox">
-                <span>Bypass cache</span>
-              </label>
-            </div>
-
-            <button class="launch-button" id="launch-button" type="submit">
-              <span>Start capture</span>
-              <span class="launch-arrow" aria-hidden="true">↗</span>
-            </button>
-            <div class="launch-status" id="launch-status" aria-live="polite">
-              <span class="status-track"><span></span></span>
-              <span id="launch-status-text">Ready for a URL</span>
-              <time id="launch-timer">00:00</time>
-            </div>
-          </form>
-        </aside>
-
-        <section class="archive-panel panel">
-          <header class="archive-heading">
-            <div>
-              <span class="eyebrow">Evidence archive</span>
-              <h2>Every attempt leaves a trace.</h2>
-            </div>
-            <div class="archive-tools">
-              <label class="search-field">
-                <span class="sr-only">Filter runs</span>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-                <input id="run-search" type="search" placeholder="Filter URL, domain, run ID">
-              </label>
-              <label class="select-field">
-                <span class="sr-only">Filter by audit verdict</span>
-                <select id="verdict-filter">
-                  <option value="all">All records</option>
-                  <option value="fail">Failed audits</option>
-                  <option value="review">Needs review</option>
-                  <option value="pass">Passed audits</option>
-                  <option value="unevaluated">Not evaluated</option>
-                </select>
-              </label>
+            <div class="trace-actions">
+              <button class="icon-button" id="copy-url-button" type="button" aria-label="Copy target URL" title="Copy target URL">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+              </button>
+              <a class="icon-button" id="open-url-button" href="#" target="_blank" rel="noopener noreferrer" aria-label="Open target URL" title="Open target URL">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+              </a>
             </div>
           </header>
 
-          <div class="archive-grid">
-            <section class="run-library" aria-label="Saved scrape runs">
-              <header class="run-library-heading">
-                <span id="run-count">0 records</span>
-                <span>Newest first</span>
+          <nav class="view-tabs" role="tablist" aria-label="Trace detail views">
+            <button type="button" role="tab" aria-selected="true" data-view="trace">Trace</button>
+            <button type="button" role="tab" aria-selected="false" data-view="output">Output</button>
+            <button type="button" role="tab" aria-selected="false" data-view="evaluation">Evaluation</button>
+            <button type="button" role="tab" aria-selected="false" data-view="artifacts">Artifacts <span id="artifact-count">0</span></button>
+            <button type="button" role="tab" aria-selected="false" data-view="raw">Raw</button>
+          </nav>
+
+          <div class="view-stack">
+            <section class="workspace-panel trace-panel" id="trace-panel" role="tabpanel">
+              <header class="panel-header">
+                <div><h3>Trace timeline</h3><span id="trace-step-count">0 steps</span></div>
+                <div class="timeline-legend" aria-label="Timing legend"><span><i class="legend-bar"></i>Recorded duration</span><span><i class="legend-tick"></i>Order only</span></div>
               </header>
-              <div class="run-list" id="run-list" role="listbox" aria-label="Scrape runs">
-                <div class="loading-stack" aria-hidden="true">
-                  <span></span><span></span><span></span>
+              <div class="trace-split">
+                <div class="timeline-pane">
+                  <div class="timeline-columns" aria-hidden="true"><span>Step</span><span>Duration</span><span>Timeline</span></div>
+                  <div class="trace-timeline" id="trace-timeline"></div>
                 </div>
+                <aside class="step-inspector" id="step-inspector" aria-label="Selected step details">
+                  <div class="inspector-placeholder">Select a step to inspect its result and attributes.</div>
+                </aside>
               </div>
             </section>
 
-            <article class="run-inspector" id="run-inspector" tabindex="-1">
-              <div class="inspector-empty" id="inspector-empty">
-                <span class="empty-orbit" aria-hidden="true"><i></i></span>
-                <span class="eyebrow">Run inspector</span>
-                <h3>Select a record to open its evidence.</h3>
-                <p>The scrape output, provider route, AI judgment, attempts, and saved artifacts will appear here.</p>
+            <section class="workspace-panel output-panel" id="output-panel" role="tabpanel" hidden>
+              <header class="panel-header"><div><h3>Scraped output</h3><span>Saved Markdown and HTML evidence</span></div><div class="content-toolbar" id="content-toolbar"></div></header>
+              <pre class="code-reader" id="content-viewer"><code>Select an output source.</code></pre>
+            </section>
+
+            <section class="workspace-panel evaluation-panel" id="evaluation-panel" role="tabpanel" hidden>
+              <header class="panel-header"><div><h3>AI evaluation</h3><span id="evaluation-subtitle">Quality judgment and improvement signals</span></div></header>
+              <div class="evaluation-content" id="evaluation-content"></div>
+            </section>
+
+            <section class="workspace-panel artifacts-panel" id="artifacts-panel" role="tabpanel" hidden>
+              <header class="panel-header"><div><h3>Artifacts</h3><span>Raw evidence saved with this run</span></div></header>
+              <div class="artifact-split">
+                <div class="artifact-list" id="artifact-list"></div>
+                <div class="artifact-viewer" id="artifact-viewer"><div class="panel-placeholder">Select an artifact to preview it safely.</div></div>
               </div>
+            </section>
 
-              <div class="inspector-content" id="inspector-content" hidden>
-                <header class="inspector-heading">
-                  <div class="inspector-title">
-                    <div class="title-line">
-                      <span class="verdict-beacon" id="inspector-beacon"></span>
-                      <span class="eyebrow" id="inspector-domain">—</span>
-                    </div>
-                    <h3 id="inspector-url">—</h3>
-                    <div class="inspector-meta" id="inspector-meta"></div>
-                  </div>
-                  <div class="inspector-actions">
-                    <button class="icon-button" id="copy-url-button" type="button" title="Copy URL" aria-label="Copy URL">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
-                    </button>
-                    <a class="icon-button" id="open-url-button" href="#" target="_blank" rel="noopener noreferrer" title="Open target" aria-label="Open target">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
-                    </a>
-                  </div>
-                </header>
-
-                <div class="audit-ribbon" id="audit-ribbon"></div>
-
-                <nav class="inspector-tabs" aria-label="Run detail views" role="tablist">
-                  <button type="button" role="tab" aria-selected="true" aria-controls="overview-panel" data-tab="overview">Overview</button>
-                  <button type="button" role="tab" aria-selected="false" aria-controls="content-panel" data-tab="content">Content</button>
-                  <button type="button" role="tab" aria-selected="false" aria-controls="artifacts-panel" data-tab="artifacts">Artifacts <span id="artifact-count">0</span></button>
-                </nav>
-
-                <section class="tab-panel" id="overview-panel" role="tabpanel">
-                  <div id="evaluation-body"></div>
-                  <div id="attempts-body"></div>
-                </section>
-
-                <section class="tab-panel" id="content-panel" role="tabpanel" hidden>
-                  <div class="content-toolbar" id="content-toolbar"></div>
-                  <pre class="evidence-reader" id="content-viewer"><code>Select a Markdown or HTML artifact.</code></pre>
-                </section>
-
-                <section class="tab-panel artifact-panel" id="artifacts-panel" role="tabpanel" hidden>
-                  <div class="artifact-list" id="artifact-list"></div>
-                  <div class="artifact-viewer" id="artifact-viewer">
-                    <div class="artifact-placeholder">Choose an artifact to inspect it safely.</div>
-                  </div>
-                </section>
-              </div>
-            </article>
+            <section class="workspace-panel raw-panel" id="raw-panel" role="tabpanel" hidden>
+              <header class="panel-header"><div><h3>Raw run report</h3><span>Complete persisted telemetry JSON</span></div><button class="secondary-button" id="copy-raw-button" type="button">Copy JSON</button></header>
+              <pre class="code-reader raw-reader" id="raw-viewer"><code>No report selected.</code></pre>
+            </section>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
 
-    <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-title">
-      <form id="auth-form" class="auth-card">
-        <span class="auth-signal" aria-hidden="true"></span>
-        <span class="eyebrow">Operator access</span>
-        <h2 id="auth-title">Connect to the recorder.</h2>
-        <p>The same bearer token used by the MCP endpoint unlocks scrape controls and saved evidence. It stays in this browser tab only.</p>
-        <label class="field-label" for="token-input">Bearer token</label>
-        <input id="token-input" name="sgw_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore="true" placeholder="Paste SGW_MCP_TOKEN" required>
-        <p class="form-error" id="auth-error" role="alert"></p>
-        <button class="launch-button" type="submit"><span>Connect</span><span aria-hidden="true">→</span></button>
+    <dialog class="modal" id="new-scrape-dialog" aria-labelledby="new-scrape-title">
+      <form id="scrape-form" class="modal-card">
+        <header class="modal-header">
+          <div><h2 id="new-scrape-title">New scrape</h2><p>Run a page through the gateway and save the full trace.</p></div>
+          <button class="icon-button" id="close-scrape-dialog" type="button" aria-label="Close new scrape dialog">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+
+        <div class="modal-body">
+          <label class="field">
+            <span>Target URL</span>
+            <input id="url-input" name="url" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com/products" required>
+          </label>
+          <label class="field">
+            <span>Evaluation goal <small>Optional</small></span>
+            <textarea id="evaluation-goal" name="evaluation_goal" rows="3" maxlength="4000" placeholder="Capture product names, prices, and availability."></textarea>
+          </label>
+
+          <fieldset class="option-group">
+            <legend>Capture options</legend>
+            <div class="option-grid">
+              <label class="check-option"><input name="screenshot" type="checkbox" checked><span><strong>Screenshot</strong><small>Save rendered visual evidence</small></span></label>
+              <label class="check-option"><input name="render_js" type="checkbox"><span><strong>Render JavaScript</strong><small>Wait for client-side content</small></span></label>
+              <label class="check-option"><input name="mobile" type="checkbox"><span><strong>Mobile viewport</strong><small>Request the compact page state</small></span></label>
+              <label class="check-option"><input name="premium" type="checkbox"><span><strong>Premium route</strong><small>Allow residential escalation</small></span></label>
+              <label class="check-option"><input name="block_ads" type="checkbox"><span><strong>Block ads</strong><small>Reduce network and visual noise</small></span></label>
+              <label class="check-option"><input name="fresh" type="checkbox"><span><strong>Bypass cache</strong><small>Force a new provider request</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="format-group">
+            <legend>Primary output</legend>
+            <label><input type="radio" name="output_format" value="markdown" checked><span>Markdown</span></label>
+            <label><input type="radio" name="output_format" value="html"><span>HTML</span></label>
+          </fieldset>
+        </div>
+
+        <footer class="modal-footer">
+          <button class="secondary-button" id="cancel-scrape-button" type="button">Cancel</button>
+          <button class="primary-button" id="launch-button" type="submit">Start scrape</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="modal auth-dialog" id="auth-dialog" aria-labelledby="auth-title">
+      <form id="auth-form" class="modal-card auth-card">
+        <header class="modal-header"><div><h2 id="auth-title">Connect to Scrape Gateway</h2><p>Use the same bearer token as the MCP endpoint. It remains in this browser tab.</p></div></header>
+        <div class="modal-body">
+          <label class="field" for="token-input"><span>Access token</span><input id="token-input" name="sgw_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" data-1p-ignore="true" placeholder="Paste SGW_MCP_TOKEN" required></label>
+          <p class="form-error" id="auth-error" role="alert"></p>
+        </div>
+        <footer class="modal-footer"><button class="primary-button" type="submit">Connect</button></footer>
       </form>
     </dialog>
 
