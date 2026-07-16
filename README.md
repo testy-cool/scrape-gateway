@@ -36,6 +36,7 @@ sgw url https://example.com
 | `sgw meta <url>` | Extract OpenGraph metadata as JSON |
 | `sgw history <url>` | Show scrape timeline and page changes |
 | `sgw telemetry` | Inspect recent scrape reports |
+| `sgw evaluations` | Aggregate AI quality audits and review recurring failures |
 | `sgw providers` | List all available providers |
 | `sgw extensions` | Browse/install community extensions |
 | `sgw selftest` | Verify installation with known-safe sites |
@@ -57,6 +58,35 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 | `scraperapi` | paid | yes | yes | premium proxies |
 
 Add API keys in `.env` to enable paid providers. Without them, `sgw` uses free providers only.
+
+## AI scrape-quality audits
+
+Enable the optional audit evaluator to have OpenRouter's
+`google/gemini-3.1-flash-lite` judge the deterministic signals and saved Markdown,
+plus a screenshot when one was requested and captured:
+
+```yaml
+evaluation:
+  mode: audit
+  model: google/gemini-3.1-flash-lite
+  include_screenshot: true
+```
+
+```bash
+export OPENROUTER_API_KEY=...
+sgw url https://example.com/products \
+  --evaluation-goal "Capture every visible product and price" \
+  --screenshot
+sgw evaluations
+```
+
+Each run keeps the evaluator request, strict JSON response, final HTML and Markdown,
+screenshot when available, hashes, token/cost data, and OpenRouter generation metadata
+under `.scrape-gateway/runs/<run-id>/evaluation/`. The judge returns a binary usability
+verdict plus categorical access, goal-coverage, extractability, and visual-state checks.
+Audit failures never turn a successful scrape into a failed scrape. The judge is explicitly
+uncalibrated and audit-only; `sgw evaluations` builds a review queue but does not modify
+prompts, validators, or routing.
 
 ## Extend it
 

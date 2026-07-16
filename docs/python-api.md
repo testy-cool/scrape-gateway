@@ -32,7 +32,8 @@ asyncio.run(main())
 | `wait_event` | str | None | Wait for JS event (e.g. "networkidle") |
 | `wait_selector` | str | None | Wait for CSS selector to appear |
 | `output_format` | str | "html" | "html" or "markdown" |
-| `metadata` | dict | {} | Pass-through metadata (e.g. `{"start_tier": "scrapedrive:advanced"}`) |
+| `screenshot` | bool | False | Request image evidence from a capable provider |
+| `metadata` | dict | {} | Pass-through metadata (e.g. `{"evaluation_goal": "Capture visible products"}`) |
 
 ## ScrapeResult fields
 
