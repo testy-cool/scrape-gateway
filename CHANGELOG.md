@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-16
+
+### Added
+- A browser console at `/` for starting scrapes and reviewing saved runs, AI checks, provider attempts, recurring improvements, usage, and costs.
+- Protected HTTP APIs for run history, evaluation summaries, scrape submission, and safe access to saved Markdown, HTML source, JSON, and screenshot artifacts.
+- The console uses the existing MCP bearer token and keeps it only in browser `sessionStorage`.
+
+### Changed
+- The HTTP process now serves the browser console and `/mcp` from one lifespan managed Starlette application.
+- Browser and audit views use the same 500 run window, so every summary result can be found with the filters.
+
 ## [0.7.2] - 2026-07-16
 
 ### Fixed
