@@ -154,6 +154,8 @@ async def scrape(
     country: str | None = None,
     output_format: str = "markdown",
     premium: bool = False,
+    screenshot: bool = False,
+    evaluation_goal: str | None = None,
 ) -> dict:
     """Scrape a URL and return its content.
 
@@ -166,6 +168,8 @@ async def scrape(
         country: Country code for geo-targeted scraping
         output_format: "markdown" or "html"
         premium: Use premium/residential proxies
+        screenshot: Capture screenshot evidence when a capable provider is available
+        evaluation_goal: Describe what a usable scrape must contain for the audit evaluator
     """
     from .models import ScrapeRequest
 
@@ -176,7 +180,9 @@ async def scrape(
             country=country,
             render_js=render_js,
             premium=premium,
+            screenshot=screenshot,
             output_format=output_format,
+            metadata={"evaluation_goal": evaluation_goal} if evaluation_goal else {},
         ),
         use_cache=True,
         use_memory=True,
@@ -198,6 +204,10 @@ async def scrape(
     else:
         response["error"] = result.error
         response["failure_reason"] = result.failure_reason.value if result.failure_reason else None
+
+    for field in ("run_id", "telemetry_report", "evaluation"):
+        if field in result.metadata:
+            response[field] = result.metadata[field]
 
     return response
 

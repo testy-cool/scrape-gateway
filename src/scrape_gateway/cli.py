@@ -33,6 +33,7 @@ Commands:
   extract   Pull structured data (JSON/CSV) from those repeated elements
   recipe    Replay a saved scrape+extract workflow from a YAML file
   history   See how a page changed across scrapes
+  evaluations  Aggregate AI quality audits and review recurring failures
   selftest  Verify the tool works against safe public URLs"""
 )
 console = Console(stderr=True)
@@ -163,6 +164,16 @@ def _print_result(result) -> None:
         table.add_row("run", f"[dim]{result.metadata['run_id']}[/]")
     if result.metadata.get("telemetry_report"):
         table.add_row("report", f"[dim]{result.metadata['telemetry_report']}[/]")
+    evaluation = result.metadata.get("evaluation")
+    if isinstance(evaluation, dict):
+        audit_result = evaluation.get("verdict") or evaluation.get("status") or "unknown"
+        audit_style = {"pass": "green", "fail": "red"}.get(str(audit_result), "yellow")
+        table.add_row("AI audit", f"[{audit_style}]{audit_result}[/]")
+        if evaluation.get("needs_human_review"):
+            table.add_row("audit review", "[yellow]human review needed[/]")
+        action = evaluation.get("recommended_action")
+        if action and action != "accept":
+            table.add_row("audit action", str(action))
 
     console.print(Panel(table, title=title, border_style="green" if result.success else "red"))
 
@@ -192,6 +203,11 @@ def url(
     meta: bool = typer.Option(False, "--meta", help="Extract and print OpenGraph metadata as JSON"),
     debug_artifacts: bool = typer.Option(
         False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"
+    ),
+    evaluation_goal: str | None = typer.Option(
+        None,
+        "--evaluation-goal",
+        help="Describe what a usable scrape must contain for the audit evaluator",
     ),
     referer: str | None = typer.Option(
         None, "--referer", help="Referer header (default: auto Google search URL, '' to disable)"
@@ -224,6 +240,8 @@ def url(
             metadata["start_tier"] = f"scrapedrive:{tier}"
         if debug_artifacts:
             metadata["debug_artifacts"] = True
+        if evaluation_goal:
+            metadata["evaluation_goal"] = evaluation_goal
         fmt = output_format
         if meta and fmt == "markdown":
             fmt = "html"
@@ -258,6 +276,104 @@ def url(
             raise typer.Exit(1)
 
     asyncio.run(run())
+
+
+@app.command()
+def evaluations(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Telemetry run root (defaults to telemetry.root from config)",
+    ),
+    limit: int = typer.Option(500, "--limit", "-n", min=1),
+    domain: str | None = typer.Option(None, "--domain"),
+    output_format: str = typer.Option("rich", "--format", "-f", help="rich|json"),
+) -> None:
+    """Summarize saved scrape-quality audits and surface recurring issues.
+
+    This is an evidence and review surface. It never changes providers,
+    validators, prompts, or routing automatically.
+    """
+    from .config import load_config
+    from .telemetry import load_recent_reports, summarize_evaluations
+
+    config = load_config()
+    reports = load_recent_reports(
+        root=root or config.telemetry.root,
+        limit=limit,
+        domain=domain,
+        evaluated_only=True,
+    )
+    summary = summarize_evaluations(reports)
+
+    if output_format == "json":
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+    if output_format != "rich":
+        console.print("[red]--format must be rich or json[/]")
+        raise typer.Exit(2)
+
+    console.print(
+        Panel(
+            f"[bold]{summary['evaluated_runs']}[/] evaluated / "
+            f"{summary['runs_scanned']} scanned\n"
+            f"[yellow]{len(summary['review_queue'])}[/] need review  "
+            f"OpenRouter [cyan]${summary['usage']['cost']:.6f}[/]  "
+            f"upstream [cyan]${summary['usage']['upstream_inference_cost']:.6f}[/]\n"
+            "[dim]uncalibrated audit signal; no automatic changes[/]",
+            title="Scrape quality evaluations",
+        )
+    )
+
+    counts = Table(show_header=True)
+    counts.add_column("Signal")
+    counts.add_column("Counts")
+    counts.add_row(
+        "Verdicts",
+        ", ".join(f"{key}: {value}" for key, value in summary["verdict_counts"].items()) or "none",
+    )
+    counts.add_row(
+        "Page types",
+        ", ".join(f"{key}: {value}" for key, value in summary["page_type_counts"].items())
+        or "none",
+    )
+    counts.add_row(
+        "Root causes",
+        ", ".join(f"{key}: {value}" for key, value in summary["root_cause_counts"].items())
+        or "none",
+    )
+    counts.add_row(
+        "Issues",
+        ", ".join(f"{key}: {value}" for key, value in summary["issue_counts"].items()) or "none",
+    )
+    counts.add_row(
+        "Actions",
+        ", ".join(f"{key}: {value}" for key, value in summary["recommended_action_counts"].items())
+        or "none",
+    )
+    counts.add_row(
+        "Failed checks",
+        ", ".join(f"{key}: {value}" for key, value in summary["check_failure_counts"].items())
+        or "none",
+    )
+    console.print(counts)
+
+    if summary["review_queue"]:
+        review = Table(title="Review queue", show_lines=True)
+        review.add_column("Run", style="dim")
+        review.add_column("URL", style="cyan", max_width=45)
+        review.add_column("Verdict")
+        review.add_column("Failed checks")
+        review.add_column("Next action")
+        for item in summary["review_queue"][:20]:
+            review.add_row(
+                str(item.get("run_id") or "?"),
+                str(item.get("url") or "?"),
+                str(item.get("verdict") or item.get("status") or "?"),
+                ", ".join(item.get("failed_checks") or []) or "-",
+                str(item.get("recommended_action") or item.get("error") or "manual review"),
+            )
+        console.print(review)
 
 
 @app.command()
