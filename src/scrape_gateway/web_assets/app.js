@@ -181,7 +181,7 @@ function configureLiveRefresh() {
   setText(nodes.liveToggleLabel, state.autoRefresh ? "Live" : "Paused");
   if (!state.autoRefresh || !state.session) return;
   state.refreshInterval = window.setInterval(() => {
-    if (document.visibilityState === "visible" && !state.pendingRun) {
+    if (document.visibilityState === "visible") {
       refreshData({ background: true });
     }
   }, LIVE_REFRESH_MS);
@@ -344,6 +344,23 @@ function renderSummary() {
   setText(nodes.judgeCost, `Judge cost ${formatCost(cost)}`);
 }
 
+function restoreActiveScrape(activeRuns) {
+  const active = Array.isArray(activeRuns) ? activeRuns : [];
+  const restored =
+    active.find((run) => run.run_id === state.pendingRun?.run_id) ||
+    active.find((run) => run.url === state.pendingRun?.url) ||
+    active[0];
+  if (restored) {
+    state.pendingRun = { ...restored, pending: true };
+    return true;
+  }
+  if (state.pendingRun?.run_id === "pending") return true;
+  state.pendingRun = null;
+  stopLaunchTimer();
+  nodes.activityBar.hidden = true;
+  return false;
+}
+
 async function refreshData({ selectNewest = false, background = false } = {}) {
   if (!state.session) return;
   if (!background) nodes.refreshButton.classList.add("is-refreshing");
@@ -354,11 +371,20 @@ async function refreshData({ selectNewest = false, background = false } = {}) {
     ]);
     state.runs = runsPayload.runs || [];
     state.summary = auditPayload.summary || null;
+    const pendingWasSelected =
+      !state.selectedRunId ||
+      state.selectedRunId === "pending" ||
+      state.selectedRunId === state.pendingRun?.run_id;
+    const hasActiveScrape = restoreActiveScrape(runsPayload.active_runs);
     setText(nodes.lastUpdated, `Updated ${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`);
     renderRuns();
     renderSummary();
 
-    if (state.pendingRun) return;
+    if (hasActiveScrape && pendingWasSelected) {
+      renderPendingWorkspace();
+      startLaunchTimer();
+      return;
+    }
     const selectionExists = state.runs.some((run) => run.run_id === state.selectedRunId);
     if (selectNewest || !selectionExists) state.selectedRunId = state.runs[0]?.run_id || null;
     if (state.selectedRunId) await selectRun(state.selectedRunId, { keepView: background });
@@ -824,9 +850,10 @@ function closeScrapeDialog() {
 
 function pendingTrace(url, payload, status = "running", error = null) {
   const elapsed = state.pendingRun ? Date.now() - new Date(state.pendingRun.started_at).getTime() : 0;
+  const pendingId = state.pendingRun?.run_id || "pending";
   return {
     report: {
-      run_id: "pending",
+      run_id: pendingId,
       started_at: state.pendingRun?.started_at,
       elapsed_ms: elapsed,
       url,
@@ -836,7 +863,7 @@ function pendingTrace(url, payload, status = "running", error = null) {
       final: {},
     },
     trace: {
-      run_id: "pending",
+      run_id: pendingId,
       status: status === "error" ? "error" : "running",
       audit_verdict: null,
       duration_ms: elapsed,
@@ -875,7 +902,7 @@ function pendingTrace(url, payload, status = "running", error = null) {
 
 function renderPendingWorkspace(status = "running", error = null) {
   if (!state.pendingRun) return;
-  state.selectedRunId = "pending";
+  state.selectedRunId = state.pendingRun.run_id;
   state.selectedStepId = "gateway";
   renderRuns();
   renderInspector(pendingTrace(state.pendingRun.url, state.pendingRun.payload, status, error), { pending: status !== "error" });
@@ -1002,7 +1029,9 @@ function bindEvents() {
   nodes.statusFilter.addEventListener("change", renderRuns);
   nodes.runList.addEventListener("click", (event) => {
     const row = event.target.closest("[data-run-id]");
-    if (row && row.dataset.runId !== "pending") selectRun(row.dataset.runId);
+    if (!row) return;
+    if (row.dataset.runId === state.pendingRun?.run_id) renderPendingWorkspace();
+    else selectRun(row.dataset.runId);
   });
   nodes.traceTimeline.addEventListener("click", (event) => {
     const row = event.target.closest("[data-step-id]");

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 
@@ -22,6 +24,24 @@ class FakeGateway:
         self.requests.append(request)
         self.calls.append({"use_cache": use_cache, "use_memory": use_memory})
         return self.result
+
+
+class BlockingGateway:
+    def __init__(self) -> None:
+        self.providers = []
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def scrape(self, request, *, use_cache: bool, use_memory: bool):
+        self.started.set()
+        await self.release.wait()
+        return ScrapeResult(
+            request.url,
+            "browserless",
+            True,
+            status_code=200,
+            metadata={"run_id": "finished123"},
+        )
 
 
 def _config(root: Path, *, evaluation_mode: str = "audit") -> GatewayConfig:
@@ -131,6 +151,52 @@ async def test_scrape_api_forwards_operator_options_and_returns_a_safe_preview(
     assert "<script>" in payload["preview"]["html"]
     assert payload["preview"]["has_screenshot"] is True
     assert "screenshot" not in payload["preview"]
+
+
+async def test_active_scrape_remains_visible_after_the_console_request_is_cancelled(
+    tmp_path: Path,
+) -> None:
+    from scrape_gateway.web import create_console_app
+
+    gateway = BlockingGateway()
+    app = create_console_app(
+        get_gateway=lambda: gateway,
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        request_task = asyncio.create_task(
+            client.post(
+                "/api/scrapes",
+                json={
+                    "url": "https://example.com/slow",
+                    "screenshot": True,
+                    "use_cache": False,
+                },
+            )
+        )
+        await asyncio.wait_for(gateway.started.wait(), timeout=1)
+
+        active = (await client.get("/api/runs")).json()["active_runs"]
+        assert len(active) == 1
+        assert active[0]["url"] == "https://example.com/slow"
+        assert active[0]["pending"] is True
+        assert active[0]["payload"]["screenshot"] is True
+
+        request_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await request_task
+
+        restored = (await client.get("/api/runs")).json()["active_runs"]
+        assert restored[0]["run_id"] == active[0]["run_id"]
+
+        gateway.release.set()
+        for _ in range(20):
+            if not (await client.get("/api/runs")).json()["active_runs"]:
+                break
+            await asyncio.sleep(0.01)
+
+        assert (await client.get("/api/runs")).json()["active_runs"] == []
 
 
 async def test_run_api_lists_summaries_and_serves_contained_artifacts(tmp_path: Path) -> None:
@@ -409,6 +475,8 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert 'fetchJson("/api/evaluations' in script.text
     assert "renderTraceTimeline" in script.text
     assert "renderStepInspector" in script.text
+    assert "restoreActiveScrape" in script.text
+    assert "runsPayload.active_runs" in script.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text
