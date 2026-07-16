@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -361,6 +362,10 @@ async def test_console_serves_packaged_assets_without_authentication(tmp_path: P
     assert "Scrape Gateway" in page.text
     assert css.status_code == 200
     assert script.status_code == 200
+    asset_version = hashlib.sha256(css.content + b"\0" + script.content).hexdigest()[:12]
+    assert f'/assets/app.css?v={asset_version}' in page.text
+    assert f'/assets/app.js?v={asset_version}' in page.text
+    assert page.headers["cache-control"] == "no-cache"
 
 
 async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> None:
