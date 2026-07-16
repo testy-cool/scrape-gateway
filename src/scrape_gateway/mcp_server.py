@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
+from starlette.routing import Mount
 
 _TOKEN = os.environ.get("SGW_MCP_TOKEN", "")
 _PORT = int(os.environ.get("SGW_MCP_PORT", "8100"))
@@ -124,7 +125,7 @@ def _create_service_app() -> Starlette:
     return Starlette(
         routes=[
             *create_console_routes(token=_TOKEN, get_gateway=_get_gateway),
-            *mcp_app.routes,
+            Mount("/", app=mcp_app),
         ],
         lifespan=lifespan,
     )

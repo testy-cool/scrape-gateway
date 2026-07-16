@@ -276,9 +276,39 @@ async def test_console_shell_exposes_the_full_operator_workflow(tmp_path: Path) 
     assert "prefers-reduced-motion" in css.text
 
 
-def test_service_app_keeps_the_mcp_endpoint_and_console_routes() -> None:
+def test_service_app_keeps_the_console_route() -> None:
     from scrape_gateway.mcp_server import app
 
     paths = {getattr(route, "path", None) for route in app.routes}
     assert "/" in paths
-    assert "/mcp" in paths
+
+
+def test_service_app_preserves_authenticated_mcp_middleware(monkeypatch) -> None:
+    import importlib
+
+    from starlette.testclient import TestClient
+
+    import scrape_gateway.mcp_server as mcp_server
+
+    with monkeypatch.context() as env:
+        env.setenv("SGW_MCP_TOKEN", "operator-secret")
+        env.setenv("SGW_MCP_PORT", "8999")
+        env.setenv("SGW_MCP_URL", "http://localhost:8999")
+        mcp_server = importlib.reload(mcp_server)
+
+        with TestClient(mcp_server.app, base_url="http://localhost:8999") as client:
+            response = client.post(
+                "/mcp",
+                headers={
+                    "Authorization": "Bearer operator-secret",
+                    "Accept": "application/json, text/event-stream",
+                },
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "result" in payload
+        assert "scrape" in {tool["name"] for tool in payload["result"]["tools"]}
+
+    importlib.reload(mcp_server)
