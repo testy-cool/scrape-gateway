@@ -1,6 +1,6 @@
 [project]
 name = "scrape-gateway"
-version = "0.7.0"
+version = "0.7.1"
 description = "Open-source scrape gateway with cache, domain memory, provider adapters, and cost-aware fallback."
 readme = "README.md"
 requires-python = ">=3.11"
