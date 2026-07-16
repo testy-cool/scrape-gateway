@@ -481,7 +481,14 @@ class OpenRouterEvaluator:
                 response_metadata["choice_metadata"] = choice_metadata
             generation_id = raw.get("id")
             generation_metadata = None
-            if generation_id:
+            usage = raw.get("usage") or {}
+            cost_details = usage.get("cost_details") or {}
+            has_inline_generation_metadata = (
+                bool(raw.get("provider"))
+                and "is_byok" in usage
+                and cost_details.get("upstream_inference_cost") is not None
+            )
+            if generation_id and not has_inline_generation_metadata:
                 generation_metadata = await self._generation_metadata(generation_id)
                 response_metadata["generation"] = generation_metadata
             outcome = EvaluationOutcome(
@@ -491,7 +498,7 @@ class OpenRouterEvaluator:
                 generation_id=generation_id,
                 provider=(generation_metadata or {}).get("provider_name")
                 or raw.get("provider"),
-                usage=raw.get("usage") or {},
+                usage=usage,
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
                 input_modalities=modalities,
                 markdown_evidence=markdown_evidence,
