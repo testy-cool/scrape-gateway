@@ -970,7 +970,8 @@ def test_summarize_evaluations_surfaces_recurring_improvements() -> None:
                 },
                 "issues": [],
                 "improvement_opportunities": [
-                    "The current extraction is sufficient; no improvements needed."
+                    "The current extraction is sufficient; no improvements needed.",
+                    "None required as the current scrape retrieved the target content.",
                 ],
                 "usage": {"cost": 0, "total_tokens": 0, "cache_hit": True},
                 "cached": True,
