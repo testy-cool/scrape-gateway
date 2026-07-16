@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 
@@ -53,43 +54,75 @@ class BrowserlessProvider(ProviderAdapter):
                 "timeout": timeout_ms,
             }
 
-        endpoint = "screenshot" if request.screenshot else "content"
-        api_url = f"{self.base_url}/{endpoint}"
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(
                 timeout=(timeout_ms / 1000) + 10,
                 follow_redirects=True,
             ) as client:
-                response = await client.post(api_url, params={"token": self.token}, json=body)
+                if request.screenshot:
+                    content_response, screenshot_response = await asyncio.gather(
+                        client.post(
+                            f"{self.base_url}/content",
+                            params={"token": self.token},
+                            json=body,
+                        ),
+                        client.post(
+                            f"{self.base_url}/screenshot",
+                            params={"token": self.token},
+                            json=body,
+                        ),
+                    )
+                else:
+                    content_response = await client.post(
+                        f"{self.base_url}/content",
+                        params={"token": self.token},
+                        json=body,
+                    )
 
             latency_ms = int((time.perf_counter() - start) * 1000)
             if request.screenshot:
+                html = content_response.text if content_response.is_success else ""
+                content_failure = classify_failure(content_response.status_code, html)
+                screenshot_success = screenshot_response.is_success
+                success = (
+                    content_response.is_success and content_failure is None and screenshot_success
+                )
+                if content_failure is not None:
+                    failure_reason = content_failure
+                elif success:
+                    failure_reason = None
+                else:
+                    failure_reason = FailureReason.PROVIDER_ERROR
+                errors = []
+                if not content_response.is_success:
+                    errors.append(f"content: {content_response.text}")
+                if not screenshot_success:
+                    errors.append(f"screenshot: {screenshot_response.text}")
                 return ScrapeResult(
                     url=request.url,
                     provider=self.name,
-                    success=response.is_success,
-                    status_code=response.status_code,
-                    screenshot=response.content if response.is_success else None,
-                    error=None if response.is_success else response.text,
-                    failure_reason=None
-                    if response.is_success
-                    else FailureReason.PROVIDER_ERROR,
-                    cost_units=5,
+                    success=success,
+                    status_code=content_response.status_code,
+                    html=html if content_response.is_success else None,
+                    screenshot=screenshot_response.content if screenshot_success else None,
+                    error="; ".join(errors) or None,
+                    failure_reason=failure_reason,
+                    cost_units=10,
                     latency_ms=latency_ms,
-                    route="browserless:screenshot",
+                    route="browserless:content+screenshot",
                 )
 
-            html = response.text if response.is_success else ""
-            failure = classify_failure(response.status_code, html)
+            html = content_response.text if content_response.is_success else ""
+            failure = classify_failure(content_response.status_code, html)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
-                success=response.is_success and failure is None,
-                status_code=response.status_code,
-                html=html if response.is_success else None,
+                success=content_response.is_success and failure is None,
+                status_code=content_response.status_code,
+                html=html if content_response.is_success else None,
                 failure_reason=failure,
-                error=None if response.is_success else response.text,
+                error=None if content_response.is_success else content_response.text,
                 cost_units=5,
                 latency_ms=latency_ms,
                 route="browserless:content",
