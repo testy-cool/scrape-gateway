@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import re
@@ -31,6 +32,14 @@ def _package_version() -> str:
         return version("scrape-gateway")
     except PackageNotFoundError:
         return "dev"
+
+
+def _asset_version(asset_root: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update((asset_root / "app.css").read_bytes())
+    digest.update(b"\0")
+    digest.update((asset_root / "app.js").read_bytes())
+    return digest.hexdigest()[:12]
 
 
 def _unauthorized() -> JSONResponse:
@@ -477,7 +486,9 @@ def create_console_routes(
     asset_root: Path = ASSET_ROOT,
 ) -> list:
     async def homepage(request: Request) -> Response:
-        return HTMLResponse((asset_root / "index.html").read_text(encoding="utf-8"))
+        markup = (asset_root / "index.html").read_text(encoding="utf-8")
+        markup = markup.replace("__ASSET_VERSION__", _asset_version(asset_root))
+        return HTMLResponse(markup, headers={"Cache-Control": "no-cache"})
 
     async def status(request: Request) -> Response:
         return JSONResponse(
