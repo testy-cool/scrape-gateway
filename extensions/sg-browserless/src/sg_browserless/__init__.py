@@ -59,24 +59,22 @@ class BrowserlessProvider(ProviderAdapter):
             async with httpx.AsyncClient(
                 timeout=(timeout_ms / 1000) + 10,
                 follow_redirects=True,
+                headers={"Authorization": f"Bearer {self.token}"},
             ) as client:
                 if request.screenshot:
                     content_response, screenshot_response = await asyncio.gather(
                         client.post(
                             f"{self.base_url}/content",
-                            params={"token": self.token},
                             json=body,
                         ),
                         client.post(
                             f"{self.base_url}/screenshot",
-                            params={"token": self.token},
                             json=body,
                         ),
                     )
                 else:
                     content_response = await client.post(
                         f"{self.base_url}/content",
-                        params={"token": self.token},
                         json=body,
                     )
 

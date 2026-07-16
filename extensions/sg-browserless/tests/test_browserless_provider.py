@@ -77,7 +77,8 @@ class TestBrowserlessProvider:
         assert result.cost_units == 5
 
         sent = route.calls[0].request
-        assert sent.url.params["token"] == self.TOKEN
+        assert "token" not in sent.url.params
+        assert sent.headers["authorization"] == f"Bearer {self.TOKEN}"
         body = json.loads(sent.content)
         assert body == {
             "url": TARGET_URL,
