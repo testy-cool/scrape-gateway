@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-16
+
+### Fixed
+- Console CSS and JavaScript references now carry a content fingerprint, preventing a new trace shell from loading stale Cloudflare-cached assets from an earlier release.
+- The console shell now revalidates on each visit so deployments become visible without waiting for the edge-cache TTL.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added
