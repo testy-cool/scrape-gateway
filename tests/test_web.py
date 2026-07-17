@@ -460,9 +460,7 @@ async def test_run_detail_exposes_an_ordered_trace_without_inventing_step_timing
     ]
 
     raw_http = next(step for step in trace["steps"] if step["id"] == "provider-1")
-    raw_validation = next(
-        step for step in trace["steps"] if step["id"] == "provider-1-validation"
-    )
+    raw_validation = next(step for step in trace["steps"] if step["id"] == "provider-1-validation")
     browserless = next(step for step in trace["steps"] if step["id"] == "provider-2")
     evaluation = next(step for step in trace["steps"] if step["kind"] == "evaluation")
     persistence = next(step for step in trace["steps"] if step["kind"] == "persistence")
@@ -519,8 +517,8 @@ async def test_console_serves_packaged_assets_without_authentication(tmp_path: P
     assert css.status_code == 200
     assert script.status_code == 200
     asset_version = hashlib.sha256(css.content + b"\0" + script.content).hexdigest()[:12]
-    assert f'/assets/app.css?v={asset_version}' in page.text
-    assert f'/assets/app.js?v={asset_version}' in page.text
+    assert f"/assets/app.css?v={asset_version}" in page.text
+    assert f"/assets/app.js?v={asset_version}" in page.text
     assert page.headers["cache-control"] == "no-cache"
 
 

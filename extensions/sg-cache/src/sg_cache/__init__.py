@@ -261,7 +261,9 @@ def list_entries(
         age = _human_age(entry.age_seconds)
         if entry.expired:
             age = f"[yellow]{age}[/]"
-        table.add_row(age, entry.key, entry.provider or "-", _human_size(entry.size_bytes), entry.url or "-")
+        table.add_row(
+            age, entry.key, entry.provider or "-", _human_size(entry.size_bytes), entry.url or "-"
+        )
     console.print(table)
     if limit and len(entries) > limit:
         console.print(f"[dim]Showing {limit} of {len(entries)} entries[/]")
@@ -357,12 +359,16 @@ def purge(
         raise typer.Exit(1)
 
     for entry in entries:
-        console.print(f"[dim]{'would purge' if dry_run else 'purging'}[/] {entry.key} {entry.url or ''}")
+        console.print(
+            f"[dim]{'would purge' if dry_run else 'purging'}[/] {entry.key} {entry.url or ''}"
+        )
         if not dry_run:
             shutil.rmtree(entry.folder, ignore_errors=True)
 
     action = "Would purge" if dry_run else "Purged"
-    console.print(f"[green]{action} {len(entries)} cache entr{'y' if len(entries) == 1 else 'ies'}.[/]")
+    console.print(
+        f"[green]{action} {len(entries)} cache entr{'y' if len(entries) == 1 else 'ies'}.[/]"
+    )
 
 
 def register(app: typer.Typer) -> None:

@@ -191,9 +191,7 @@ async def test_evaluator_skips_generation_lookup_when_completion_has_usage_detai
                 "id": "gen-inline-metadata",
                 "model": "google/gemini-3.1-flash-lite",
                 "provider": "Google",
-                "choices": [
-                    {"message": {"content": json.dumps(GOOD_JUDGMENT)}}
-                ],
+                "choices": [{"message": {"content": json.dumps(GOOD_JUDGMENT)}}],
                 "usage": {
                     "prompt_tokens": 1200,
                     "completion_tokens": 120,
@@ -236,9 +234,7 @@ async def test_evaluator_skips_generation_lookup_when_completion_has_usage_detai
 
 
 @respx.mock
-async def test_generation_metadata_retries_eventual_404(
-    tmp_path: Path, monkeypatch
-) -> None:
+async def test_generation_metadata_retries_eventual_404(tmp_path: Path, monkeypatch) -> None:
     from scrape_gateway.evaluation import OpenRouterEvaluator
 
     generation = respx.get("https://openrouter.ai/api/v1/generation").mock(
