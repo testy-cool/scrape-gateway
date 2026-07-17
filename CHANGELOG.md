@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-17
+
+### Added
+- Active console runs now expose provider, validation, screenshot, AI-evaluation, and persistence progress before the final telemetry report exists, with one-second polling and refresh recovery.
+- An authenticated gateway settings dialog can globally enable or disable providers and configure default, per-provider, and AI-evaluation timeouts for subsequent console and MCP runs.
+- A dedicated Visual view renders authenticated screenshot artifacts and clearly distinguishes not-requested, in-progress, captured, and requested-but-missing states.
+- Final HTML, Markdown, and screenshot evidence is now saved for every telemetry run independently of whether AI evaluation is enabled.
+
+### Changed
+- Console-owned routing settings persist locally in `.scrape-gateway/operator-settings.yml`, override the base YAML without rewriting it, and reload the shared gateway used by MCP tools.
+- ScrapeDrive now honors the configured provider timeout and downloads returned screenshot URLs into the scrape result.
+
+### Fixed
+- A screenshot-required ScrapeDrive attempt can no longer report success when it returned no usable image evidence.
+
 ## [0.9.2] - 2026-07-16
 
 ### Fixed
