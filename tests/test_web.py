@@ -401,6 +401,64 @@ async def test_run_api_lists_summaries_and_serves_contained_artifacts(tmp_path: 
     assert image_response.headers["content-type"] == "image/png"
 
 
+async def test_run_detail_builds_a_cache_bypassing_retry_payload(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    run_id = "retry123"
+    run_dir = tmp_path / run_id
+    run_dir.mkdir()
+    (run_dir / "report.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "url": "https://example.com/catalog",
+                "success": False,
+                "request": {
+                    "url": "https://example.com/catalog",
+                    "country": "de",
+                    "render_js": True,
+                    "premium": True,
+                    "screenshot": True,
+                    "mobile": True,
+                    "block_ads": True,
+                    "output_format": "html",
+                    "evaluation_goal": "Capture the full catalog",
+                    "cache_read_enabled": True,
+                    "metadata": {
+                        "run_id": run_id,
+                        "preferred_provider": "browserless",
+                        "debug_artifacts": True,
+                    },
+                },
+                "final": {"provider": "browserless", "success": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = create_console_app(
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        response = await client.get(f"/api/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert response.json()["retry"] == {
+        "url": "https://example.com/catalog",
+        "country": "de",
+        "render_js": True,
+        "premium": True,
+        "screenshot": True,
+        "mobile": True,
+        "block_ads": True,
+        "output_format": "html",
+        "evaluation_goal": "Capture the full catalog",
+        "provider": "browserless",
+        "use_cache": False,
+    }
+
+
 async def test_run_detail_exposes_an_ordered_trace_without_inventing_step_timings(
     tmp_path: Path,
 ) -> None:
@@ -591,6 +649,7 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "evaluation-goal",
         "provider-select",
         "forced-provider-badge",
+        "retry-button",
         "live-toggle",
         "run-list",
         "trace-workspace",
@@ -629,6 +688,9 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert 'provider: String(formData.get("provider")' in script.text
     assert "report.request?.metadata?.preferred_provider" in script.text
     assert "Auto routing" in page.text
+    assert "openRetryDialog" in script.text
+    assert "state.retryPayload" in script.text
+    assert "use_cache: state.retryPayload ? false" in script.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text

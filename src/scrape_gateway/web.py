@@ -253,6 +253,32 @@ def _run_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _retry_payload(report: dict[str, Any]) -> dict[str, Any]:
+    request = report.get("request") if isinstance(report.get("request"), dict) else {}
+    metadata = request.get("metadata") if isinstance(request.get("metadata"), dict) else {}
+    output_format = request.get("output_format")
+    if output_format not in {"html", "markdown"}:
+        output_format = "markdown"
+    provider = metadata.get("preferred_provider")
+    return {
+        "url": str(report.get("url") or request.get("url") or ""),
+        "country": request.get("country") if isinstance(request.get("country"), str) else None,
+        "render_js": request.get("render_js") is True,
+        "premium": request.get("premium") is True,
+        "screenshot": request.get("screenshot") is True,
+        "mobile": request.get("mobile") is True,
+        "block_ads": request.get("block_ads") is True,
+        "output_format": output_format,
+        "evaluation_goal": (
+            request.get("evaluation_goal")
+            if isinstance(request.get("evaluation_goal"), str)
+            else ""
+        ),
+        "provider": provider if isinstance(provider, str) else "",
+        "use_cache": False,
+    }
+
+
 def _preview_text(value: str | None) -> tuple[str | None, bool]:
     if value is None:
         return None, False
@@ -840,6 +866,7 @@ def create_console_routes(
                 "report": report,
                 "trace": _trace_payload(report, artifacts),
                 "artifacts": artifacts,
+                "retry": _retry_payload(report),
             }
         )
 
