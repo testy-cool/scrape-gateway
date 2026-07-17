@@ -67,6 +67,12 @@ function formatDuration(milliseconds) {
   return `${Math.floor(value / 60000)}m ${Math.round((value % 60000) / 1000)}s`;
 }
 
+function formatLiveDuration(milliseconds) {
+  const value = Math.max(0, Number(milliseconds || 0));
+  if (value < 60000) return `${(value / 1000).toFixed(1)}s`;
+  return `${Math.floor(value / 60000)}m ${String(Math.floor((value % 60000) / 1000)).padStart(2, "0")}s`;
+}
+
 function formatOffset(milliseconds) {
   const value = Number(milliseconds);
   if (!Number.isFinite(value) || value <= 0) return "+0 ms";
@@ -186,9 +192,9 @@ function configureLiveRefresh() {
   const schedule = () => {
     const delay = state.pendingRun ? ACTIVE_REFRESH_MS : LIVE_REFRESH_MS;
     state.refreshInterval = window.setTimeout(async () => {
-    if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible") {
         await refreshData({ background: true });
-    }
+      }
       if (state.autoRefresh && state.session) schedule();
     }, delay);
   };
@@ -264,6 +270,34 @@ function runStatus(run) {
   return "ok";
 }
 
+function liveRunElapsed(run = state.pendingRun) {
+  const started = new Date(run?.started_at || "").getTime();
+  return Number.isFinite(started) ? Math.max(0, Date.now() - started) : 0;
+}
+
+function currentLiveStep(run = state.pendingRun) {
+  const steps = Array.isArray(run?.steps) ? run.steps : [];
+  const running = [...steps].reverse().find((step) => step.status === "running");
+  if (running) return running;
+  const recorded = steps.find((step) => step.id === run?.current_step?.id);
+  return recorded || run?.current_step || steps.at(-1) || null;
+}
+
+function liveActivityText(run = state.pendingRun) {
+  const step = currentLiveStep(run);
+  const elapsed = liveRunElapsed(run);
+  if (!step) return `Routing request · ${formatLiveDuration(elapsed)}`;
+  const provider = step.attributes?.provider || run?.provider;
+  const label = provider
+    ? `${titleCase(provider)} attempt`
+    : step.kind === "routing"
+      ? "Routing"
+      : step.name || "Gateway processing";
+  const stateLabel = step.status === "running" ? "in progress" : titleCase(step.outcome || step.status);
+  const stepElapsed = Math.max(0, elapsed - Number(step.offset_ms || 0));
+  return `${label} ${stateLabel.toLowerCase()} · ${formatLiveDuration(stepElapsed)}`;
+}
+
 function statusFilterMatches(run, filter) {
   if (filter === "all") return true;
   if (filter === "unaudited") return auditVerdict(run) === "unaudited";
@@ -306,8 +340,10 @@ function renderRunRow(run) {
   body.append(element("span", "run-row-path", parts.path || run.url || "Unknown target"));
 
   const meta = element("span", "run-row-meta");
-  meta.append(element("span", "", run.provider || (run.pending ? "gateway" : "no provider")));
-  meta.append(element("span", "", run.pending ? "in progress" : formatDuration(run.elapsed_ms)));
+  meta.append(element("span", "", run.provider || (run.pending ? "routing" : "no provider")));
+  const elapsed = element("span", "", run.pending ? formatLiveDuration(liveRunElapsed(run)) : formatDuration(run.elapsed_ms));
+  if (run.pending) elapsed.dataset.liveElapsed = "true";
+  meta.append(elapsed);
   if (run.status_code) meta.append(element("span", "", `HTTP ${run.status_code}`));
   body.append(meta);
 
@@ -373,6 +409,7 @@ function restoreActiveScrape(activeRuns) {
   state.pendingRun = null;
   stopLaunchTimer();
   nodes.activityBar.hidden = true;
+  nodes.workspaceContent.classList.remove("is-pending");
   return false;
 }
 
@@ -421,10 +458,12 @@ function showEmptyWorkspace() {
   state.selectedStepId = null;
   nodes.workspaceEmpty.hidden = false;
   nodes.workspaceContent.hidden = true;
+  nodes.workspaceContent.classList.remove("is-pending");
 }
 
 function metadataItem(label, value) {
   const item = element("span");
+  item.dataset.metadataLabel = label.toLowerCase();
   item.append(element("strong", "", `${label} `));
   item.append(document.createTextNode(value || "—"));
   return item;
@@ -484,7 +523,9 @@ function renderTraceRow(step, total) {
   copy.append(nameLine, element("span", "step-summary", step.summary || "No step summary recorded."));
   main.append(copy);
 
-  const duration = element("span", "step-duration", step.duration_ms === null || step.duration_ms === undefined ? "—" : formatDuration(step.duration_ms));
+  const isLiveStep = step.status === "running" && (step.duration_ms === null || step.duration_ms === undefined);
+  const duration = element("span", "step-duration", isLiveStep ? formatLiveDuration(0) : step.duration_ms === null || step.duration_ms === undefined ? "—" : formatDuration(step.duration_ms));
+  if (isLiveStep) duration.dataset.liveStepOffset = String(step.offset_ms || 0);
   const waterfall = element("span", "waterfall");
   const start = Math.max(0, Math.min(98, (Number(step.offset_ms || 0) / total) * 100));
   waterfall.style.setProperty("--start", `${start}%`);
@@ -906,6 +947,7 @@ function renderInspector(detail, { pending = false, keepView = false } = {}) {
   state.activeOutputLabel = null;
   nodes.workspaceEmpty.hidden = true;
   nodes.workspaceContent.hidden = false;
+  nodes.workspaceContent.classList.toggle("is-pending", pending);
   renderTraceHeader(detail, pending);
   renderTraceTimeline(detail.trace);
   renderOutput(detail);
@@ -950,7 +992,7 @@ function closeScrapeDialog() {
 }
 
 function pendingTrace(url, payload, status = "running", error = null) {
-  const elapsed = state.pendingRun ? Date.now() - new Date(state.pendingRun.started_at).getTime() : 0;
+  const elapsed = liveRunElapsed();
   const pendingId = state.pendingRun?.run_id || "pending";
   const recordedSteps = Array.isArray(state.pendingRun?.steps) ? state.pendingRun.steps : [];
   const fallbackSteps = [
@@ -981,6 +1023,9 @@ function pendingTrace(url, payload, status = "running", error = null) {
       attributes: {},
     },
   ];
+  const steps = recordedSteps.length > 1
+    ? recordedSteps
+    : [recordedSteps[0] || fallbackSteps[0], fallbackSteps[1]];
   return {
     report: {
       run_id: pendingId,
@@ -990,14 +1035,16 @@ function pendingTrace(url, payload, status = "running", error = null) {
       success: status === "error" ? false : null,
       diagnosis: status === "error" ? "request_failed" : "in_progress",
       request: payload,
-      final: {},
+      final: {
+        provider: state.pendingRun?.provider || currentLiveStep()?.attributes?.provider || null,
+      },
     },
     trace: {
       run_id: pendingId,
       status: status === "error" ? "error" : "running",
       audit_verdict: null,
       duration_ms: elapsed,
-      steps: recordedSteps.length ? recordedSteps : fallbackSteps,
+      steps,
     },
     artifacts: [],
   };
@@ -1013,19 +1060,31 @@ function renderPendingWorkspace(status = "running", error = null) {
   nodes.activityBar.hidden = false;
   nodes.activityBar.classList.toggle("is-error", status === "error");
   setText(nodes.activityTitle, status === "error" ? "Scrape request failed" : "Scrape in progress");
-  setText(nodes.activityDetail, error || state.pendingRun.activity || latestStep?.summary || "Waiting for the gateway to start.");
+  setText(nodes.activityDetail, error || liveActivityText());
+  updateLiveRunClock();
+}
+
+function updateLiveRunClock() {
+  if (!state.pendingRun) return;
+  const elapsed = liveRunElapsed();
+  const seconds = elapsed / 1000;
+  setText(nodes.activityTimer, `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${(seconds % 60).toFixed(1).padStart(4, "0")}`);
+  if (!nodes.activityBar.classList.contains("is-error")) setText(nodes.activityDetail, liveActivityText());
+  nodes.runList.querySelectorAll("[data-live-elapsed]").forEach((node) => setText(node, formatLiveDuration(elapsed)));
+  const duration = nodes.traceMetadata.querySelector('[data-metadata-label="duration"]');
+  if (duration) {
+    const value = duration.lastChild;
+    if (value) value.textContent = formatLiveDuration(elapsed);
+  }
+  nodes.traceTimeline.querySelectorAll("[data-live-step-offset]").forEach((node) => {
+    setText(node, formatLiveDuration(elapsed - Number(node.dataset.liveStepOffset || 0)));
+  });
 }
 
 function startLaunchTimer() {
   window.clearInterval(state.launchInterval);
-  const tick = () => {
-    if (!state.pendingRun) return;
-    const elapsed = Date.now() - new Date(state.pendingRun.started_at).getTime();
-    const seconds = Math.floor(elapsed / 1000);
-    setText(nodes.activityTimer, `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`);
-  };
-  tick();
-  state.launchInterval = window.setInterval(tick, 1000);
+  updateLiveRunClock();
+  state.launchInterval = window.setInterval(updateLiveRunClock, 100);
 }
 
 function stopLaunchTimer() {
@@ -1069,6 +1128,7 @@ async function submitScrape(event) {
   closeScrapeDialog();
   renderPendingWorkspace();
   startLaunchTimer();
+  configureLiveRefresh();
 
   try {
     const result = await fetchJson("/api/scrapes", { method: "POST", body: JSON.stringify(payload) });
@@ -1092,6 +1152,7 @@ async function submitScrape(event) {
   } finally {
     stopLaunchTimer();
     nodes.launchButton.disabled = false;
+    configureLiveRefresh();
   }
 }
 
