@@ -98,6 +98,23 @@
           <button class="secondary-button" id="empty-new-scrape-button" type="button">Start a scrape</button>
         </div>
 
+        <div class="workspace-loading" id="workspace-loading" aria-live="polite" aria-busy="true" hidden>
+          <span class="sr-only">Loading selected trace</span>
+          <div class="loading-trace-header" aria-hidden="true">
+            <span class="skeleton-block skeleton-badge"></span>
+            <span class="skeleton-block skeleton-badge"></span>
+            <span class="skeleton-block skeleton-title"></span>
+            <span class="skeleton-block skeleton-meta"></span>
+          </div>
+          <div class="loading-tabs" aria-hidden="true">
+            <span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span>
+          </div>
+          <div class="loading-trace-body" aria-hidden="true">
+            <div class="loading-timeline"><span></span><span></span><span></span><span></span></div>
+            <div class="loading-inspector"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+
         <div class="workspace-content" id="workspace-content" hidden>
           <div class="activity-bar" id="activity-bar" hidden aria-live="polite">
             <span class="spinner" aria-hidden="true"></span>
