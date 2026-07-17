@@ -134,6 +134,10 @@
               <div class="trace-metadata" id="trace-metadata"></div>
             </div>
             <div class="trace-actions">
+              <button class="secondary-button retry-button" id="retry-button" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
+                Retry
+              </button>
               <button class="icon-button" id="copy-url-button" type="button" aria-label="Copy target URL" title="Copy target URL">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
               </button>
@@ -204,7 +208,7 @@
     <dialog class="modal" id="new-scrape-dialog" aria-labelledby="new-scrape-title">
       <form id="scrape-form" class="modal-card">
         <header class="modal-header">
-          <div><h2 id="new-scrape-title">New scrape</h2><p>Run a page through the gateway and save the full trace.</p></div>
+          <div><h2 id="new-scrape-title">New scrape</h2><p id="scrape-dialog-description">Run a page through the gateway and save the full trace.</p></div>
           <button class="icon-button" id="close-scrape-dialog" type="button" aria-label="Close new scrape dialog">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </button>

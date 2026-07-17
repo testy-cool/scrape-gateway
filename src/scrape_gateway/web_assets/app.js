@@ -25,6 +25,7 @@ const state = {
   toastTimer: null,
   launchInterval: null,
   pendingRun: null,
+  retryPayload: null,
   launch: null,
   refreshRequestId: 0,
   selectionRequestId: 0,
@@ -543,6 +544,8 @@ function renderTraceHeader(detail, pending = false) {
   setText(nodes.traceUrl, report.url || "Unknown target");
   nodes.copyUrlButton.dataset.url = report.url || "";
   nodes.openUrlButton.href = /^https?:\/\//i.test(report.url || "") ? report.url : "#";
+  nodes.retryButton.hidden = pending;
+  nodes.retryButton.disabled = pending || !detail.retry?.url;
   nodes.traceMetadata.replaceChildren();
   const metadata = [
     ["Started", formatDate(report.started_at)],
@@ -1067,9 +1070,41 @@ function openScrapeDialog() {
     showAuth("Connect before starting a scrape.");
     return;
   }
+  state.retryPayload = null;
+  nodes.scrapeForm.reset();
   populateProviderSelect();
+  setText(nodes.newScrapeTitle, "New scrape");
+  setText(nodes.scrapeDialogDescription, "Run a page through the gateway and save the full trace.");
+  setText(nodes.launchButton, "Start scrape");
   if (!nodes.newScrapeDialog.open) nodes.newScrapeDialog.showModal();
   window.setTimeout(() => nodes.urlInput.focus(), 30);
+}
+
+function openRetryDialog() {
+  const retry = state.selectedDetail?.retry;
+  if (!retry?.url) {
+    showToast("This trace does not include enough request detail to retry.", true);
+    return;
+  }
+  state.retryPayload = { ...retry };
+  nodes.scrapeForm.reset();
+  populateProviderSelect();
+  nodes.urlInput.value = retry.url;
+  nodes.evaluationGoal.value = retry.evaluation_goal || "";
+  ["screenshot", "render_js", "mobile", "premium", "block_ads"].forEach((name) => {
+    nodes.scrapeForm.elements[name].checked = retry[name] === true;
+  });
+  nodes.scrapeForm.elements.fresh.checked = true;
+  const output = nodes.scrapeForm.querySelector(`input[name="output_format"][value="${retry.output_format}"]`);
+  if (output) output.checked = true;
+  if (Array.from(nodes.providerSelect.options).some((option) => option.value === retry.provider)) {
+    nodes.providerSelect.value = retry.provider;
+  }
+  setText(nodes.newScrapeTitle, "Retry scrape");
+  setText(nodes.scrapeDialogDescription, "Original capture options restored. Cache bypass is required; the provider can be changed for this retry.");
+  setText(nodes.launchButton, "Retry scrape");
+  if (!nodes.newScrapeDialog.open) nodes.newScrapeDialog.showModal();
+  window.setTimeout(() => nodes.providerSelect.focus(), 30);
 }
 
 function closeScrapeDialog() {
@@ -1192,6 +1227,7 @@ async function submitScrape(event) {
   }
   const payload = {
     url,
+    country: state.retryPayload?.country || null,
     evaluation_goal: String(formData.get("evaluation_goal") || "").trim(),
     provider: String(formData.get("provider") || "").trim(),
     output_format: String(formData.get("output_format") || "markdown"),
@@ -1200,7 +1236,7 @@ async function submitScrape(event) {
     mobile: formData.has("mobile"),
     premium: formData.has("premium"),
     block_ads: formData.has("block_ads"),
-    use_cache: !formData.has("fresh"),
+    use_cache: state.retryPayload ? false : !formData.has("fresh"),
   };
 
   state.pendingRun = {
@@ -1235,6 +1271,7 @@ async function submitScrape(event) {
       preferredRunId: shouldFocus ? runId : null,
     });
     if (shouldFocus && payload.screenshot && state.selectedDetail?.report?.run_id === runId) showView("visual");
+    state.retryPayload = null;
     state.launch = null;
   } catch (error) {
     renderPendingWorkspace("error", error.message);
@@ -1383,6 +1420,7 @@ function bindEvents() {
   nodes.closeScrapeDialog.addEventListener("click", closeScrapeDialog);
   nodes.cancelScrapeButton.addEventListener("click", closeScrapeDialog);
   nodes.scrapeForm.addEventListener("submit", submitScrape);
+  nodes.retryButton.addEventListener("click", openRetryDialog);
   nodes.settingsButton.addEventListener("click", openSettingsDialog);
   nodes.closeSettingsDialog.addEventListener("click", closeSettingsDialog);
   nodes.cancelSettingsButton.addEventListener("click", closeSettingsDialog);
@@ -1447,11 +1485,11 @@ function collectNodes() {
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
     "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
     "trace-status-badge", "trace-audit-badge", "forced-provider-badge", "copy-run-id-button", "trace-url", "trace-metadata",
-    "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
+    "retry-button", "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
     "visual-subtitle", "visual-viewer",
     "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
-    "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal", "provider-select",
+    "scrape-form", "new-scrape-title", "scrape-dialog-description", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal", "provider-select",
     "launch-button", "settings-dialog", "settings-form", "close-settings-dialog", "cancel-settings-button",
     "save-settings-button", "provider-settings-list", "default-timeout-input", "evaluation-timeout-input",
     "settings-error", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",
