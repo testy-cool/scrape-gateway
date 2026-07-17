@@ -20,6 +20,7 @@ from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
 from .models import FailureReason, ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
+from .progress import emit_progress
 from .telemetry import TelemetryRecorder, new_run_id, safe_metadata, utc_now
 from .validators import validate_content
 
@@ -291,7 +292,30 @@ class ScrapeGateway:
         elapsed_ms: int,
     ) -> dict | None:
         if self.evaluator is None:
+            emit_progress(
+                id="evaluation",
+                name="AI evaluation",
+                kind="evaluation",
+                status="skipped",
+                outcome="disabled",
+                summary="AI evaluation is disabled for this gateway.",
+                attributes={"screenshot_bytes": len(result.screenshot or b"")},
+            )
             return None
+        evaluation_start = time.perf_counter()
+        emit_progress(
+            id="evaluation",
+            name="AI evaluation",
+            kind="evaluation",
+            status="running",
+            outcome="judging",
+            summary="Sending saved text and available visual evidence to the evaluator.",
+            attributes={
+                "model": getattr(getattr(self.evaluator, "config", None), "model", "unknown"),
+                "markdown_chars": len(result.markdown or ""),
+                "screenshot_bytes": len(result.screenshot or b""),
+            },
+        )
         try:
             outcome = await self.evaluator.evaluate(
                 request=request,
@@ -324,7 +348,49 @@ class ScrapeGateway:
             "recommended_action": summary["recommended_action"],
             "report_artifacts": artifacts,
         }
+        emit_progress(
+            id="evaluation",
+            name="AI evaluation",
+            kind="evaluation",
+            status="ok" if summary["status"] == "completed" else "error",
+            outcome=summary.get("verdict") or summary["status"],
+            summary=(
+                summary.get("critique")
+                or summary.get("error")
+                or f"Evaluator finished with {summary.get('verdict') or summary['status']}."
+            ),
+            duration_ms=int((time.perf_counter() - evaluation_start) * 1000),
+            attributes={
+                "model": summary.get("model"),
+                "input_modalities": summary.get("input_modalities", []),
+                "screenshot_bytes": len(result.screenshot or b""),
+            },
+        )
         return summary
+
+    def _write_report_with_progress(self, report: dict) -> Path | None:
+        persistence_start = time.perf_counter()
+        emit_progress(
+            id="persistence",
+            name="Save run evidence",
+            kind="persistence",
+            status="running",
+            outcome="saving",
+            summary="Writing the report and captured artifacts.",
+            attributes={},
+        )
+        report_path = self.telemetry.write_report(report)
+        emit_progress(
+            id="persistence",
+            name="Save run evidence",
+            kind="persistence",
+            status="ok" if report_path else "skipped",
+            outcome="saved" if report_path else "telemetry_disabled",
+            summary=str(report_path) if report_path else "Telemetry persistence is disabled.",
+            duration_ms=int((time.perf_counter() - persistence_start) * 1000),
+            attributes={"report_path": str(report_path) if report_path else None},
+        )
+        return report_path
 
     async def scrape(
         self, request: ScrapeRequest, use_cache: bool = True, use_memory: bool = True
@@ -397,26 +463,93 @@ class ScrapeGateway:
                     skipped=[],
                     evaluation=evaluation,
                 )
-                report_path = self.telemetry.write_report(report)
+                report_path = self._write_report_with_progress(report)
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
                 return result
             _log("  [cache] MISS")
 
         ordered = self._ordered_providers(request)
+        emit_progress(
+            id="routing",
+            name="Build provider route",
+            kind="routing",
+            status="ok",
+            outcome="planned",
+            summary=f"Prepared {len(ordered)} provider{'s' if len(ordered) != 1 else ''}.",
+            attributes={"providers": [provider.name for provider in ordered]},
+        )
         attempts = []
         skipped = []
         last_result: ScrapeResult | None = None
-        for provider in ordered:
+        for provider_index, provider in enumerate(ordered, start=1):
+            provider_step_id = f"provider-{provider_index}"
             if not provider.can_handle(request):
                 skipped.append(f"{provider.name}(no capability)")
+                emit_progress(
+                    id=provider_step_id,
+                    name=f"{provider.name} attempt",
+                    kind="provider",
+                    status="skipped",
+                    outcome="missing_capability",
+                    summary="Provider cannot satisfy the requested capture options.",
+                    attributes={
+                        "provider": provider.name,
+                        "screenshot_requested": request.screenshot,
+                    },
+                )
                 continue
             if use_memory and self.memory.should_skip_provider(request.url, provider.name):
                 skipped.append(f"{provider.name}(bad history)")
+                emit_progress(
+                    id=provider_step_id,
+                    name=f"{provider.name} attempt",
+                    kind="provider",
+                    status="skipped",
+                    outcome="bad_history",
+                    summary="Domain memory skipped this provider after prior failures.",
+                    attributes={"provider": provider.name},
+                )
                 continue
             start = time.perf_counter()
+            emit_progress(
+                id=provider_step_id,
+                name=f"{provider.name} attempt",
+                kind="provider",
+                status="running",
+                outcome="requesting",
+                summary=f"Waiting for {provider.name} to return the page.",
+                attributes={
+                    "provider": provider.name,
+                    "timeout_seconds": request.timeout_seconds,
+                    "screenshot_requested": request.screenshot,
+                    "render_js": request.render_js,
+                },
+            )
             result = await provider.scrape(request)
             elapsed = time.perf_counter() - start
+            emit_progress(
+                id=provider_step_id,
+                name=f"{provider.name} attempt",
+                kind="provider",
+                status="ok" if result.success else "error",
+                outcome="response_received" if result.success else "failed",
+                summary=(
+                    f"HTTP {result.status_code or 'unknown'}; "
+                    f"{len(result.html or '')} HTML chars; "
+                    f"{len(result.screenshot or b'')} screenshot bytes."
+                ),
+                duration_ms=int(elapsed * 1000),
+                attributes={
+                    "provider": provider.name,
+                    "route": result.route,
+                    "status": result.status_code,
+                    "failure_reason": result.failure_reason.value if result.failure_reason else None,
+                    "html_chars": len(result.html or ""),
+                    "screenshot_bytes": len(result.screenshot or b""),
+                    "screenshot_requested": request.screenshot,
+                },
+            )
             if request.skip_validation and not result.success and result.html:
                 if result.status_code and 200 <= result.status_code < 400:
                     result.success = True
@@ -436,6 +569,20 @@ class ScrapeGateway:
                 screenshot_only = bool(request.screenshot and result.screenshot and not result.html)
                 if not request.skip_validation and not screenshot_only:
                     validation = validate_content(result.html)
+                    emit_progress(
+                        id=f"validation-{provider_index}",
+                        parent_id=provider_step_id,
+                        name="Validate captured content",
+                        kind="validation",
+                        status="ok" if validation.passed else "error",
+                        outcome="passed" if validation.passed else "rejected",
+                        summary=validation.detail,
+                        attributes={
+                            "block_type": validation.block_type,
+                            "matched_pattern": validation.matched_pattern,
+                            "html_chars": len(result.html or ""),
+                        },
+                    )
                     result.content_validated = validation.passed
                     result.block_type = validation.block_type
                     result.validation_detail = validation.detail
@@ -535,7 +682,7 @@ class ScrapeGateway:
                     skipped=skipped,
                     evaluation=evaluation,
                 )
-                report_path = self.telemetry.write_report(report)
+                report_path = self._write_report_with_progress(report)
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
                 _log_event(
@@ -629,7 +776,7 @@ class ScrapeGateway:
             skipped=skipped,
             evaluation=evaluation,
         )
-        report_path = self.telemetry.write_report(report)
+        report_path = self._write_report_with_progress(report)
         if report_path:
             final.metadata["telemetry_report"] = str(report_path)
         _log_event(

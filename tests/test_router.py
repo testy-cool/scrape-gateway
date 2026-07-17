@@ -8,6 +8,7 @@ from scrape_gateway.cache import ArtifactCache
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
+from scrape_gateway.progress import observe_progress
 from scrape_gateway.router import ScrapeGateway
 from scrape_gateway.telemetry import TelemetryRecorder
 
@@ -59,6 +60,35 @@ async def test_routes_to_first_success(tmp_dir):
     result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
     assert result.success
     assert result.provider == "success"
+
+
+async def test_reports_provider_validation_evaluation_and_persistence_progress(tmp_dir):
+    events = []
+    gw = ScrapeGateway(
+        providers=[SuccessProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_dir / "runs"),
+    )
+
+    with observe_progress(events.append):
+        result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+
+    assert result.success is True
+    assert [event["id"] for event in events] == [
+        "routing",
+        "provider-1",
+        "provider-1",
+        "validation-1",
+        "evaluation",
+        "persistence",
+        "persistence",
+    ]
+    assert events[1]["status"] == "running"
+    assert events[2]["status"] == "ok"
+    assert events[2]["attributes"]["screenshot_bytes"] == 0
+    assert events[3]["outcome"] == "passed"
+    assert events[-1]["outcome"] == "saved"
 
 
 async def test_returns_last_failure_when_all_fail(tmp_dir):
