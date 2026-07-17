@@ -378,7 +378,9 @@ class ScrapeGateway:
         )
         return summary
 
-    def _write_report_with_progress(self, report: dict) -> Path | None:
+    def _write_report_with_progress(
+        self, report: dict, result: ScrapeResult
+    ) -> Path | None:
         persistence_start = time.perf_counter()
         emit_progress(
             id="persistence",
@@ -389,6 +391,7 @@ class ScrapeGateway:
             summary="Writing the report and captured artifacts.",
             attributes={},
         )
+        artifact_paths = self.telemetry.write_result_artifacts(report["run_id"], result)
         report_path = self.telemetry.write_report(report)
         emit_progress(
             id="persistence",
@@ -398,7 +401,10 @@ class ScrapeGateway:
             outcome="saved" if report_path else "telemetry_disabled",
             summary=str(report_path) if report_path else "Telemetry persistence is disabled.",
             duration_ms=int((time.perf_counter() - persistence_start) * 1000),
-            attributes={"report_path": str(report_path) if report_path else None},
+            attributes={
+                "report_path": str(report_path) if report_path else None,
+                "final_artifacts": artifact_paths,
+            },
         )
         return report_path
 
@@ -476,7 +482,7 @@ class ScrapeGateway:
                     skipped=[],
                     evaluation=evaluation,
                 )
-                report_path = self._write_report_with_progress(report)
+                report_path = self._write_report_with_progress(report, result)
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
                 return result
@@ -577,6 +583,8 @@ class ScrapeGateway:
                 "elapsed_ms": int(elapsed * 1000),
                 "route": result.route,
                 "cost": result.cost_units,
+                "screenshot_requested": request.screenshot,
+                "screenshot_bytes": len(result.screenshot or b""),
             }
             if result.failure_reason:
                 attempt["failure_reason"] = result.failure_reason.value
@@ -699,7 +707,7 @@ class ScrapeGateway:
                     skipped=skipped,
                     evaluation=evaluation,
                 )
-                report_path = self._write_report_with_progress(report)
+                report_path = self._write_report_with_progress(report, result)
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
                 _log_event(
@@ -793,7 +801,7 @@ class ScrapeGateway:
             skipped=skipped,
             evaluation=evaluation,
         )
-        report_path = self._write_report_with_progress(report)
+        report_path = self._write_report_with_progress(report, final)
         if report_path:
             final.metadata["telemetry_report"] = str(report_path)
         _log_event(

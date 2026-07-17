@@ -129,6 +129,7 @@
             <button type="button" role="tab" aria-selected="true" data-view="trace">Trace</button>
             <button type="button" role="tab" aria-selected="false" data-view="output">Output</button>
             <button type="button" role="tab" aria-selected="false" data-view="evaluation">Evaluation</button>
+            <button type="button" role="tab" aria-selected="false" data-view="visual">Visual</button>
             <button type="button" role="tab" aria-selected="false" data-view="artifacts">Artifacts <span id="artifact-count">0</span></button>
             <button type="button" role="tab" aria-selected="false" data-view="raw">Raw</button>
           </nav>
@@ -158,6 +159,11 @@
             <section class="workspace-panel evaluation-panel" id="evaluation-panel" role="tabpanel" hidden>
               <header class="panel-header"><div><h3>AI evaluation</h3><span id="evaluation-subtitle">Quality judgment and improvement signals</span></div></header>
               <div class="evaluation-content" id="evaluation-content"></div>
+            </section>
+
+            <section class="workspace-panel visual-panel" id="visual-panel" role="tabpanel" hidden>
+              <header class="panel-header"><div><h3>Rendered screenshot</h3><span id="visual-subtitle">Visual evidence captured by the provider</span></div></header>
+              <div class="visual-viewer" id="visual-viewer"><div class="panel-placeholder">Select a run to inspect its rendered screenshot.</div></div>
             </section>
 
             <section class="workspace-panel artifacts-panel" id="artifacts-panel" role="tabpanel" hidden>

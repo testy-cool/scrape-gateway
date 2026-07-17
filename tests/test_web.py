@@ -558,6 +558,9 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "step-inspector",
         "output-panel",
         "evaluation-panel",
+        "visual-panel",
+        "visual-viewer",
+        "visual-subtitle",
         "artifacts-panel",
         "artifact-viewer",
         "raw-panel",
@@ -571,6 +574,8 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert 'fetchJson("/api/evaluations' in script.text
     assert "renderTraceTimeline" in script.text
     assert "renderStepInspector" in script.text
+    assert "renderVisual" in script.text
+    assert "screenshotArtifact" in script.text
     assert "restoreActiveScrape" in script.text
     assert "runsPayload.active_runs" in script.text
     assert 'fetchJson("/api/settings")' in script.text

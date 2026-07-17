@@ -172,6 +172,7 @@ def result_summary(result: ScrapeResult) -> dict[str, Any]:
         "error": truncate(result.error),
         "chars": len(result.html or ""),
         "markdown_chars": len(result.markdown or ""),
+        "screenshot_bytes": len(result.screenshot or b""),
         "content_validated": result.content_validated,
         "block_type": result.block_type,
         "validation_detail": result.validation_detail,
@@ -614,6 +615,33 @@ class TelemetryRecorder:
             encoding="utf-8",
         )
         paths["metadata"] = str(metadata_path)
+        return paths
+
+    def write_result_artifacts(
+        self,
+        run_id: str,
+        result: ScrapeResult,
+    ) -> dict[str, str]:
+        """Save final run evidence independently of the optional AI evaluator."""
+
+        if not self.enabled:
+            return {}
+        folder = self.root / run_id
+        folder.mkdir(parents=True, exist_ok=True)
+        paths: dict[str, str] = {}
+        if result.html is not None:
+            html_path = folder / "final.html"
+            html_path.write_text(result.html, encoding="utf-8")
+            paths["final_html"] = str(html_path)
+        if result.markdown is not None:
+            markdown_path = folder / "final.md"
+            markdown_path.write_text(result.markdown, encoding="utf-8")
+            paths["final_markdown"] = str(markdown_path)
+        if result.screenshot:
+            suffix = _screenshot_suffix(result.screenshot)
+            screenshot_path = folder / f"screenshot.{suffix}"
+            screenshot_path.write_bytes(result.screenshot)
+            paths["screenshot"] = str(screenshot_path)
         return paths
 
     def build_report(

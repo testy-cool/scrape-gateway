@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from urllib.parse import urlparse
 
 import httpx
 
@@ -109,21 +110,50 @@ class ScrapeDriveProvider(ProviderAdapter):
                 data.get("screenshot_url") if isinstance(data, dict) else None
             )
 
+            screenshot = None
+            screenshot_error = None
+            if request.screenshot:
+                parsed_screenshot_url = urlparse(screenshot_url or "")
+                if parsed_screenshot_url.scheme not in {"http", "https"}:
+                    screenshot_error = "Screenshot was requested but no downloadable URL was returned"
+                else:
+                    async with httpx.AsyncClient(
+                        timeout=request.timeout_seconds, follow_redirects=True
+                    ) as screenshot_client:
+                        screenshot_response = await screenshot_client.get(screenshot_url)
+                    screenshot_content_type = screenshot_response.headers.get("content-type", "")
+                    if (
+                        screenshot_response.is_success
+                        and screenshot_response.content
+                        and screenshot_content_type.lower().startswith("image/")
+                    ):
+                        screenshot = screenshot_response.content
+                    else:
+                        screenshot_error = (
+                            "Screenshot download failed with HTTP "
+                            f"{screenshot_response.status_code} ({screenshot_content_type or 'unknown type'})"
+                        )
+
             failure = classify_failure(response.status_code, html)
+            if request.screenshot and not screenshot and failure is None:
+                failure = FailureReason.PROVIDER_ERROR
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
-                success=response.is_success and failure is None,
+                success=response.is_success and failure is None and not screenshot_error,
                 status_code=response.status_code,
                 html=html,
                 markdown=markdown,
+                screenshot=screenshot,
                 failure_reason=failure,
+                error=screenshot_error,
                 cost_units=TIER_COST.get(tier, 1),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route=f"scrapedrive:{tier}",
                 metadata={
                     "tier": tier,
                     "screenshot_url": screenshot_url,
+                    "screenshot_bytes": len(screenshot or b""),
                     **({"raw_json": data} if isinstance(data, dict) else {}),
                 },
             )

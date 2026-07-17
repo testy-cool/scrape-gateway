@@ -88,8 +88,8 @@ class TestParams:
     async def test_screenshot(self, provider):
         result = await provider.scrape(ScrapeRequest(url="https://example.com", screenshot=True))
         assert result.success is True
-        screenshot_url = result.metadata.get("screenshot_url")
-        assert screenshot_url is not None or result.screenshot is not None
+        assert result.screenshot is not None
+        assert len(result.screenshot) > 100
 
 
 class TestErrorHandling:

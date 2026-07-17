@@ -194,6 +194,57 @@ class TestScrapeDrive:
         assert result.markdown == "# Hello"
 
     @respx.mock
+    async def test_downloads_requested_screenshot_evidence(self):
+        import json
+
+        screenshot_url = "https://assets.scrapedrive.test/run-123.png"
+        body = json.dumps({"html": GOOD_HTML, "screenshot_url": screenshot_url})
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200,
+                text=body,
+                headers={"content-type": "application/json"},
+            )
+        )
+        screenshot = b"\x89PNG\r\n\x1a\nvisual-evidence"
+        screenshot_route = respx.get(screenshot_url).mock(
+            return_value=httpx.Response(
+                200,
+                content=screenshot,
+                headers={"content-type": "image/png"},
+            )
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, screenshot=True, premium=True)
+        )
+
+        assert result.success is True
+        assert result.screenshot == screenshot
+        assert result.metadata["screenshot_url"] == screenshot_url
+        assert len(screenshot_route.calls) == 1
+
+    @respx.mock
+    async def test_rejects_success_without_requested_screenshot_evidence(self):
+        import json
+
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200,
+                text=json.dumps({"html": GOOD_HTML}),
+                headers={"content-type": "application/json"},
+            )
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, screenshot=True, premium=True)
+        )
+
+        assert result.success is False
+        assert result.failure_reason == FailureReason.PROVIDER_ERROR
+        assert "screenshot" in (result.error or "").lower()
+
+    @respx.mock
     async def test_respects_start_tier(self):
         route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
         prov = ScrapeDriveProvider(api_key=self.API_KEY)
