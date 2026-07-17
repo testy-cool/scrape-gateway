@@ -115,7 +115,9 @@ class ScrapeDriveProvider(ProviderAdapter):
             if request.screenshot:
                 parsed_screenshot_url = urlparse(screenshot_url or "")
                 if parsed_screenshot_url.scheme not in {"http", "https"}:
-                    screenshot_error = "Screenshot was requested but no downloadable URL was returned"
+                    screenshot_error = (
+                        "Screenshot was requested but no downloadable URL was returned"
+                    )
                 else:
                     async with httpx.AsyncClient(
                         timeout=request.timeout_seconds, follow_redirects=True

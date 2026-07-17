@@ -91,9 +91,9 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print(f"[dim]sgw links {url_display} -f compact   # LLM-optimized link tree[/]")
     elif cmd == "search":
         q = ctx.get("query", "<query>")
-        console.print(f"[dim]sgw search \"{q}\" --proxy        # route via residential proxy[/]")
-        console.print(f"[dim]sgw search \"{q}\" -f urls        # just URLs, pipe to sgw run[/]")
-        console.print(f"[dim]sgw search \"{q}\" -t w           # last week only[/]")
+        console.print(f'[dim]sgw search "{q}" --proxy        # route via residential proxy[/]')
+        console.print(f'[dim]sgw search "{q}" -f urls        # just URLs, pipe to sgw run[/]')
+        console.print(f'[dim]sgw search "{q}" -t w           # last week only[/]')
     elif cmd == "selftest":
         console.print("[dim]sgw url <url>                   # scrape any URL[/]")
         console.print("[dim]sgw links <url> -f compact      # extract links for LLM[/]")
@@ -1587,10 +1587,18 @@ def recipe(
 def search(
     query: str = typer.Argument(..., help="Search query"),
     max_results: int = typer.Option(10, "--max", "-n", help="Max results to return"),
-    region: str = typer.Option("us-en", "--region", "-r", help="Region (us-en, wt-wt=global, uk-en, etc.)"),
-    timelimit: str | None = typer.Option(None, "--time", "-t", help="Time filter: d(ay), w(eek), m(onth), y(ear)"),
-    backend: str = typer.Option("auto", "--backend", "-b", help="Backend: auto, bing, duckduckgo, google, brave"),
-    proxy: bool = typer.Option(False, "--proxy", help="Route through SCRAPE_PROXY_URL (Evomi residential)"),
+    region: str = typer.Option(
+        "us-en", "--region", "-r", help="Region (us-en, wt-wt=global, uk-en, etc.)"
+    ),
+    timelimit: str | None = typer.Option(
+        None, "--time", "-t", help="Time filter: d(ay), w(eek), m(onth), y(ear)"
+    ),
+    backend: str = typer.Option(
+        "auto", "--backend", "-b", help="Backend: auto, bing, duckduckgo, google, brave"
+    ),
+    proxy: bool = typer.Option(
+        False, "--proxy", help="Route through SCRAPE_PROXY_URL (Evomi residential)"
+    ),
     output_format: str = typer.Option("rich", "--format", "-f", help="rich|json|urls"),
 ) -> None:
     """Search the web via DuckDuckGo and return results.

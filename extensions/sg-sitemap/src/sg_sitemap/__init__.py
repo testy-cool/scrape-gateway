@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
@@ -134,7 +133,11 @@ async def _expand_sitemaps(
 
     if lang:
         lang_lower = lang.lower()
-        filtered = [u for u in all_pages if f"/{lang_lower}/" in u.lower() or f"lang={lang_lower}" in u.lower()]
+        filtered = [
+            u
+            for u in all_pages
+            if f"/{lang_lower}/" in u.lower() or f"lang={lang_lower}" in u.lower()
+        ]
         if filtered:
             return filtered
 
@@ -185,9 +188,7 @@ def register(app: typer.Typer) -> None:
             "--discover-only",
             help="Only print sitemap URLs declared in robots.txt; do not expand page URLs",
         ),
-        provider: str | None = typer.Option(
-            None, "--provider", "-p", help="Preferred provider"
-        ),
+        provider: str | None = typer.Option(None, "--provider", "-p", help="Preferred provider"),
         no_cache: bool = typer.Option(False, "--no-cache"),
     ) -> None:
         """Find and expand sitemaps via the scrape gateway.

@@ -378,9 +378,7 @@ class ScrapeGateway:
         )
         return summary
 
-    def _write_report_with_progress(
-        self, report: dict, result: ScrapeResult
-    ) -> Path | None:
+    def _write_report_with_progress(self, report: dict, result: ScrapeResult) -> Path | None:
         persistence_start = time.perf_counter()
         emit_progress(
             id="persistence",
@@ -567,7 +565,9 @@ class ScrapeGateway:
                     "provider": provider.name,
                     "route": result.route,
                     "status": result.status_code,
-                    "failure_reason": result.failure_reason.value if result.failure_reason else None,
+                    "failure_reason": result.failure_reason.value
+                    if result.failure_reason
+                    else None,
                     "html_chars": len(result.html or ""),
                     "screenshot_bytes": len(result.screenshot or b""),
                     "screenshot_requested": request.screenshot,

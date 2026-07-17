@@ -334,8 +334,7 @@ class OpenRouterEvaluator:
                 return response.json().get("data") or {}
             except httpx.HTTPStatusError as exc:
                 retryable = (
-                    exc.response.status_code == 404
-                    and attempt + 1 < GENERATION_METADATA_ATTEMPTS
+                    exc.response.status_code == 404 and attempt + 1 < GENERATION_METADATA_ATTEMPTS
                 )
                 if retryable:
                     delay = GENERATION_METADATA_INITIAL_DELAY_SECONDS * (2**attempt)
@@ -498,8 +497,7 @@ class OpenRouterEvaluator:
                 model=self.config.model,
                 judgment=judgment,
                 generation_id=generation_id,
-                provider=(generation_metadata or {}).get("provider_name")
-                or raw.get("provider"),
+                provider=(generation_metadata or {}).get("provider_name") or raw.get("provider"),
                 usage=usage,
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
                 input_modalities=modalities,

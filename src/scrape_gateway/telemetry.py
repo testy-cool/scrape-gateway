@@ -307,10 +307,13 @@ def _is_actionable_opportunity(text: str) -> bool:
         return False
     if re.match(r"^none(?:\s+(?:is|are))?\s+(?:needed|required|necessary)\b", normalized):
         return False
-    return re.search(
-        r"\bno (?:specific )?improvements? (?:are )?(?:needed|required|necessary)\b",
-        normalized,
-    ) is None
+    return (
+        re.search(
+            r"\bno (?:specific )?improvements? (?:are )?(?:needed|required|necessary)\b",
+            normalized,
+        )
+        is None
+    )
 
 
 def summarize_evaluations(
@@ -355,9 +358,7 @@ def summarize_evaluations(
             prompt_version_counts[str(prompt_version)] += 1
         page_type = evaluation.get("page_type")
         if page_type:
-            normalized_page_type = re.sub(
-                r"[\s_-]+", " ", str(page_type).strip().lower()
-            )
+            normalized_page_type = re.sub(r"[\s_-]+", " ", str(page_type).strip().lower())
             page_type_counts[normalized_page_type] += 1
         for field, counter in (
             ("verdict", verdict_counts),
@@ -415,9 +416,7 @@ def summarize_evaluations(
 
         needs_human_review = evaluation.get("needs_human_review") is True
         needs_review = (
-            status != "completed"
-            or evaluation.get("verdict") != "pass"
-            or needs_human_review
+            status != "completed" or evaluation.get("verdict") != "pass" or needs_human_review
         )
         if needs_review:
             review_queue.append(

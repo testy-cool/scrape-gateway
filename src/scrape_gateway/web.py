@@ -77,7 +77,9 @@ def _settings_payload(config: GatewayConfig) -> dict[str, Any]:
     configured = {provider.name: provider for provider in config.providers}
     names = set(available) | set(configured)
     providers = []
-    for name in sorted(names, key=lambda item: (getattr(available.get(item), "cost_rank", 999), item)):
+    for name in sorted(
+        names, key=lambda item: (getattr(available.get(item), "cost_rank", 999), item)
+    ):
         provider = configured.get(name)
         provider_type = available.get(name)
         timeout = provider.timeout_seconds if provider else None
@@ -316,9 +318,7 @@ def _trace_step(
     }
 
 
-def _trace_payload(
-    report: dict[str, Any], artifacts: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _trace_payload(report: dict[str, Any], artifacts: list[dict[str, Any]]) -> dict[str, Any]:
     request = report.get("request") if isinstance(report.get("request"), dict) else {}
     final = report.get("final") if isinstance(report.get("final"), dict) else {}
     attempts = report.get("attempts") if isinstance(report.get("attempts"), list) else []
@@ -531,9 +531,7 @@ def _trace_payload(
     )
 
     artifact_bytes = sum(
-        artifact.get("size", 0)
-        for artifact in artifacts
-        if isinstance(artifact.get("size"), int)
+        artifact.get("size", 0) for artifact in artifacts if isinstance(artifact.get("size"), int)
     )
     steps.append(
         _trace_step(

@@ -281,7 +281,9 @@ async def links(
     if not result.success or not result.html:
         return {
             "success": False,
-            "error": result.error or result.failure_reason.value if result.failure_reason else "scrape failed",
+            "error": result.error or result.failure_reason.value
+            if result.failure_reason
+            else "scrape failed",
         }
 
     all_links, groups = _extract_links(result.html, result.url)
@@ -324,7 +326,9 @@ async def detect(
     if not result.success or not result.html:
         return {
             "success": False,
-            "error": result.error or result.failure_reason.value if result.failure_reason else "scrape failed",
+            "error": result.error or result.failure_reason.value
+            if result.failure_reason
+            else "scrape failed",
         }
 
     patterns = _detect_patterns(result.html)
@@ -369,7 +373,9 @@ async def extract(
     if not result.success or not result.html:
         return {
             "success": False,
-            "error": result.error or result.failure_reason.value if result.failure_reason else "scrape failed",
+            "error": result.error or result.failure_reason.value
+            if result.failure_reason
+            else "scrape failed",
         }
 
     rows, description = _extract_rows(result.html, selector)
