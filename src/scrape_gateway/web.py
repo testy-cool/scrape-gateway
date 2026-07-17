@@ -633,9 +633,22 @@ def create_console_routes(
         if isinstance(evaluation_goal, str) and len(evaluation_goal) > 4000:
             return _json_error("evaluation_goal is too long.")
 
+        provider = payload.get("provider")
+        if provider is not None and not isinstance(provider, str):
+            return _json_error("provider must be text.")
+        provider = provider.strip() if isinstance(provider, str) else ""
+        enabled_providers = {item.name for item in get_gateway().providers}
+        if provider and provider not in enabled_providers:
+            return _json_error(
+                f"provider must be one of the currently enabled providers: "
+                f"{', '.join(sorted(enabled_providers)) or 'none'}."
+            )
+
         metadata = {}
         if evaluation_goal and evaluation_goal.strip():
             metadata["evaluation_goal"] = evaluation_goal.strip()
+        if provider:
+            metadata["preferred_provider"] = provider
         scrape_request = ScrapeRequest(
             url.strip(),
             country=payload.get("country") or None,
@@ -662,6 +675,7 @@ def create_console_routes(
             "payload": {
                 "url": scrape_request.url,
                 "evaluation_goal": metadata.get("evaluation_goal", ""),
+                "provider": provider,
                 "output_format": output_format,
                 "screenshot": scrape_request.screenshot,
                 "render_js": scrape_request.render_js,

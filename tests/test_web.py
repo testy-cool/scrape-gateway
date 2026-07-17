@@ -169,6 +169,36 @@ async def test_scrape_api_forwards_operator_options_and_returns_a_safe_preview(
     assert "screenshot" not in payload["preview"]
 
 
+async def test_scrape_api_forwards_a_per_run_provider_override(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from scrape_gateway.web import create_console_app
+
+    gateway = FakeGateway(
+        ScrapeResult(
+            "https://example.com",
+            "browserless",
+            True,
+            metadata={"run_id": "forced123"},
+        )
+    )
+    gateway.providers = [SimpleNamespace(name="browserless")]
+    app = create_console_app(
+        get_gateway=lambda: gateway,
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        response = await client.post(
+            "/api/scrapes",
+            json={"url": "https://example.com", "provider": "browserless"},
+        )
+
+    assert response.status_code == 200
+    assert gateway.requests[0].metadata["preferred_provider"] == "browserless"
+    assert gateway.calls == [{"use_cache": True, "use_memory": True}]
+
+
 async def test_active_scrape_remains_visible_after_the_console_request_is_cancelled(
     tmp_path: Path,
 ) -> None:
@@ -559,6 +589,8 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "scrape-form",
         "url-input",
         "evaluation-goal",
+        "provider-select",
+        "forced-provider-badge",
         "live-toggle",
         "run-list",
         "trace-workspace",
@@ -593,6 +625,10 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert 'fetchJson("/api/settings")' in script.text
     assert 'fetchJson("/api/settings", { method: "PUT"' in script.text
     assert "renderProviderSettings" in script.text
+    assert "populateProviderSelect" in script.text
+    assert 'provider: String(formData.get("provider")' in script.text
+    assert "report.request?.metadata?.preferred_provider" in script.text
+    assert "Auto routing" in page.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text

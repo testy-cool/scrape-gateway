@@ -264,6 +264,46 @@ async def test_preferred_provider_tried_first(tmp_dir):
     assert call_order[0] == "success"
 
 
+async def test_request_provider_override_applies_to_only_that_scrape(tmp_dir):
+    call_order = []
+
+    class TrackingFailure(FailProvider):
+        async def scrape(self, request):
+            call_order.append(self.name)
+            return await super().scrape(request)
+
+    class TrackingSuccess(SuccessProvider):
+        async def scrape(self, request):
+            call_order.append(self.name)
+            return await super().scrape(request)
+
+    gw = ScrapeGateway(
+        providers=[TrackingFailure(), TrackingSuccess()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    )
+
+    forced = await gw.scrape(
+        ScrapeRequest(
+            "https://example.com/forced",
+            metadata={"preferred_provider": "success"},
+        ),
+        use_cache=False,
+        use_memory=False,
+    )
+    assert forced.provider == "success"
+    assert call_order == ["success"]
+
+    call_order.clear()
+    automatic = await gw.scrape(
+        ScrapeRequest("https://another.example/automatic"),
+        use_cache=False,
+        use_memory=False,
+    )
+    assert automatic.provider == "success"
+    assert call_order == ["fail", "success"]
+
+
 class CloudflareProvider(ProviderAdapter):
     """Returns 200 OK but with a Cloudflare challenge page."""
 
