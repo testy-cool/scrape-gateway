@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-07-17
+
+### Fixed
+- Consent-wall signatures now apply only to responses shorter than 8,000 characters, so cookie documentation and pages with non-blocking preference controls pass validation.
+
 ## [0.10.3] - 2026-07-17
 
 ### Fixed
