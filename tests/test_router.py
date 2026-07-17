@@ -91,6 +91,37 @@ async def test_reports_provider_validation_evaluation_and_persistence_progress(t
     assert events[-1]["outcome"] == "saved"
 
 
+async def test_applies_global_and_per_provider_timeout_defaults(tmp_dir):
+    observed = []
+
+    class TimedFailure(FailProvider):
+        name = "timed_failure"
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            observed.append((self.name, request.timeout_seconds))
+            return await super().scrape(request)
+
+    class TimedSuccess(SuccessProvider):
+        name = "timed_success"
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            observed.append((self.name, request.timeout_seconds))
+            return await super().scrape(request)
+
+    gw = ScrapeGateway(
+        providers=[TimedFailure(), TimedSuccess()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        default_timeout_seconds=31,
+        provider_timeouts={"timed_failure": 7},
+    )
+
+    result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
+
+    assert result.success is True
+    assert observed == [("timed_failure", 7), ("timed_success", 31)]
+
+
 async def test_returns_last_failure_when_all_fail(tmp_dir):
     gw = ScrapeGateway(
         providers=[FailProvider()],

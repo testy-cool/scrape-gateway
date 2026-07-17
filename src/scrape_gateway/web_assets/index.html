@@ -32,6 +32,9 @@
         <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh traces" title="Refresh traces">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
         </button>
+        <button class="icon-button" id="settings-button" type="button" aria-label="Gateway settings" title="Gateway settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
         <button class="primary-button" id="new-scrape-button" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           New scrape
@@ -215,6 +218,37 @@
         <footer class="modal-footer">
           <button class="secondary-button" id="cancel-scrape-button" type="button">Cancel</button>
           <button class="primary-button" id="launch-button" type="submit">Start scrape</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="modal settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+      <form id="settings-form" class="modal-card">
+        <header class="modal-header">
+          <div><h2 id="settings-title">Gateway settings</h2><p>Control routing for every new console and MCP scrape.</p></div>
+          <button class="icon-button" id="close-settings-dialog" type="button" aria-label="Close gateway settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <div class="modal-body settings-body">
+          <section class="settings-section" aria-labelledby="timeout-settings-title">
+            <div class="settings-section-heading"><h3 id="timeout-settings-title">Timeouts</h3><p>Each provider attempt gets its own budget. A provider override wins over the default.</p></div>
+            <div class="timeout-grid">
+              <label class="field" for="default-timeout-input"><span>Default provider timeout</span><div class="number-control"><input id="default-timeout-input" name="default_timeout_seconds" type="number" min="1" max="600" step="1" required><span>seconds</span></div></label>
+              <label class="field" for="evaluation-timeout-input"><span>AI evaluation timeout</span><div class="number-control"><input id="evaluation-timeout-input" name="evaluation_timeout_seconds" type="number" min="1" max="600" step="1" required><span>seconds</span></div></label>
+            </div>
+          </section>
+          <section class="settings-section" aria-labelledby="provider-settings-title">
+            <div class="settings-section-heading"><h3 id="provider-settings-title">Providers</h3><p>Disabled providers are removed from routing globally. Leave a timeout blank to use the default.</p></div>
+            <div class="provider-settings-header" aria-hidden="true"><span>Use</span><span>Provider</span><span>Timeout</span></div>
+            <div class="provider-settings-list" id="provider-settings-list"></div>
+          </section>
+          <p class="form-error" id="settings-error" role="alert"></p>
+        </div>
+        <footer class="modal-footer">
+          <span class="settings-scope-note">Saved locally on this gateway</span>
+          <button class="secondary-button" id="cancel-settings-button" type="button">Cancel</button>
+          <button class="primary-button" id="save-settings-button" type="submit">Save settings</button>
         </footer>
       </form>
     </dialog>

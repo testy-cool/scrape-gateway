@@ -89,7 +89,7 @@ class ScrapeDriveProvider(ProviderAdapter):
         elif request.wait_event:
             params["wait_browser"] = request.wait_event
 
-        timeout = 180.0 if tier == "hyperdrive" else 120.0
+        timeout = request.timeout_seconds
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:

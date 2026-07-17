@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 
-from scrape_gateway.config import GatewayConfig, TelemetryConfig
+from scrape_gateway.config import GatewayConfig, ProviderConfig, TelemetryConfig
 from scrape_gateway.models import ScrapeResult
 
 
@@ -240,6 +240,53 @@ async def test_active_scrape_exposes_incremental_trace_steps(tmp_path: Path) -> 
 
         gateway.release.set()
         await request_task
+
+
+async def test_settings_api_updates_provider_availability_and_timeouts(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    current = _config(tmp_path)
+    current.providers = [
+        ProviderConfig(name="raw_http", enabled=True, timeout_seconds=10),
+        ProviderConfig(name="scrapedrive", enabled=True),
+    ]
+    applied = []
+
+    def apply_settings(settings):
+        applied.append(settings)
+        current.request.default_timeout_seconds = settings["default_timeout_seconds"]
+        current.evaluation.timeout_seconds = settings["evaluation_timeout_seconds"]
+        for provider in current.providers:
+            update = next(item for item in settings["providers"] if item["name"] == provider.name)
+            provider.enabled = update["enabled"]
+            provider.timeout_seconds = update["timeout_seconds"]
+        return current
+
+    app = create_console_app(
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: current,
+        apply_settings=apply_settings,
+    )
+
+    async with _client(app) as client:
+        initial = (await client.get("/api/settings")).json()
+        response = await client.put(
+            "/api/settings",
+            json={
+                "default_timeout_seconds": 28,
+                "evaluation_timeout_seconds": 80,
+                "providers": [
+                    {"name": "raw_http", "enabled": True, "timeout_seconds": 9},
+                    {"name": "scrapedrive", "enabled": False, "timeout_seconds": None},
+                ],
+            },
+        )
+
+    assert initial["default_timeout_seconds"] == 45
+    assert response.status_code == 200
+    assert applied[0]["providers"][1]["enabled"] is False
+    assert response.json()["providers_by_name"]["scrapedrive"]["enabled"] is False
+    assert response.json()["default_timeout_seconds"] == 28
 
 
 async def test_run_api_lists_summaries_and_serves_contained_artifacts(tmp_path: Path) -> None:
@@ -495,6 +542,12 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "auth-dialog",
         "new-scrape-button",
         "new-scrape-dialog",
+        "settings-button",
+        "settings-dialog",
+        "settings-form",
+        "provider-settings-list",
+        "default-timeout-input",
+        "evaluation-timeout-input",
         "scrape-form",
         "url-input",
         "evaluation-goal",
@@ -520,6 +573,9 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert "renderStepInspector" in script.text
     assert "restoreActiveScrape" in script.text
     assert "runsPayload.active_runs" in script.text
+    assert 'fetchJson("/api/settings")' in script.text
+    assert 'fetchJson("/api/settings", { method: "PUT"' in script.text
+    assert "renderProviderSettings" in script.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text

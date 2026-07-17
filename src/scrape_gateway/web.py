@@ -70,6 +70,86 @@ def _telemetry_root(get_config: Callable[[], GatewayConfig]) -> Path:
     return Path(get_config().telemetry.root).expanduser()
 
 
+def _settings_payload(config: GatewayConfig) -> dict[str, Any]:
+    from .discovery import discover_providers
+
+    available = discover_providers()
+    configured = {provider.name: provider for provider in config.providers}
+    names = set(available) | set(configured)
+    providers = []
+    for name in sorted(names, key=lambda item: (getattr(available.get(item), "cost_rank", 999), item)):
+        provider = configured.get(name)
+        provider_type = available.get(name)
+        timeout = provider.timeout_seconds if provider else None
+        providers.append(
+            {
+                "name": name,
+                "enabled": provider.enabled if provider else True,
+                "available": provider_type is not None,
+                "timeout_seconds": timeout,
+                "effective_timeout_seconds": timeout or config.request.default_timeout_seconds,
+                "cost_rank": getattr(provider_type, "cost_rank", None),
+                "capabilities": sorted(getattr(provider_type, "capabilities", [])),
+            }
+        )
+    return {
+        "default_timeout_seconds": config.request.default_timeout_seconds,
+        "evaluation_timeout_seconds": config.evaluation.timeout_seconds,
+        "providers": providers,
+        "providers_by_name": {provider["name"]: provider for provider in providers},
+    }
+
+
+def _positive_timeout(value: Any, field: str, *, optional: bool = False) -> float | None:
+    if optional and value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a number.")
+    timeout = float(value)
+    if not 1 <= timeout <= 600:
+        raise ValueError(f"{field} must be between 1 and 600 seconds.")
+    return timeout
+
+
+def _validated_settings(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("Settings must be a JSON object.")
+    providers_value = payload.get("providers")
+    if not isinstance(providers_value, list) or not providers_value:
+        raise ValueError("providers must be a non-empty list.")
+    providers = []
+    seen = set()
+    for value in providers_value:
+        if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+            raise ValueError("Each provider must include a name.")
+        name = value["name"].strip()
+        if not name or name in seen:
+            raise ValueError("Provider names must be unique and non-empty.")
+        if not isinstance(value.get("enabled"), bool):
+            raise ValueError(f"enabled must be true or false for {name}.")
+        seen.add(name)
+        providers.append(
+            {
+                "name": name,
+                "enabled": value["enabled"],
+                "timeout_seconds": _positive_timeout(
+                    value.get("timeout_seconds"), f"timeout_seconds for {name}", optional=True
+                ),
+            }
+        )
+    if not any(provider["enabled"] for provider in providers):
+        raise ValueError("At least one provider must remain enabled.")
+    return {
+        "default_timeout_seconds": _positive_timeout(
+            payload.get("default_timeout_seconds"), "default_timeout_seconds"
+        ),
+        "evaluation_timeout_seconds": _positive_timeout(
+            payload.get("evaluation_timeout_seconds"), "evaluation_timeout_seconds"
+        ),
+        "providers": providers,
+    }
+
+
 def _run_dir(root: Path, run_id: str) -> Path | None:
     if not RUN_ID_PATTERN.fullmatch(run_id):
         return None
@@ -489,6 +569,7 @@ def create_console_routes(
     get_gateway: Callable[[], Any],
     get_config: Callable[[], GatewayConfig] = load_config,
     asset_root: Path = ASSET_ROOT,
+    apply_settings: Callable[[dict[str, Any]], GatewayConfig] | None = None,
 ) -> list:
     active_scrapes: dict[str, dict[str, Any]] = {}
     active_tasks: set[asyncio.Task[Any]] = set()
@@ -653,6 +734,23 @@ def create_console_routes(
             return _json_error(f"Scrape failed before producing a result: {exc}", 500)
         return JSONResponse(_result_payload(result))
 
+    async def settings(request: Request) -> Response:
+        if not _is_authorized(request, token):
+            return _unauthorized()
+        if request.method == "GET":
+            return JSONResponse(_settings_payload(get_config()))
+        if apply_settings is None:
+            return _json_error("Runtime settings are read-only for this service.", 405)
+        try:
+            payload = await request.json()
+            validated = _validated_settings(payload)
+            config = apply_settings(validated)
+        except json.JSONDecodeError:
+            return _json_error("Request body must be valid JSON.")
+        except ValueError as exc:
+            return _json_error(str(exc))
+        return JSONResponse(_settings_payload(config))
+
     async def list_runs(request: Request) -> Response:
         if not _is_authorized(request, token):
             return _unauthorized()
@@ -746,6 +844,7 @@ def create_console_routes(
         Route("/api/status", status, methods=["GET"]),
         Route("/api/session", session, methods=["GET"]),
         Route("/api/scrapes", scrape_page, methods=["POST"]),
+        Route("/api/settings", settings, methods=["GET", "PUT"]),
         Route("/api/runs", list_runs, methods=["GET"]),
         Route("/api/runs/{run_id}", run_detail, methods=["GET"]),
         Route(
@@ -764,6 +863,7 @@ def create_console_app(
     get_gateway: Callable[[], Any],
     get_config: Callable[[], GatewayConfig] = load_config,
     asset_root: Path = ASSET_ROOT,
+    apply_settings: Callable[[dict[str, Any]], GatewayConfig] | None = None,
 ) -> Starlette:
     return Starlette(
         routes=create_console_routes(
@@ -771,5 +871,6 @@ def create_console_app(
             get_gateway=get_gateway,
             get_config=get_config,
             asset_root=asset_root,
+            apply_settings=apply_settings,
         )
     )

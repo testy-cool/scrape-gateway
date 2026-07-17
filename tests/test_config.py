@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from scrape_gateway.config import EvaluationConfig, GatewayConfig, _parse_ttl, load_config
+from scrape_gateway.config import (
+    EvaluationConfig,
+    GatewayConfig,
+    _parse_ttl,
+    load_config,
+    save_operator_settings,
+)
 
 
 def test_parse_ttl_seconds():
@@ -86,6 +92,41 @@ evaluation:
     assert cfg.evaluation.model == "google/gemini-3.1-flash-lite"
     assert cfg.evaluation.max_markdown_chars == 25000
     assert cfg.evaluation.include_screenshot is True
+
+
+def test_operator_settings_override_provider_and_timeout_defaults(tmp_path):
+    config_path = tmp_path / "scrape-gateway.yml"
+    config_path.write_text(
+        """
+providers:
+  - name: raw_http
+    enabled: true
+  - name: scrapedrive
+    enabled: true
+evaluation:
+  mode: audit
+"""
+    )
+
+    settings_path = save_operator_settings(
+        {
+            "default_timeout_seconds": 32,
+            "evaluation_timeout_seconds": 75,
+            "providers": [
+                {"name": "raw_http", "enabled": True, "timeout_seconds": 8},
+                {"name": "scrapedrive", "enabled": False, "timeout_seconds": 19},
+            ],
+        },
+        config_path=config_path,
+    )
+
+    assert settings_path == tmp_path / ".scrape-gateway" / "operator-settings.yml"
+    cfg = load_config(config_path)
+    assert cfg.request.default_timeout_seconds == 32
+    assert cfg.evaluation.timeout_seconds == 75
+    assert cfg.providers[0].timeout_seconds == 8
+    assert cfg.providers[1].enabled is False
+    assert cfg.providers[1].timeout_seconds == 19
 
 
 @pytest.mark.parametrize(
