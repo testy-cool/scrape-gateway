@@ -46,7 +46,7 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
     ],
 }
 
-CONSENT_WALL_MAX_CONTENT_CHARS = 8_000
+CONSENT_WALL_MAX_CONTENT_CHARS = 8_192
 
 
 @dataclass(slots=True)
