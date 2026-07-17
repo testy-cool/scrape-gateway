@@ -914,6 +914,26 @@ textarea::placeholder {
   color: var(--text-secondary);
 }
 
+.run-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+}
+
+.run-link-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.run-link-button:hover {
+  color: var(--text-secondary);
+}
+
 .trace-header h2 {
   max-width: min(920px, 72vw);
   overflow: hidden;

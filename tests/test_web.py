@@ -596,6 +596,21 @@ async def test_artifact_api_rejects_paths_outside_the_run_directory(tmp_path: Pa
     assert "do not expose" not in response.text
 
 
+async def test_unknown_run_returns_a_clear_not_found_message(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    app = create_console_app(
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        response = await client.get("/api/runs/expired123")
+
+    assert response.status_code == 404
+    assert response.json() == {"error": "Run not found."}
+
+
 async def test_console_serves_packaged_assets_without_authentication(tmp_path: Path) -> None:
     from scrape_gateway.web import create_console_app
 
@@ -650,6 +665,7 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "provider-select",
         "forced-provider-badge",
         "retry-button",
+        "copy-link-button",
         "live-toggle",
         "run-list",
         "trace-workspace",
@@ -691,6 +707,11 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert "openRetryDialog" in script.text
     assert "state.retryPayload" in script.text
     assert "use_cache: state.retryPayload ? false" in script.text
+    assert "history.replaceState" in script.text
+    assert 'searchParams.get("run")' in script.text
+    assert 'searchParams.get("tab")' in script.text
+    assert "buildRunLink" in script.text
+    assert "Run no longer available" in script.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text

@@ -3,6 +3,19 @@
 const TOKEN_KEY = "scrape-gateway.operator-token";
 const LIVE_REFRESH_MS = 15000;
 const ACTIVE_REFRESH_MS = 1000;
+const VIEW_NAMES = new Set(["trace", "output", "evaluation", "visual", "artifacts", "raw"]);
+
+function deepLinkSelection() {
+  const url = new URL(window.location.href);
+  const runId = url.searchParams.get("run")?.trim() || null;
+  const requestedView = url.searchParams.get("tab") || "trace";
+  return {
+    runId,
+    view: runId && VIEW_NAMES.has(requestedView) ? requestedView : "trace",
+  };
+}
+
+const initialDeepLink = deepLinkSelection();
 
 const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || "",
@@ -11,10 +24,10 @@ const state = {
   settings: null,
   runs: [],
   summary: null,
-  selectedRunId: null,
+  selectedRunId: initialDeepLink.runId,
   selectedDetail: null,
   selectedStepId: null,
-  activeView: "trace",
+  activeView: initialDeepLink.view,
   previews: new Map(),
   artifactObjectUrl: null,
   visualObjectUrl: null,
@@ -124,6 +137,19 @@ function urlParts(value) {
   } catch (_error) {
     return { domain: value || "Unknown URL", path: "" };
   }
+}
+
+function buildRunLink(runId, viewName = state.activeView) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("run", runId);
+  url.searchParams.set("tab", VIEW_NAMES.has(viewName) ? viewName : "trace");
+  return url.href;
+}
+
+function replaceRunLocation(runId, viewName = state.activeView) {
+  if (!runId || runId === "pending") return;
+  const url = new URL(buildRunLink(runId, viewName));
+  history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function authHeaders(json = false) {
@@ -274,7 +300,9 @@ async function connect(token = state.token) {
     showToast(`Gateway settings are unavailable: ${error.message}`, true);
   }
   configureLiveRefresh();
-  await refreshData();
+  const deepLink = deepLinkSelection();
+  state.activeView = deepLink.view;
+  await refreshData({ preferredRunId: deepLink.runId });
   return true;
 }
 
@@ -477,10 +505,15 @@ async function refreshData({ selectNewest = false, background = false, preferred
       if (pendingWasSelected && state.launch?.watching !== false) preferredRunId = completedRun.run_id;
     }
     const selectionExists = state.runs.some((run) => run.run_id === state.selectedRunId);
-    const preferredExists = state.runs.some((run) => run.run_id === preferredRunId);
-    if (preferredExists) state.selectedRunId = preferredRunId;
+    const currentDeepLink = deepLinkSelection();
+    if (!preferredRunId && currentDeepLink.runId === state.selectedRunId && !selectionExists) {
+      preferredRunId = currentDeepLink.runId;
+    }
+    if (preferredRunId) state.selectedRunId = preferredRunId;
     else if (selectNewest || !selectionExists) state.selectedRunId = state.runs[0]?.run_id || null;
-    if (state.selectedRunId) await selectRun(state.selectedRunId, { keepView: background });
+    if (state.selectedRunId) {
+      await selectRun(state.selectedRunId, { keepView: background || Boolean(preferredRunId) });
+    }
     else showEmptyWorkspace();
   } catch (error) {
     if (error.status === 401) {
@@ -541,6 +574,8 @@ function renderTraceHeader(detail, pending = false) {
     : "";
   setText(nodes.copyRunIdButton, `run ${report.run_id || "pending"}`);
   nodes.copyRunIdButton.dataset.runId = pending ? "" : report.run_id || "";
+  nodes.copyLinkButton.dataset.runId = pending ? "" : report.run_id || "";
+  nodes.copyLinkButton.hidden = pending;
   setText(nodes.traceUrl, report.url || "Unknown target");
   nodes.copyUrlButton.dataset.url = report.url || "";
   nodes.openUrlButton.href = /^https?:\/\//i.test(report.url || "") ? report.url : "#";
@@ -997,7 +1032,7 @@ function renderRaw(report) {
 }
 
 function showView(viewName) {
-  state.activeView = viewName;
+  state.activeView = VIEW_NAMES.has(viewName) ? viewName : "trace";
   nodes.viewButtons.forEach((button) => {
     const selected = button.dataset.view === viewName;
     button.setAttribute("aria-selected", String(selected));
@@ -1012,6 +1047,13 @@ function showView(viewName) {
   if (viewName === "artifacts" && state.selectedDetail && !state.activeArtifactPath) {
     const screenshot = Array.from(nodes.artifactList.querySelectorAll("button")).find((button) => /screenshot\.(png|jpe?g|webp)$/i.test(button.dataset.artifactPath));
     (screenshot || nodes.artifactList.querySelector("button"))?.click();
+  }
+  if (
+    state.selectedRunId &&
+    state.selectedRunId !== "pending" &&
+    !nodes.workspaceContent.classList.contains("is-pending")
+  ) {
+    replaceRunLocation(state.selectedRunId, state.activeView);
   }
 }
 
@@ -1042,6 +1084,7 @@ async function selectRun(runId, { keepView = false, userInitiated = false } = {}
   const selectionId = ++state.selectionRequestId;
   if (state.selectedRunId !== runId) state.selectedStepId = null;
   state.selectedRunId = runId;
+  replaceRunLocation(runId, state.activeView);
   renderRuns();
   const needsLoadingState = !keepView || state.selectedDetail?.report?.run_id !== runId;
   if (needsLoadingState) showWorkspaceLoading();
@@ -1059,8 +1102,12 @@ async function selectRun(runId, { keepView = false, userInitiated = false } = {}
     nodes.workspaceLoading.hidden = true;
     nodes.workspaceEmpty.hidden = false;
     nodes.workspaceContent.hidden = true;
-    nodes.workspaceEmpty.querySelector("h2").textContent = "Trace unavailable";
-    nodes.workspaceEmpty.querySelector("p").textContent = error.message;
+    nodes.workspaceEmpty.querySelector("h2").textContent = error.status === 404
+      ? "Run no longer available"
+      : "Trace unavailable";
+    nodes.workspaceEmpty.querySelector("p").textContent = error.status === 404
+      ? `Run ${runId} is unknown or expired. Check the copied link or choose another trace.`
+      : error.message;
     if (error.status === 401) disconnect();
   }
 }
@@ -1468,6 +1515,10 @@ function bindEvents() {
   nodes.viewButtons.forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
   nodes.copyUrlButton.addEventListener("click", () => copyText(nodes.copyUrlButton.dataset.url, "Target URL copied."));
   nodes.copyRunIdButton.addEventListener("click", () => copyText(nodes.copyRunIdButton.dataset.runId, "Run ID copied."));
+  nodes.copyLinkButton.addEventListener("click", () => {
+    const runId = nodes.copyLinkButton.dataset.runId;
+    copyText(runId ? buildRunLink(runId) : "", "Shareable link copied.");
+  });
   nodes.copyRawButton.addEventListener("click", () => copyText(JSON.stringify(state.selectedDetail?.report || {}, null, 2), "Raw report copied."));
   window.addEventListener("beforeunload", () => {
     revokeArtifactUrl();
@@ -1485,7 +1536,7 @@ function collectNodes() {
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
     "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
     "trace-status-badge", "trace-audit-badge", "forced-provider-badge", "copy-run-id-button", "trace-url", "trace-metadata",
-    "retry-button", "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
+    "retry-button", "copy-link-button", "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
     "visual-subtitle", "visual-viewer",
     "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
