@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-17
+
+### Added
+- Active traces now show the current routing, provider, evaluation, or persistence activity with a client-side elapsed clock between telemetry polls.
+- Responsive trace-loading skeletons, newly appended step feedback, and subtle running and hover motion make state changes visible without disrupting inspection.
+
+### Changed
+- A scrape that completes while still watched resolves in place to its own persisted trace and announces the outcome; navigating elsewhere during the run preserves the operator's selection.
+
+### Fixed
+- Active polling now begins immediately at the one-second cadence, and the trace panel keeps the remaining workspace height instead of leaving the tab strip above an empty void.
+- Stale inventory or detail responses can no longer replace a newer trace selection during the active-to-completed handoff.
+
 ## [0.10.5] - 2026-07-17
 
 ### Fixed
