@@ -54,6 +54,15 @@
     "excerpt": "<!doctype html><html><head><title>Accept Cookies to Continue</title></head><body><div class=\"overlay\"><h1>Accept cookies to continue</h1><button>Accept</button></div></body></html>"
   },
   {
+    "id": "tetapux_browserless_rendered_cookie_overlay",
+    "classification": "consent_wall",
+    "source_url": "https://tiagozip.github.io/tetapux/2/allowCookie.html",
+    "captured_at": "2026-07-17-browserless",
+    "content_chars": 8118,
+    "matched_pattern": "accept cookies to continue",
+    "excerpt": "<!doctype html><html><head><title>Accept Cookies to Continue</title></head><body><div class=\"overlay\"><h1>Accept cookies to continue</h1><button>Accept</button></div></body></html>"
+  },
+  {
     "id": "freestream_blocking_cookie_overlay",
     "classification": "consent_wall",
     "source_url": "http://freestream.tv/",
