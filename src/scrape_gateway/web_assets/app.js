@@ -29,6 +29,9 @@ const state = {
   refreshRequestId: 0,
   selectionRequestId: 0,
   announcedRunIds: new Set(),
+  timelineRunId: null,
+  timelineWasLive: false,
+  timelineStepIds: new Set(),
 };
 
 const nodes = {};
@@ -356,7 +359,9 @@ function renderRunRow(run) {
   const parts = urlParts(run.url);
   const title = element("span", "run-row-title");
   title.append(element("strong", "", run.domain || parts.domain));
-  title.append(run.pending ? element("span", "compact-badge", "Running") : compactAuditBadge(run));
+  const badge = run.pending ? element("span", "compact-badge", "Running") : compactAuditBadge(run);
+  if (run.pending) badge.dataset.status = "running";
+  title.append(badge);
   body.append(title);
   body.append(element("span", "run-row-path", parts.path || run.url || "Unknown target"));
 
@@ -490,9 +495,22 @@ async function refreshData({ selectNewest = false, background = false, preferred
 function showEmptyWorkspace() {
   state.selectedDetail = null;
   state.selectedStepId = null;
+  state.timelineRunId = null;
+  state.timelineWasLive = false;
+  state.timelineStepIds.clear();
   nodes.workspaceEmpty.hidden = false;
+  nodes.workspaceEmpty.querySelector("h2").textContent = "Select a trace";
+  nodes.workspaceEmpty.querySelector("p").textContent = "Inspect each provider attempt, validation decision, AI evaluation, output, and saved artifact.";
+  nodes.workspaceLoading.hidden = true;
   nodes.workspaceContent.hidden = true;
   nodes.workspaceContent.classList.remove("is-pending");
+}
+
+function showWorkspaceLoading() {
+  state.selectedDetail = null;
+  nodes.workspaceEmpty.hidden = true;
+  nodes.workspaceContent.hidden = true;
+  nodes.workspaceLoading.hidden = false;
 }
 
 function metadataItem(label, value) {
@@ -585,20 +603,32 @@ function defaultStepId(steps) {
   )?.id || null;
 }
 
-function renderTraceTimeline(trace) {
+function renderTraceTimeline(trace, { live = false } = {}) {
   const steps = trace?.steps || [];
+  const continuingTimeline = state.timelineRunId === trace?.run_id || (live && state.timelineWasLive);
+  const previousStepIds = continuingTimeline ? state.timelineStepIds : new Set();
   state.selectedStepId = defaultStepId(steps);
   setText(nodes.traceStepCount, `${steps.length} ${steps.length === 1 ? "step" : "steps"}`);
   nodes.traceTimeline.replaceChildren();
   if (!steps.length) {
     nodes.traceTimeline.append(element("div", "empty-note", "No lifecycle steps were recorded."));
+    state.timelineRunId = trace?.run_id || null;
+    state.timelineWasLive = live;
+    state.timelineStepIds.clear();
     renderStepInspector(null);
     return;
   }
   const total = traceTotal(trace);
   const fragment = document.createDocumentFragment();
-  steps.forEach((step) => fragment.append(renderTraceRow(step, total)));
+  steps.forEach((step) => {
+    const row = renderTraceRow(step, total);
+    if (previousStepIds.size && !previousStepIds.has(step.id)) row.classList.add("is-new");
+    fragment.append(row);
+  });
   nodes.traceTimeline.append(fragment);
+  state.timelineRunId = trace?.run_id || null;
+  state.timelineWasLive = live;
+  state.timelineStepIds = new Set(steps.map((step) => step.id));
   renderStepInspector(steps.find((step) => step.id === state.selectedStepId));
 }
 
@@ -980,10 +1010,11 @@ function renderInspector(detail, { pending = false, keepView = false } = {}) {
   state.activeArtifactPath = null;
   state.activeOutputLabel = null;
   nodes.workspaceEmpty.hidden = true;
+  nodes.workspaceLoading.hidden = true;
   nodes.workspaceContent.hidden = false;
   nodes.workspaceContent.classList.toggle("is-pending", pending);
   renderTraceHeader(detail, pending);
-  renderTraceTimeline(detail.trace);
+  renderTraceTimeline(detail.trace, { live: pending });
   renderOutput(detail);
   renderEvaluation(detail.report || {});
   renderVisual(detail, { pending });
@@ -1002,16 +1033,22 @@ async function selectRun(runId, { keepView = false, userInitiated = false } = {}
   if (state.selectedRunId !== runId) state.selectedStepId = null;
   state.selectedRunId = runId;
   renderRuns();
-  nodes.workspaceEmpty.hidden = false;
-  nodes.workspaceContent.hidden = true;
-  nodes.workspaceEmpty.querySelector("h2").textContent = "Loading trace…";
+  const needsLoadingState = !keepView || state.selectedDetail?.report?.run_id !== runId;
+  if (needsLoadingState) showWorkspaceLoading();
   try {
     const detail = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
     if (selectionId !== state.selectionRequestId || state.selectedRunId !== runId) return;
     renderInspector(detail, { keepView });
-    nodes.workspaceEmpty.querySelector("h2").textContent = "Select a trace";
   } catch (error) {
     if (selectionId !== state.selectionRequestId || state.selectedRunId !== runId) return;
+    if (!needsLoadingState) {
+      showToast(`Trace refresh failed: ${error.message}`, true);
+      if (error.status === 401) disconnect();
+      return;
+    }
+    nodes.workspaceLoading.hidden = true;
+    nodes.workspaceEmpty.hidden = false;
+    nodes.workspaceContent.hidden = true;
     nodes.workspaceEmpty.querySelector("h2").textContent = "Trace unavailable";
     nodes.workspaceEmpty.querySelector("p").textContent = error.message;
     if (error.status === 401) disconnect();
@@ -1388,7 +1425,7 @@ function collectNodes() {
     "refresh-button", "settings-button", "new-scrape-button", "auth-button", "run-count", "last-updated",
     "metric-success", "metric-audit-fail", "metric-review", "judge-cost", "run-search",
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
-    "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
+    "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
     "trace-status-badge", "trace-audit-badge", "copy-run-id-button", "trace-url", "trace-metadata",
     "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
