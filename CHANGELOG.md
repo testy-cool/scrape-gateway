@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-07-17
+
+### Fixed
+- ScrapeDrive tier escalation and screenshot retrieval now share one configured provider timeout instead of resetting the budget for every tier.
+
 ## [0.10.2] - 2026-07-17
 
 ### Fixed
