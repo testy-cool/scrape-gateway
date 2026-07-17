@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-17
+
+### Added
+- Completed traces can be retried with their original capture options, a guaranteed cache bypass, and an optional per-run provider override while the replacement run stays in focus.
+- New console scrapes can prefer any currently enabled provider for that run without changing shared routing settings, and completed traces identify the override in their header.
+- Run and tab selections now live in shareable `?run=` and `?tab=` links that survive authentication, include a one-click copy action, and explain unknown or expired run IDs.
+- Every completed trace starts with a plain-language outcome and recommended next step, with accessible explanations for audit, validator, cache, review, and provider-server-error terminology.
+
 ## [0.11.0] - 2026-07-17
 
 ### Added
