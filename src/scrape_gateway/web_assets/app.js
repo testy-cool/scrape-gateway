@@ -17,6 +17,7 @@ const state = {
   activeView: "trace",
   previews: new Map(),
   artifactObjectUrl: null,
+  visualObjectUrl: null,
   activeArtifactPath: null,
   activeOutputLabel: null,
   autoRefresh: true,
@@ -614,6 +615,8 @@ function contentSources(detail) {
   const sources = [];
   const artifacts = detail.artifacts || [];
   [
+    ["final.md", "Final Markdown"],
+    ["final.html", "Final HTML"],
     ["evaluation/final.md", "Final Markdown"],
     ["evaluation/input.md", "Evaluator input"],
     ["evaluation/final.html", "Final HTML"],
@@ -737,6 +740,89 @@ function revokeArtifactUrl() {
   state.artifactObjectUrl = null;
 }
 
+function revokeVisualUrl() {
+  if (!state.visualObjectUrl) return;
+  URL.revokeObjectURL(state.visualObjectUrl);
+  state.visualObjectUrl = null;
+}
+
+function screenshotArtifact(detail) {
+  const images = (detail.artifacts || []).filter((artifact) => artifact.kind === "image");
+  return (
+    images.find((artifact) => /^screenshot\.(png|jpe?g|webp)$/i.test(artifact.path)) ||
+    images.find((artifact) => /(?:^|\/)screenshot\.(png|jpe?g|webp)$/i.test(artifact.path)) ||
+    null
+  );
+}
+
+function visualStateCard(title, detail, status = "info") {
+  const card = element("div", "visual-state-card");
+  card.dataset.status = status;
+  card.append(element("strong", "", title), element("p", "", detail));
+  return card;
+}
+
+function renderVisual(detail, { pending = false } = {}) {
+  revokeVisualUrl();
+  nodes.visualViewer.replaceChildren();
+  const report = detail.report || {};
+  const requested = report.request?.screenshot === true;
+  const artifact = screenshotArtifact(detail);
+  const provider = report.final?.provider || "provider";
+
+  if (pending) {
+    setText(nodes.visualSubtitle, requested ? "Capture requested · waiting for provider" : "Screenshot not requested");
+    nodes.visualViewer.append(
+      visualStateCard(
+        requested ? "Screenshot capture is in progress" : "No screenshot requested",
+        requested
+          ? "The live trace will report the byte count as soon as a provider returns visual evidence."
+          : "Start a scrape with Screenshot enabled to capture rendered visual evidence.",
+      ),
+    );
+    return;
+  }
+
+  if (!artifact) {
+    const finalBytes = Number(report.final?.screenshot_bytes || 0);
+    setText(nodes.visualSubtitle, requested ? "Requested · no saved image" : "Not requested");
+    nodes.visualViewer.append(
+      visualStateCard(
+        requested ? "Screenshot requested, but none was captured" : "No screenshot was requested",
+        requested
+          ? `${provider} returned ${formatNumber(finalBytes)} screenshot bytes. Inspect the provider step for the exact failure and retry with a screenshot-capable route.`
+          : "Enable Screenshot in the New scrape dialog when visual page state matters.",
+        requested ? "error" : "info",
+      ),
+    );
+    return;
+  }
+
+  setText(nodes.visualSubtitle, `${provider} · ${formatBytes(artifact.size)} · ${artifact.path}`);
+  const loading = visualStateCard("Loading saved screenshot", "Fetching the authenticated image artifact.");
+  nodes.visualViewer.append(loading);
+  const runId = report.run_id;
+  fetchArtifact(artifact)
+    .then((response) => response.blob())
+    .then((blob) => {
+      if (state.selectedDetail?.report?.run_id !== runId) return;
+      revokeVisualUrl();
+      state.visualObjectUrl = URL.createObjectURL(blob);
+      const frame = element("figure", "visual-frame");
+      const image = element("img");
+      image.src = state.visualObjectUrl;
+      image.alt = `Rendered screenshot of ${report.url || "the scraped page"}`;
+      const caption = element("figcaption", "", `${artifact.path} · ${formatBytes(artifact.size)}`);
+      frame.append(image, caption);
+      nodes.visualViewer.replaceChildren(frame);
+    })
+    .catch((error) => {
+      if (state.selectedDetail?.report?.run_id !== runId) return;
+      nodes.visualViewer.replaceChildren(visualStateCard("Screenshot unavailable", error.message, "error"));
+      if (error.status === 401) disconnect();
+    });
+}
+
 async function loadArtifact(artifact, button) {
   nodes.artifactList.querySelectorAll("button").forEach((item) => item.classList.toggle("is-selected", item === button));
   state.activeArtifactPath = artifact.path;
@@ -824,6 +910,7 @@ function renderInspector(detail, { pending = false, keepView = false } = {}) {
   renderTraceTimeline(detail.trace);
   renderOutput(detail);
   renderEvaluation(detail.report || {});
+  renderVisual(detail, { pending });
   renderArtifacts(detail);
   renderRaw(detail.report || {});
   if (!keepView || pending) showView("trace");
@@ -992,6 +1079,7 @@ async function submitScrape(event) {
     state.selectedRunId = runId || null;
     showToast(result.success ? `Trace ${runId} completed.` : `Trace ${runId} failed; evidence was saved.`, !result.success);
     await refreshData({ selectNewest: !runId });
+    if (payload.screenshot && state.selectedDetail) showView("visual");
   } catch (error) {
     renderPendingWorkspace("error", error.message);
     showToast(error.message, true);
@@ -1174,6 +1262,7 @@ function bindEvents() {
   nodes.copyRawButton.addEventListener("click", () => copyText(JSON.stringify(state.selectedDetail?.report || {}, null, 2), "Raw report copied."));
   window.addEventListener("beforeunload", () => {
     revokeArtifactUrl();
+    revokeVisualUrl();
     stopLiveRefresh();
     stopLaunchTimer();
   });
@@ -1189,6 +1278,7 @@ function collectNodes() {
     "trace-status-badge", "trace-audit-badge", "copy-run-id-button", "trace-url", "trace-metadata",
     "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
+    "visual-subtitle", "visual-viewer",
     "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
     "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal",
     "launch-button", "settings-dialog", "settings-form", "close-settings-dialog", "cancel-settings-button",
@@ -1204,6 +1294,7 @@ function collectNodes() {
     trace: document.getElementById("trace-panel"),
     output: document.getElementById("output-panel"),
     evaluation: document.getElementById("evaluation-panel"),
+    visual: document.getElementById("visual-panel"),
     artifacts: document.getElementById("artifacts-panel"),
     raw: document.getElementById("raw-panel"),
   };

@@ -889,7 +889,8 @@ textarea::placeholder {
 .timeline-pane,
 .step-inspector,
 .artifact-split,
-.artifact-viewer {
+.artifact-viewer,
+.visual-viewer {
   min-width: 0;
   min-height: 0;
 }
@@ -1356,6 +1357,65 @@ textarea::placeholder {
   overflow: auto;
   scrollbar-color: #404957 transparent;
   scrollbar-width: thin;
+}
+
+.visual-viewer {
+  display: grid;
+  padding: 18px;
+  place-items: center;
+  background: #0d0f13;
+  overflow: auto;
+  scrollbar-color: #404957 #0d0f13;
+  scrollbar-width: thin;
+}
+
+.visual-frame {
+  display: grid;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  gap: 9px;
+  justify-items: center;
+}
+
+.visual-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 260px);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 32%);
+}
+
+.visual-frame figcaption {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.visual-state-card {
+  width: min(520px, 100%);
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius);
+}
+
+.visual-state-card[data-status="error"] {
+  border-left-color: var(--danger);
+}
+
+.visual-state-card strong {
+  font-size: 15px;
+}
+
+.visual-state-card p {
+  margin: 7px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
 }
 
 .evaluation-overview {
@@ -2059,6 +2119,7 @@ textarea::placeholder {
   }
 
   .provider-identity small,
+  .provider-availability,
   .settings-scope-note {
     display: none;
   }
