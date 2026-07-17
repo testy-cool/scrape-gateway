@@ -621,7 +621,9 @@ async def test_console_keeps_the_launched_trace_focused_when_it_completes(tmp_pa
     assert "refreshId !== state.refreshRequestId" in script
 
 
-async def test_console_uses_restrained_feedback_for_loading_and_live_updates(tmp_path: Path) -> None:
+async def test_console_uses_restrained_feedback_for_loading_and_live_updates(
+    tmp_path: Path,
+) -> None:
     from scrape_gateway.web import create_console_app
 
     app = create_console_app(
