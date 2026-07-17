@@ -46,6 +46,8 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
     ],
 }
 
+CONSENT_WALL_MAX_CONTENT_CHARS = 8_000
+
 
 @dataclass(slots=True)
 class ValidationResult:
@@ -96,6 +98,8 @@ def validate_content(
 
     checks_run.append("block_signatures")
     for sig_type, patterns in BLOCK_SIGNATURES.items():
+        if sig_type == "consent_wall" and len(text) >= CONSENT_WALL_MAX_CONTENT_CHARS:
+            continue
         for pattern in patterns:
             if pattern in text:
                 checks_failed.append("block_signatures")

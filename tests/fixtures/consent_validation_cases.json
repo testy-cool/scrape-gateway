@@ -1,0 +1,65 @@
+[
+  {
+    "id": "github_docs_cookie_preferences",
+    "classification": "full_content",
+    "source_url": "https://docs.github.com/en/account-and-profile/how-tos/account-settings/manage-cookie-preferences",
+    "captured_at": "2026-07-17",
+    "content_chars": 124351,
+    "matched_pattern": "cookie preferences",
+    "excerpt": "<html><head><title>Manage cookie preferences - GitHub Docs</title></head><body><main><h1>Manage cookie preferences</h1><p>Control non-essential tracking cookie settings for GitHub marketing pages.</p></main></body></html>"
+  },
+  {
+    "id": "iubenda_cookie_preferences_article",
+    "classification": "full_content",
+    "source_url": "https://www.iubenda.com/en/blog/cookie-preferences/",
+    "captured_at": "2026-07-17",
+    "content_chars": 272328,
+    "matched_pattern": "cookie preferences",
+    "excerpt": "<html><head><title>Cookie Preferences</title></head><body><main><article><h1>Cookie preferences</h1><p>An article explaining the choices users make about website cookies.</p></article></main></body></html>"
+  },
+  {
+    "id": "govuk_design_system_cookies_page",
+    "classification": "full_content",
+    "source_url": "https://design-system.service.gov.uk/patterns/cookies-page/",
+    "captured_at": "2026-07-17",
+    "content_chars": 102893,
+    "matched_pattern": "we use cookies",
+    "excerpt": "<html><head><title>Cookies page - GOV.UK Design System</title></head><body><main><h1>Cookies page</h1><pre><code>We use cookies to make this site work and collect service usage information.</code></pre></main></body></html>"
+  },
+  {
+    "id": "scnplus_cookie_policy",
+    "classification": "full_content",
+    "source_url": "https://www.scnplus.com/cookies.html",
+    "captured_at": "2026-07-17",
+    "content_chars": 14365,
+    "matched_pattern": "we use cookies",
+    "excerpt": "<html><head><title>Cookie Policy</title></head><body><main><h1>Cookie Policy</h1><p>We use cookies on this site.</p><p>This page explains cookie categories, consent, and browser settings.</p></main></body></html>"
+  },
+  {
+    "id": "askcodi_cookie_settings_button",
+    "classification": "full_content",
+    "source_url": "https://www.askcodi.com/",
+    "captured_at": "2026-06-21",
+    "content_chars": 8527,
+    "matched_pattern": "cookie preferences",
+    "excerpt": "<html><body><main><h1>AskCodi</h1><p>AI coding tools and product content.</p></main><button aria-label=\"cookie settings\" title=\"cookie preferences\">Settings</button></body></html>"
+  },
+  {
+    "id": "tetapux_blocking_cookie_overlay",
+    "classification": "consent_wall",
+    "source_url": "https://tiagozip.github.io/tetapux/2/allowCookie.html",
+    "captured_at": "2026-07-17",
+    "content_chars": 7091,
+    "matched_pattern": "accept cookies to continue",
+    "excerpt": "<!doctype html><html><head><title>Accept Cookies to Continue</title></head><body><div class=\"overlay\"><h1>Accept cookies to continue</h1><button>Accept</button></div></body></html>"
+  },
+  {
+    "id": "freestream_blocking_cookie_overlay",
+    "classification": "consent_wall",
+    "source_url": "http://freestream.tv/",
+    "captured_at": "legacy-aeccs-corpus",
+    "content_chars": 617,
+    "matched_pattern": "accept cookies to continue",
+    "excerpt": "<html><body><div class=\"cookie-wall-overlay\" style=\"position:fixed;inset:0\"><h2>You must accept cookies to continue</h2><p>Cookies are required to proceed.</p><button>Accept All Cookies</button></div></body></html>"
+  }
+]
