@@ -601,6 +601,26 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert "prefers-reduced-motion" in css.text
 
 
+async def test_console_keeps_the_launched_trace_focused_when_it_completes(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    app = create_console_app(
+        get_gateway=lambda: FakeGateway(ScrapeResult("https://example.com", "fake", True)),
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        script = (await client.get("/assets/app.js")).text
+
+    assert "refreshRequestId" in script
+    assert "selectionRequestId" in script
+    assert "announceRunOutcome" in script
+    assert "preferredRunId" in script
+    assert "userInitiated" in script
+    assert "launch?.watching" in script
+    assert "refreshId !== state.refreshRequestId" in script
+
+
 def test_service_app_keeps_the_console_route() -> None:
     from scrape_gateway.mcp_server import app
 

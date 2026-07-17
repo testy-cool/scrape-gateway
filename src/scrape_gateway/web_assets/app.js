@@ -25,6 +25,10 @@ const state = {
   toastTimer: null,
   launchInterval: null,
   pendingRun: null,
+  launch: null,
+  refreshRequestId: 0,
+  selectionRequestId: 0,
+  announcedRunIds: new Set(),
 };
 
 const nodes = {};
@@ -165,6 +169,18 @@ function showToast(message, error = false) {
   state.toastTimer = window.setTimeout(() => nodes.toast.classList.remove("is-visible"), 3500);
 }
 
+function announceRunOutcome(run) {
+  if (!run?.run_id || state.announcedRunIds.has(run.run_id)) return;
+  state.announcedRunIds.add(run.run_id);
+  const target = urlParts(run.url).domain;
+  showToast(
+    run.success
+      ? `Scrape completed: ${target}.`
+      : `Scrape failed: ${target}. Evidence was saved.`,
+    !run.success,
+  );
+}
+
 function setConnection(kind, label) {
   nodes.serviceState.classList.remove("is-online", "is-error");
   if (kind === "online") nodes.serviceState.classList.add("is-online");
@@ -210,6 +226,11 @@ function disconnect() {
   state.summary = null;
   state.selectedRunId = null;
   state.selectedDetail = null;
+  state.pendingRun = null;
+  state.launch = null;
+  state.refreshRequestId += 1;
+  state.selectionRequestId += 1;
+  state.announcedRunIds.clear();
   sessionStorage.removeItem(TOKEN_KEY);
   nodes.authButton.textContent = "Connect";
   setConnection("error", "Locked");
@@ -403,6 +424,7 @@ function restoreActiveScrape(activeRuns) {
     active[0];
   if (restored) {
     state.pendingRun = { ...restored, pending: true };
+    if (state.launch && state.launch.url === restored.url) state.launch.runId = restored.run_id;
     return true;
   }
   if (state.pendingRun?.run_id === "pending") return true;
@@ -413,20 +435,23 @@ function restoreActiveScrape(activeRuns) {
   return false;
 }
 
-async function refreshData({ selectNewest = false, background = false } = {}) {
+async function refreshData({ selectNewest = false, background = false, preferredRunId = null } = {}) {
   if (!state.session) return;
+  const refreshId = ++state.refreshRequestId;
   if (!background) nodes.refreshButton.classList.add("is-refreshing");
   try {
     const [runsPayload, auditPayload] = await Promise.all([
       fetchJson("/api/runs?limit=500"),
       fetchJson("/api/evaluations?limit=500"),
     ]);
-    state.runs = runsPayload.runs || [];
-    state.summary = auditPayload.summary || null;
+    if (refreshId !== state.refreshRequestId) return;
+    const previousPending = state.pendingRun;
     const pendingWasSelected =
       !state.selectedRunId ||
       state.selectedRunId === "pending" ||
-      state.selectedRunId === state.pendingRun?.run_id;
+      state.selectedRunId === previousPending?.run_id;
+    state.runs = runsPayload.runs || [];
+    state.summary = auditPayload.summary || null;
     const hasActiveScrape = restoreActiveScrape(runsPayload.active_runs);
     setText(nodes.lastUpdated, `Updated ${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`);
     renderRuns();
@@ -437,8 +462,17 @@ async function refreshData({ selectNewest = false, background = false } = {}) {
       startLaunchTimer();
       return;
     }
+    const completedRun = previousPending?.run_id !== "pending"
+      ? state.runs.find((run) => run.run_id === previousPending?.run_id)
+      : null;
+    if (completedRun) {
+      announceRunOutcome(completedRun);
+      if (pendingWasSelected && state.launch?.watching !== false) preferredRunId = completedRun.run_id;
+    }
     const selectionExists = state.runs.some((run) => run.run_id === state.selectedRunId);
-    if (selectNewest || !selectionExists) state.selectedRunId = state.runs[0]?.run_id || null;
+    const preferredExists = state.runs.some((run) => run.run_id === preferredRunId);
+    if (preferredExists) state.selectedRunId = preferredRunId;
+    else if (selectNewest || !selectionExists) state.selectedRunId = state.runs[0]?.run_id || null;
     if (state.selectedRunId) await selectRun(state.selectedRunId, { keepView: background });
     else showEmptyWorkspace();
   } catch (error) {
@@ -959,8 +993,12 @@ function renderInspector(detail, { pending = false, keepView = false } = {}) {
   else showView(state.activeView);
 }
 
-async function selectRun(runId, { keepView = false } = {}) {
+async function selectRun(runId, { keepView = false, userInitiated = false } = {}) {
   if (!runId || runId === "pending") return;
+  if (userInitiated && state.launch && runId !== state.launch.runId && runId !== state.pendingRun?.run_id) {
+    state.launch.watching = false;
+  }
+  const selectionId = ++state.selectionRequestId;
   if (state.selectedRunId !== runId) state.selectedStepId = null;
   state.selectedRunId = runId;
   renderRuns();
@@ -969,9 +1007,11 @@ async function selectRun(runId, { keepView = false } = {}) {
   nodes.workspaceEmpty.querySelector("h2").textContent = "Loading trace…";
   try {
     const detail = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
+    if (selectionId !== state.selectionRequestId || state.selectedRunId !== runId) return;
     renderInspector(detail, { keepView });
     nodes.workspaceEmpty.querySelector("h2").textContent = "Select a trace";
   } catch (error) {
+    if (selectionId !== state.selectionRequestId || state.selectedRunId !== runId) return;
     nodes.workspaceEmpty.querySelector("h2").textContent = "Trace unavailable";
     nodes.workspaceEmpty.querySelector("p").textContent = error.message;
     if (error.status === 401) disconnect();
@@ -1052,6 +1092,7 @@ function pendingTrace(url, payload, status = "running", error = null) {
 
 function renderPendingWorkspace(status = "running", error = null) {
   if (!state.pendingRun) return;
+  state.selectionRequestId += 1;
   state.selectedRunId = state.pendingRun.run_id;
   const latestStep = state.pendingRun.steps?.at(-1);
   state.selectedStepId = latestStep?.id || "gateway";
@@ -1124,6 +1165,7 @@ async function submitScrape(event) {
     started_at: new Date().toISOString(),
     payload,
   };
+  state.launch = { url, runId: "pending", watching: true };
   nodes.launchButton.disabled = true;
   closeScrapeDialog();
   renderPendingWorkspace();
@@ -1134,12 +1176,20 @@ async function submitScrape(event) {
     const result = await fetchJson("/api/scrapes", { method: "POST", body: JSON.stringify(payload) });
     if (result.run_id && result.preview) state.previews.set(result.run_id, result.preview);
     const runId = result.run_id;
+    const shouldFocus = state.launch?.watching !== false;
+    if (state.launch) state.launch.runId = runId;
     state.pendingRun = null;
     nodes.activityBar.hidden = true;
-    state.selectedRunId = runId || null;
-    showToast(result.success ? `Trace ${runId} completed.` : `Trace ${runId} failed; evidence was saved.`, !result.success);
-    await refreshData({ selectNewest: !runId });
-    if (payload.screenshot && state.selectedDetail) showView("visual");
+    nodes.workspaceContent.classList.remove("is-pending");
+    if (shouldFocus) state.selectedRunId = runId || null;
+    announceRunOutcome(result);
+    await refreshData({
+      selectNewest: shouldFocus && !runId,
+      background: !shouldFocus,
+      preferredRunId: shouldFocus ? runId : null,
+    });
+    if (shouldFocus && payload.screenshot && state.selectedDetail?.report?.run_id === runId) showView("visual");
+    state.launch = null;
   } catch (error) {
     renderPendingWorkspace("error", error.message);
     showToast(error.message, true);
@@ -1148,6 +1198,7 @@ async function submitScrape(event) {
       disconnect();
     } else {
       await refreshData({ background: true });
+      if (!state.pendingRun) state.launch = null;
     }
   } finally {
     stopLaunchTimer();
@@ -1303,8 +1354,10 @@ function bindEvents() {
   nodes.runList.addEventListener("click", (event) => {
     const row = event.target.closest("[data-run-id]");
     if (!row) return;
-    if (row.dataset.runId === state.pendingRun?.run_id) renderPendingWorkspace();
-    else selectRun(row.dataset.runId);
+    if (row.dataset.runId === state.pendingRun?.run_id) {
+      if (state.launch) state.launch.watching = true;
+      renderPendingWorkspace();
+    } else selectRun(row.dataset.runId, { userInitiated: true });
   });
   nodes.traceTimeline.addEventListener("click", (event) => {
     const row = event.target.closest("[data-step-id]");
