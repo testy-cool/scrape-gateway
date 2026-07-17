@@ -1,7 +1,7 @@
 # scrape-gateway (`sgw`)
 
 [![ci](https://github.com/testy-cool/scrape-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/testy-cool/scrape-gateway/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.11.0-blue)](https://github.com/testy-cool/scrape-gateway/releases/latest)
+[![version](https://img.shields.io/badge/version-0.12.0-blue)](https://github.com/testy-cool/scrape-gateway/releases/latest)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 <p align="center">
