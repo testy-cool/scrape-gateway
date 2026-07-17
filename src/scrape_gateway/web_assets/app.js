@@ -8,6 +8,7 @@ const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || "",
   service: null,
   session: null,
+  settings: null,
   runs: [],
   summary: null,
   selectedRunId: null,
@@ -197,6 +198,7 @@ function disconnect() {
   stopLiveRefresh();
   state.token = "";
   state.session = null;
+  state.settings = null;
   state.runs = [];
   state.summary = null;
   state.selectedRunId = null;
@@ -232,6 +234,12 @@ async function connect(token = state.token) {
   if (nodes.authDialog.open) nodes.authDialog.close();
   nodes.authButton.textContent = state.service?.token_required ? "Disconnect" : "Local access";
   setConnection("online", state.session.evaluation?.mode === "audit" ? "Audit enabled" : "Connected");
+  try {
+    state.settings = await fetchJson("/api/settings");
+  } catch (error) {
+    state.settings = null;
+    showToast(`Gateway settings are unavailable: ${error.message}`, true);
+  }
   configureLiveRefresh();
   await refreshData();
   return true;
@@ -1009,12 +1017,119 @@ async function copyText(value, successMessage) {
   }
 }
 
+function providerCapabilities(provider) {
+  const values = provider.capabilities || [];
+  if (!values.length) return "No declared capabilities";
+  return values.map(titleCase).join(" · ");
+}
+
+function renderProviderSettings() {
+  nodes.providerSettingsList.replaceChildren();
+  const providers = state.settings?.providers || [];
+  if (!providers.length) {
+    nodes.providerSettingsList.append(element("div", "empty-note", "No providers were discovered."));
+    return;
+  }
+  providers.forEach((provider) => {
+    const row = element("div", "provider-setting-row");
+    row.dataset.providerName = provider.name;
+
+    const toggle = element("label", "provider-toggle");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = provider.enabled;
+    checkbox.dataset.providerEnabled = "true";
+    checkbox.setAttribute("aria-label", `Enable ${provider.name}`);
+    toggle.append(checkbox, element("span", "switch-track"));
+
+    const identity = element("div", "provider-identity");
+    const title = element("div", "provider-name-line");
+    title.append(element("strong", "", provider.name));
+    const availability = element("span", "provider-availability", provider.available ? "Available" : "Not installed");
+    availability.dataset.available = String(provider.available);
+    title.append(availability);
+    identity.append(title, element("small", "", providerCapabilities(provider)));
+
+    const timeout = element("label", "provider-timeout");
+    const timeoutInput = document.createElement("input");
+    timeoutInput.type = "number";
+    timeoutInput.min = "1";
+    timeoutInput.max = "600";
+    timeoutInput.step = "1";
+    timeoutInput.value = provider.timeout_seconds ?? "";
+    timeoutInput.placeholder = String(state.settings.default_timeout_seconds);
+    timeoutInput.dataset.providerTimeout = "true";
+    timeoutInput.setAttribute("aria-label", `${provider.name} timeout in seconds`);
+    timeout.append(timeoutInput, element("span", "", "s"));
+
+    row.append(toggle, identity, timeout);
+    nodes.providerSettingsList.append(row);
+  });
+}
+
+async function openSettingsDialog() {
+  if (!state.session) {
+    showAuth("Connect before changing gateway settings.");
+    return;
+  }
+  setText(nodes.settingsError, "", "");
+  try {
+    state.settings = await fetchJson("/api/settings");
+  } catch (error) {
+    showToast(error.message, true);
+    return;
+  }
+  nodes.defaultTimeoutInput.value = state.settings.default_timeout_seconds;
+  nodes.evaluationTimeoutInput.value = state.settings.evaluation_timeout_seconds;
+  renderProviderSettings();
+  if (!nodes.settingsDialog.open) nodes.settingsDialog.showModal();
+  window.setTimeout(() => nodes.defaultTimeoutInput.focus(), 30);
+}
+
+function closeSettingsDialog() {
+  if (nodes.settingsDialog.open) nodes.settingsDialog.close();
+}
+
+async function submitSettings(event) {
+  event.preventDefault();
+  setText(nodes.settingsError, "", "");
+  const providers = Array.from(nodes.providerSettingsList.querySelectorAll("[data-provider-name]")).map((row) => {
+    const timeoutValue = row.querySelector("[data-provider-timeout]").value.trim();
+    return {
+      name: row.dataset.providerName,
+      enabled: row.querySelector("[data-provider-enabled]").checked,
+      timeout_seconds: timeoutValue ? Number(timeoutValue) : null,
+    };
+  });
+  const payload = {
+    default_timeout_seconds: Number(nodes.defaultTimeoutInput.value),
+    evaluation_timeout_seconds: Number(nodes.evaluationTimeoutInput.value),
+    providers,
+  };
+  nodes.saveSettingsButton.disabled = true;
+  try {
+    state.settings = await fetchJson("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+    state.session = await fetchJson("/api/session");
+    closeSettingsDialog();
+    showToast("Gateway routing settings saved for new runs.");
+  } catch (error) {
+    setText(nodes.settingsError, error.message, "");
+    if (error.status === 401) disconnect();
+  } finally {
+    nodes.saveSettingsButton.disabled = false;
+  }
+}
+
 function bindEvents() {
   nodes.newScrapeButton.addEventListener("click", openScrapeDialog);
   nodes.emptyNewScrapeButton.addEventListener("click", openScrapeDialog);
   nodes.closeScrapeDialog.addEventListener("click", closeScrapeDialog);
   nodes.cancelScrapeButton.addEventListener("click", closeScrapeDialog);
   nodes.scrapeForm.addEventListener("submit", submitScrape);
+  nodes.settingsButton.addEventListener("click", openSettingsDialog);
+  nodes.closeSettingsDialog.addEventListener("click", closeSettingsDialog);
+  nodes.cancelSettingsButton.addEventListener("click", closeSettingsDialog);
+  nodes.settingsForm.addEventListener("submit", submitSettings);
   nodes.authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     setText(nodes.authError, "", "");
@@ -1067,7 +1182,7 @@ function bindEvents() {
 function collectNodes() {
   const ids = [
     "service-state", "service-state-label", "version-label", "live-toggle", "live-toggle-label",
-    "refresh-button", "new-scrape-button", "auth-button", "run-count", "last-updated",
+    "refresh-button", "settings-button", "new-scrape-button", "auth-button", "run-count", "last-updated",
     "metric-success", "metric-audit-fail", "metric-review", "judge-cost", "run-search",
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
     "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
@@ -1076,7 +1191,9 @@ function collectNodes() {
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
     "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
     "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal",
-    "launch-button", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",
+    "launch-button", "settings-dialog", "settings-form", "close-settings-dialog", "cancel-settings-button",
+    "save-settings-button", "provider-settings-list", "default-timeout-input", "evaluation-timeout-input",
+    "settings-error", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",
   ];
   ids.forEach((id) => {
     const key = id.replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());

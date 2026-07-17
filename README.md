@@ -44,14 +44,18 @@ You can use the console to:
 
 - Browse the latest 500 runs in a live-refreshing trace inventory and filter by URL, provider, scrape status, or audit status.
 - Refresh or reopen the console while a scrape is running without losing it; active requests are tracked by the service and restored into the trace inventory.
-- Follow each run from request and cache lookup through provider attempts, validation, content normalization, AI evaluation, final result, and evidence persistence.
+- Follow provider attempts, validation, screenshot delivery, AI evaluation, and evidence persistence as they happen; active runs poll once per second and retain their live timeline across a refresh.
 - Select any trace step to inspect its outcome, timing, summary, and complete saved attributes. Recorded durations use waterfall bars; steps without timing data are clearly marked as order-only.
 - Open scraped Markdown/HTML, AI checks and improvement signals, saved artifacts and screenshots, or the complete raw telemetry report without running scraped page scripts.
 - Start a scrape from the `New scrape` dialog with an evaluation goal, JavaScript rendering, screenshot evidence, mobile rendering, premium routing, ad blocking, or a cache bypass.
+- Open `Gateway settings` to enable or disable providers globally and set the default, per-provider, and AI-evaluation timeouts used by subsequent console and MCP runs.
 
 The console reads the same `.scrape-gateway/runs/` evidence used by
 `sgw evaluations`. It does not change prompts, validators, or routing based on
-an AI verdict.
+an AI verdict. Console-owned routing settings are kept locally in
+`.scrape-gateway/operator-settings.yml`; they override the base YAML without
+rewriting it and should remain on the gateway's persistent volume rather than
+being committed.
 
 ## Commands
 

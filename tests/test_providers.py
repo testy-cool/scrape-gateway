@@ -149,6 +149,31 @@ class TestScrapeDrive:
         assert result.success is False
         assert result.failure_reason == FailureReason.TIMEOUT
 
+    async def test_uses_request_timeout_budget(self, monkeypatch: pytest.MonkeyPatch):
+        observed = []
+
+        class FakeClient:
+            def __init__(self, *, timeout, follow_redirects):
+                observed.append(timeout)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def get(self, url, params):
+                return httpx.Response(200, text=GOOD_HTML, request=httpx.Request("GET", url))
+
+        monkeypatch.setattr("scrape_gateway.providers.scrapedrive.httpx.AsyncClient", FakeClient)
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=17)
+        )
+
+        assert result.success is True
+        assert observed == [17]
+
     @respx.mock
     async def test_json_response(self):
         import json

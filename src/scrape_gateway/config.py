@@ -20,6 +20,11 @@ class ProviderConfig:
     enabled: bool = True
     api_key_env: str | None = None
     options: dict[str, Any] = field(default_factory=dict)
+    timeout_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.timeout_seconds is not None and self.timeout_seconds <= 0:
+            raise ValueError("provider timeout_seconds must be positive")
 
 
 @dataclass(slots=True)
@@ -50,12 +55,24 @@ class EvaluationConfig:
     max_markdown_chars: int = 30_000
     include_screenshot: bool = True
     cache_root: str = ".scrape-gateway/evaluations"
+    timeout_seconds: float = 60
 
     def __post_init__(self) -> None:
         if self.mode not in {"off", "audit"}:
             raise ValueError("evaluation mode must be 'off' or 'audit'")
         if self.max_markdown_chars <= 0:
             raise ValueError("evaluation max_markdown_chars must be positive")
+        if self.timeout_seconds <= 0:
+            raise ValueError("evaluation timeout_seconds must be positive")
+
+
+@dataclass(slots=True)
+class RequestConfig:
+    default_timeout_seconds: float = 45
+
+    def __post_init__(self) -> None:
+        if self.default_timeout_seconds <= 0:
+            raise ValueError("request default_timeout_seconds must be positive")
 
 
 @dataclass(slots=True)
@@ -65,6 +82,7 @@ class GatewayConfig:
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    request: RequestConfig = field(default_factory=RequestConfig)
     memory_path: str = ".scrape-gateway/memory.sqlite"
 
 
@@ -103,42 +121,90 @@ def _load_dotenv(path: Path | None = None) -> None:
             os.environ[key] = val
 
 
+def _config_path(path: Path | str | None = None) -> Path:
+    if path:
+        return Path(path)
+    for name in CONFIG_FILENAMES:
+        # Check CWD first, then project root
+        candidate = Path(name)
+        if candidate.exists():
+            return candidate
+        candidate = _PROJECT_ROOT / name
+        if candidate.exists():
+            return candidate
+    return Path(CONFIG_FILENAMES[0])
+
+
+def _operator_settings_path(config_path: Path) -> Path:
+    return config_path.parent / ".scrape-gateway" / "operator-settings.yml"
+
+
+def save_operator_settings(
+    settings: dict[str, Any], *, config_path: Path | str | None = None
+) -> Path:
+    """Atomically persist console-owned routing settings beside the base config."""
+
+    path = _operator_settings_path(_config_path(config_path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "request": {
+            "default_timeout_seconds": settings["default_timeout_seconds"],
+        },
+        "evaluation": {
+            "timeout_seconds": settings["evaluation_timeout_seconds"],
+        },
+        "providers": settings["providers"],
+    }
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    temporary.replace(path)
+    return path
+
+
 def load_config(path: Path | str | None = None) -> GatewayConfig:
     _load_dotenv()
+    config_path = _config_path(path)
 
-    if path:
-        config_path = Path(path)
-    else:
-        config_path = None
-        for name in CONFIG_FILENAMES:
-            # Check CWD first, then project root
-            candidate = Path(name)
-            if candidate.exists():
-                config_path = candidate
-                break
-            candidate = _PROJECT_ROOT / name
-            if candidate.exists():
-                config_path = candidate
-                break
+    raw = yaml.safe_load(config_path.read_text()) or {} if config_path.exists() else {}
+    settings_path = _operator_settings_path(config_path)
+    operator_raw = yaml.safe_load(settings_path.read_text()) or {} if settings_path.exists() else {}
 
-    if not config_path or not config_path.exists():
-        return GatewayConfig()
-
-    raw = yaml.safe_load(config_path.read_text()) or {}
+    provider_overrides = {
+        item["name"]: item
+        for item in operator_raw.get("providers", [])
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
 
     providers = []
     for p in raw.get("providers", []):
         if isinstance(p, str):
-            providers.append(ProviderConfig(name=p))
-        elif isinstance(p, dict):
+            override = provider_overrides.pop(p, {})
             providers.append(
                 ProviderConfig(
-                    name=p["name"],
-                    enabled=p.get("enabled", True),
-                    api_key_env=p.get("api_key_env"),
-                    options=p.get("options", {}),
+                    name=p,
+                    enabled=override.get("enabled", True),
+                    timeout_seconds=override.get("timeout_seconds"),
                 )
             )
+        elif isinstance(p, dict):
+            merged = {**p, **provider_overrides.pop(p["name"], {})}
+            providers.append(
+                ProviderConfig(
+                    name=merged["name"],
+                    enabled=merged.get("enabled", True),
+                    api_key_env=merged.get("api_key_env"),
+                    options=merged.get("options", {}),
+                    timeout_seconds=merged.get("timeout_seconds"),
+                )
+            )
+    for name, override in provider_overrides.items():
+        providers.append(
+            ProviderConfig(
+                name=name,
+                enabled=override.get("enabled", True),
+                timeout_seconds=override.get("timeout_seconds"),
+            )
+        )
 
     cache_raw = raw.get("cache", {})
     cache = CacheConfig(
@@ -162,6 +228,7 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
     )
 
     evaluation_raw = raw.get("evaluation", {})
+    evaluation_override = operator_raw.get("evaluation", {})
     evaluation_mode = evaluation_raw.get("mode", "off")
     if evaluation_mode is False:
         # PyYAML treats the common unquoted spelling `off` as a boolean.
@@ -172,6 +239,17 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         max_markdown_chars=evaluation_raw.get("max_markdown_chars", 30_000),
         include_screenshot=evaluation_raw.get("include_screenshot", True),
         cache_root=evaluation_raw.get("cache_root", ".scrape-gateway/evaluations"),
+        timeout_seconds=evaluation_override.get(
+            "timeout_seconds", evaluation_raw.get("timeout_seconds", 60)
+        ),
+    )
+
+    request_raw = raw.get("request", {})
+    request_override = operator_raw.get("request", {})
+    request = RequestConfig(
+        default_timeout_seconds=request_override.get(
+            "default_timeout_seconds", request_raw.get("default_timeout_seconds", 45)
+        )
     )
 
     return GatewayConfig(
@@ -180,5 +258,6 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         strategy=strategy,
         telemetry=telemetry,
         evaluation=evaluation,
+        request=request,
         memory_path=raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
     )

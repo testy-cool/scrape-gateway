@@ -447,7 +447,9 @@ class OpenRouterEvaluator:
         response: httpx.Response | None = None
         raw: dict | None = None
         try:
-            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                timeout=self.config.timeout_seconds, follow_redirects=True
+            ) as client:
                 response = await client.post(
                     OPENROUTER_URL,
                     headers={

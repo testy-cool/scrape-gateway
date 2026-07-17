@@ -253,6 +253,8 @@ class ScrapeGateway:
         strategy: StrategyConfig | None = None,
         telemetry: TelemetryRecorder | None = None,
         evaluator=None,
+        default_timeout_seconds: float = 45,
+        provider_timeouts: dict[str, float] | None = None,
     ) -> None:
         self.providers = list(providers if providers is not None else _default_providers())
         self.cache = cache or ArtifactCache()
@@ -260,6 +262,8 @@ class ScrapeGateway:
         self.strategy = strategy or StrategyConfig()
         self.telemetry = telemetry or TelemetryRecorder()
         self.evaluator = evaluator
+        self.default_timeout_seconds = default_timeout_seconds
+        self.provider_timeouts = provider_timeouts or {}
 
     @classmethod
     def from_config(cls, config: GatewayConfig | None = None) -> ScrapeGateway:
@@ -280,6 +284,12 @@ class ScrapeGateway:
                 debug_artifacts=config.telemetry.debug_artifacts,
             ),
             evaluator=evaluator,
+            default_timeout_seconds=config.request.default_timeout_seconds,
+            provider_timeouts={
+                provider.name: provider.timeout_seconds
+                for provider in config.providers
+                if provider.enabled and provider.timeout_seconds is not None
+            },
         )
 
     async def _evaluate_result(
@@ -405,6 +415,9 @@ class ScrapeGateway:
         _apply_browser_headers(request.headers, request.url)
         _log(f"\nscrape {request.url}")
         scrape_start = time.perf_counter()
+        explicit_timeout = request.timeout_seconds if request.timeout_seconds != 45 else None
+        if explicit_timeout is None:
+            request.timeout_seconds = self.default_timeout_seconds
         run_id = request.metadata.get("run_id") or new_run_id()
         request.metadata["run_id"] = run_id
         started_at = utc_now()
@@ -484,6 +497,10 @@ class ScrapeGateway:
         last_result: ScrapeResult | None = None
         for provider_index, provider in enumerate(ordered, start=1):
             provider_step_id = f"provider-{provider_index}"
+            if explicit_timeout is None:
+                request.timeout_seconds = self.provider_timeouts.get(
+                    provider.name, self.default_timeout_seconds
+                )
             if not provider.can_handle(request):
                 skipped.append(f"{provider.name}(no capability)")
                 emit_progress(

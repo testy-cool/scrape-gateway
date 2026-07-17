@@ -99,6 +99,12 @@ only in browser `sessionStorage`. It reads run history and evidence from the
 persistent `/data/.scrape-gateway/` directory. Opening a saved run should show
 its ordered trace, step attributes, output, AI evaluation, artifacts, and raw
 report; recorded timings are kept distinct from order-only lifecycle steps.
+While a run is active, the trace should update provider, validation, screenshot,
+evaluation, and persistence state once per second and survive a browser refresh.
+Provider switches and timeout overrides saved from the settings dialog live in
+`/data/.scrape-gateway/operator-settings.yml`; they reload the shared gateway and
+therefore apply to subsequent console and MCP runs without modifying the base
+`/data/scrape-gateway.yml`.
 
 Unauthenticated MCP should return `401`, not `502`:
 

@@ -112,6 +112,18 @@ def _get_gateway():
     return _gateway
 
 
+def _apply_console_settings(settings: dict):
+    global _gateway
+
+    from .config import load_config, save_operator_settings
+    from .router import ScrapeGateway
+
+    save_operator_settings(settings)
+    config = load_config()
+    _gateway = ScrapeGateway.from_config(config)
+    return config
+
+
 def _create_service_app() -> Starlette:
     from .web import create_console_routes
 
@@ -124,7 +136,11 @@ def _create_service_app() -> Starlette:
 
     return Starlette(
         routes=[
-            *create_console_routes(token=_TOKEN, get_gateway=_get_gateway),
+            *create_console_routes(
+                token=_TOKEN,
+                get_gateway=_get_gateway,
+                apply_settings=_apply_console_settings,
+            ),
             Mount("/", app=mcp_app),
         ],
         lifespan=lifespan,
