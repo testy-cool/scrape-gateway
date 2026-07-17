@@ -8,6 +8,7 @@ import hmac
 import json
 import re
 import secrets
+import time
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -23,6 +24,7 @@ from starlette.staticfiles import StaticFiles
 from .config import GatewayConfig, load_config
 from .models import ScrapeRequest, ScrapeResult
 from .telemetry import load_recent_reports, result_summary, summarize_evaluations
+from .progress import observe_progress
 
 PREVIEW_LIMIT = 250_000
 RUN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
@@ -588,15 +590,57 @@ def create_console_routes(
                 "use_cache": use_cache,
             },
         }
+        active_entry["steps"] = [
+            {
+                "id": "request",
+                "parent_id": None,
+                "name": "Request submitted",
+                "kind": "request",
+                "status": "ok",
+                "outcome": "accepted",
+                "summary": scrape_request.url,
+                "offset_ms": 0,
+                "duration_ms": None,
+                "timing": "order_only",
+                "attributes": active_entry["payload"],
+            }
+        ]
         active_scrapes[active_id] = active_entry
+        scrape_request.metadata["run_id"] = active_id
+        progress_start = time.perf_counter()
+
+        def record_progress(event: dict[str, Any]) -> None:
+            step = {
+                "parent_id": None,
+                "status": "running",
+                "outcome": "in_progress",
+                "summary": "",
+                "duration_ms": None,
+                "timing": "recorded" if event.get("duration_ms") is not None else "order_only",
+                "attributes": {},
+                **event,
+            }
+            existing = next(
+                (item for item in active_entry["steps"] if item["id"] == step["id"]), None
+            )
+            if existing is None:
+                step["offset_ms"] = int((time.perf_counter() - progress_start) * 1000)
+                active_entry["steps"].append(step)
+            else:
+                offset_ms = existing.get("offset_ms", 0)
+                existing.update(step)
+                existing["offset_ms"] = offset_ms
+            active_entry["activity"] = step["summary"]
+            active_entry["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         async def execute_scrape() -> ScrapeResult:
             try:
-                return await get_gateway().scrape(
-                    scrape_request,
-                    use_cache=use_cache,
-                    use_memory=use_cache,
-                )
+                with observe_progress(record_progress):
+                    return await get_gateway().scrape(
+                        scrape_request,
+                        use_cache=use_cache,
+                        use_memory=use_cache,
+                    )
             finally:
                 active_scrapes.pop(active_id, None)
 

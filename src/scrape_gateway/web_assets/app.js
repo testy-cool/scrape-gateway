@@ -2,6 +2,7 @@
 
 const TOKEN_KEY = "scrape-gateway.operator-token";
 const LIVE_REFRESH_MS = 15000;
+const ACTIVE_REFRESH_MS = 1000;
 
 const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || "",
@@ -180,11 +181,16 @@ function configureLiveRefresh() {
   nodes.liveToggle.setAttribute("aria-pressed", String(state.autoRefresh));
   setText(nodes.liveToggleLabel, state.autoRefresh ? "Live" : "Paused");
   if (!state.autoRefresh || !state.session) return;
-  state.refreshInterval = window.setInterval(() => {
+  const schedule = () => {
+    const delay = state.pendingRun ? ACTIVE_REFRESH_MS : LIVE_REFRESH_MS;
+    state.refreshInterval = window.setTimeout(async () => {
     if (document.visibilityState === "visible") {
-      refreshData({ background: true });
+        await refreshData({ background: true });
     }
-  }, LIVE_REFRESH_MS);
+      if (state.autoRefresh && state.session) schedule();
+    }, delay);
+  };
+  schedule();
 }
 
 function disconnect() {
@@ -851,6 +857,35 @@ function closeScrapeDialog() {
 function pendingTrace(url, payload, status = "running", error = null) {
   const elapsed = state.pendingRun ? Date.now() - new Date(state.pendingRun.started_at).getTime() : 0;
   const pendingId = state.pendingRun?.run_id || "pending";
+  const recordedSteps = Array.isArray(state.pendingRun?.steps) ? state.pendingRun.steps : [];
+  const fallbackSteps = [
+    {
+      id: "request",
+      parent_id: null,
+      name: "Request submitted",
+      kind: "request",
+      status: "ok",
+      outcome: "accepted",
+      summary: url,
+      offset_ms: 0,
+      duration_ms: null,
+      timing: "order_only",
+      attributes: payload,
+    },
+    {
+      id: "gateway",
+      parent_id: null,
+      name: status === "error" ? "Gateway request failed" : "Gateway processing",
+      kind: "provider",
+      status,
+      outcome: status === "error" ? "failed" : "in_progress",
+      summary: error || "Waiting for the first recorded gateway step.",
+      offset_ms: 0,
+      duration_ms: null,
+      timing: "order_only",
+      attributes: {},
+    },
+  ];
   return {
     report: {
       run_id: pendingId,
@@ -867,34 +902,7 @@ function pendingTrace(url, payload, status = "running", error = null) {
       status: status === "error" ? "error" : "running",
       audit_verdict: null,
       duration_ms: elapsed,
-      steps: [
-        {
-          id: "request",
-          parent_id: null,
-          name: "Request submitted",
-          kind: "request",
-          status: "ok",
-          outcome: "accepted",
-          summary: url,
-          offset_ms: 0,
-          duration_ms: null,
-          timing: "order_only",
-          attributes: payload,
-        },
-        {
-          id: "gateway",
-          parent_id: null,
-          name: status === "error" ? "Gateway request failed" : "Gateway processing",
-          kind: "provider",
-          status,
-          outcome: status === "error" ? "failed" : "in_progress",
-          summary: error || "Provider, validation, evaluation, and persistence steps appear when telemetry is saved.",
-          offset_ms: 0,
-          duration_ms: null,
-          timing: "order_only",
-          attributes: {},
-        },
-      ],
+      steps: recordedSteps.length ? recordedSteps : fallbackSteps,
     },
     artifacts: [],
   };
@@ -903,13 +911,14 @@ function pendingTrace(url, payload, status = "running", error = null) {
 function renderPendingWorkspace(status = "running", error = null) {
   if (!state.pendingRun) return;
   state.selectedRunId = state.pendingRun.run_id;
-  state.selectedStepId = "gateway";
+  const latestStep = state.pendingRun.steps?.at(-1);
+  state.selectedStepId = latestStep?.id || "gateway";
   renderRuns();
   renderInspector(pendingTrace(state.pendingRun.url, state.pendingRun.payload, status, error), { pending: status !== "error" });
   nodes.activityBar.hidden = false;
   nodes.activityBar.classList.toggle("is-error", status === "error");
   setText(nodes.activityTitle, status === "error" ? "Scrape request failed" : "Scrape in progress");
-  setText(nodes.activityDetail, error || "Detailed steps will appear when the run report is persisted.");
+  setText(nodes.activityDetail, error || state.pendingRun.activity || latestStep?.summary || "Waiting for the gateway to start.");
 }
 
 function startLaunchTimer() {

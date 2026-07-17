@@ -44,6 +44,22 @@ class BlockingGateway:
         )
 
 
+class ProgressGateway(BlockingGateway):
+    async def scrape(self, request, *, use_cache: bool, use_memory: bool):
+        from scrape_gateway.progress import emit_progress
+
+        emit_progress(
+            id="provider-1",
+            name="Browserless request",
+            kind="provider",
+            status="running",
+            outcome="requesting",
+            summary="Waiting for Browserless",
+            attributes={"provider": "browserless", "screenshot_requested": request.screenshot},
+        )
+        return await super().scrape(request, use_cache=use_cache, use_memory=use_memory)
+
+
 def _config(root: Path, *, evaluation_mode: str = "audit") -> GatewayConfig:
     config = GatewayConfig(telemetry=TelemetryConfig(root=str(root)))
     config.evaluation = replace(config.evaluation, mode=evaluation_mode)
@@ -197,6 +213,33 @@ async def test_active_scrape_remains_visible_after_the_console_request_is_cancel
             await asyncio.sleep(0.01)
 
         assert (await client.get("/api/runs")).json()["active_runs"] == []
+
+
+async def test_active_scrape_exposes_incremental_trace_steps(tmp_path: Path) -> None:
+    from scrape_gateway.web import create_console_app
+
+    gateway = ProgressGateway()
+    app = create_console_app(
+        get_gateway=lambda: gateway,
+        get_config=lambda: _config(tmp_path),
+    )
+
+    async with _client(app) as client:
+        request_task = asyncio.create_task(
+            client.post(
+                "/api/scrapes",
+                json={"url": "https://example.com/slow", "screenshot": True},
+            )
+        )
+        await asyncio.wait_for(gateway.started.wait(), timeout=1)
+
+        active = (await client.get("/api/runs")).json()["active_runs"][0]
+        assert [step["id"] for step in active["steps"]] == ["request", "provider-1"]
+        assert active["steps"][1]["status"] == "running"
+        assert active["steps"][1]["attributes"]["screenshot_requested"] is True
+
+        gateway.release.set()
+        await request_task
 
 
 async def test_run_api_lists_summaries_and_serves_contained_artifacts(tmp_path: Path) -> None:
