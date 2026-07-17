@@ -263,6 +263,7 @@ async function connect(token = state.token) {
   if (state.token) sessionStorage.setItem(TOKEN_KEY, state.token);
   else sessionStorage.removeItem(TOKEN_KEY);
   if (nodes.authDialog.open) nodes.authDialog.close();
+  populateProviderSelect();
   nodes.authButton.textContent = state.service?.token_required ? "Disconnect" : "Local access";
   setConnection("online", state.session.evaluation?.mode === "audit" ? "Audit enabled" : "Connected");
   try {
@@ -531,6 +532,12 @@ function renderTraceHeader(detail, pending = false) {
   setText(nodes.traceStatusBadge, pending ? "Running" : status === "ok" ? "Success" : "Failed");
   nodes.traceAuditBadge.dataset.verdict = verdict;
   setText(nodes.traceAuditBadge, { pass: "Audit pass", fail: "Audit fail", review: "Needs review", unaudited: pending ? "Audit pending" : "No audit" }[verdict]);
+  const forcedProvider = report.request?.metadata?.preferred_provider || report.request?.provider;
+  nodes.forcedProviderBadge.hidden = !forcedProvider;
+  setText(nodes.forcedProviderBadge, forcedProvider ? `Forced: ${titleCase(forcedProvider)}` : "", "");
+  nodes.forcedProviderBadge.title = forcedProvider
+    ? `This run requested ${forcedProvider} first. Global routing settings were not changed.`
+    : "";
   setText(nodes.copyRunIdButton, `run ${report.run_id || "pending"}`);
   nodes.copyRunIdButton.dataset.runId = pending ? "" : report.run_id || "";
   setText(nodes.traceUrl, report.url || "Unknown target");
@@ -1060,6 +1067,7 @@ function openScrapeDialog() {
     showAuth("Connect before starting a scrape.");
     return;
   }
+  populateProviderSelect();
   if (!nodes.newScrapeDialog.open) nodes.newScrapeDialog.showModal();
   window.setTimeout(() => nodes.urlInput.focus(), 30);
 }
@@ -1185,6 +1193,7 @@ async function submitScrape(event) {
   const payload = {
     url,
     evaluation_goal: String(formData.get("evaluation_goal") || "").trim(),
+    provider: String(formData.get("provider") || "").trim(),
     output_format: String(formData.get("output_format") || "markdown"),
     screenshot: formData.has("screenshot"),
     render_js: formData.has("render_js"),
@@ -1258,6 +1267,17 @@ function providerCapabilities(provider) {
   const values = provider.capabilities || [];
   if (!values.length) return "No declared capabilities";
   return values.map(titleCase).join(" · ");
+}
+
+function populateProviderSelect() {
+  const selected = nodes.providerSelect.value;
+  nodes.providerSelect.replaceChildren(new Option("Auto routing", ""));
+  (state.session?.providers || []).forEach((provider) => {
+    nodes.providerSelect.append(new Option(titleCase(provider), provider));
+  });
+  nodes.providerSelect.value = Array.from(nodes.providerSelect.options).some(
+    (option) => option.value === selected,
+  ) ? selected : "";
 }
 
 function renderProviderSettings() {
@@ -1426,12 +1446,12 @@ function collectNodes() {
     "metric-success", "metric-audit-fail", "metric-review", "judge-cost", "run-search",
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
     "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
-    "trace-status-badge", "trace-audit-badge", "copy-run-id-button", "trace-url", "trace-metadata",
+    "trace-status-badge", "trace-audit-badge", "forced-provider-badge", "copy-run-id-button", "trace-url", "trace-metadata",
     "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",
     "visual-subtitle", "visual-viewer",
     "artifact-list", "artifact-viewer", "raw-viewer", "copy-raw-button", "new-scrape-dialog",
-    "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal",
+    "scrape-form", "close-scrape-dialog", "cancel-scrape-button", "url-input", "evaluation-goal", "provider-select",
     "launch-button", "settings-dialog", "settings-form", "close-settings-dialog", "cancel-settings-button",
     "save-settings-button", "provider-settings-list", "default-timeout-input", "evaluation-timeout-input",
     "settings-error", "auth-dialog", "auth-form", "token-input", "auth-error", "toast",

@@ -410,6 +410,7 @@ svg {
 .select-control select,
 .field input,
 .field textarea,
+.field select,
 .provider-timeout input {
   width: 100%;
   min-width: 0;
@@ -556,6 +557,7 @@ textarea::placeholder {
 .compact-badge,
 .status-badge,
 .audit-badge,
+.provider-badge,
 .kind-badge {
   display: inline-flex;
   align-items: center;
@@ -839,6 +841,7 @@ textarea::placeholder {
 
 .status-badge,
 .audit-badge,
+.provider-badge,
 .kind-badge {
   padding: 5px 7px;
   color: #b7c5d8;
@@ -1778,13 +1781,15 @@ textarea::placeholder {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   padding: 9px 10px;
   font-size: 14px;
   resize: vertical;
 }
 
-.field input {
+.field input,
+.field select {
   height: 38px;
 }
 

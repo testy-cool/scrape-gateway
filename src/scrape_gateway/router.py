@@ -822,15 +822,18 @@ class ScrapeGateway:
     def _ordered_providers(self, request: ScrapeRequest) -> list[ProviderAdapter]:
         providers = sorted(self.providers, key=lambda p: p.cost_rank)
 
-        if self.strategy.provider:
-            preferred = [p for p in providers if p.name == self.strategy.provider]
-            rest = [p for p in providers if p.name != self.strategy.provider]
+        request_provider = request.metadata.get("preferred_provider")
+        preferred_provider = (
+            request_provider if isinstance(request_provider, str) else self.strategy.provider
+        )
+        if preferred_provider:
+            source = "request" if request_provider else "strategy"
+            preferred = [p for p in providers if p.name == preferred_provider]
+            rest = [p for p in providers if p.name != preferred_provider]
             if preferred:
-                _log(f"  [strategy] preferred provider: {self.strategy.provider}")
+                _log(f"  [{source}] preferred provider: {preferred_provider}")
                 return preferred + rest
-            _log(
-                f"  [strategy] preferred provider {self.strategy.provider!r} not found, falling back"
-            )
+            _log(f"  [{source}] preferred provider {preferred_provider!r} not found, falling back")
 
         pref = self.memory.preferred_provider(request.url)
         if pref:
