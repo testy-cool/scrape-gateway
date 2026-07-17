@@ -253,6 +253,151 @@ def _run_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _human_label(value: Any, fallback: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return fallback
+    return re.sub(r"[_-]+", " ", value.strip()).title()
+
+
+def _human_duration(value: Any) -> str | None:
+    milliseconds = _recorded_milliseconds(value)
+    if milliseconds is None:
+        return None
+    if milliseconds < 1000:
+        return f"{milliseconds} ms"
+    seconds = milliseconds / 1000
+    if seconds < 10:
+        return f"{seconds:.1f} s"
+    if seconds < 60:
+        return f"{seconds:.0f} s"
+    return f"{int(seconds // 60)} min {int(seconds % 60)} s"
+
+
+def _plain_evaluation_action(value: Any) -> str:
+    actions = {
+        "retry_rendered": "retry with JavaScript rendering",
+        "retry_with_rendering": "retry with JavaScript rendering",
+        "retry_another_provider": "retry with another provider",
+        "manual_review": "review the saved output",
+        "accept": "use the saved result",
+    }
+    if isinstance(value, str) and value.strip():
+        return actions.get(value.strip().lower(), value.replace("_", " ").strip().lower())
+    return "review the saved output before using it"
+
+
+def _matched_evidence(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    compact = " ".join(value.split()).replace("'", "’")
+    if len(compact) > 90:
+        compact = f"{compact[:87].rstrip()}..."
+    return f" (matched '{compact}')"
+
+
+def _outcome_summary(report: dict[str, Any]) -> dict[str, str]:
+    final = report.get("final") if isinstance(report.get("final"), dict) else {}
+    attempts = [item for item in report.get("attempts", []) if isinstance(item, dict)]
+    evaluation = report.get("evaluation") if isinstance(report.get("evaluation"), dict) else None
+    duration = _human_duration(report.get("elapsed_ms"))
+
+    if report.get("success") is True:
+        provider_value = final.get("provider")
+        prefix = "Scraped"
+        if provider_value == "cache":
+            metadata = final.get("metadata") if isinstance(final.get("metadata"), dict) else {}
+            provider_value = metadata.get("cache_source_provider")
+            prefix = "Loaded a cached scrape captured"
+        provider = _human_label(provider_value, "the gateway")
+        timing = f" in {duration}" if duration else ""
+        lead = f"{prefix} via {provider}{timing}"
+        screenshot = bool(final.get("screenshot_bytes"))
+        if evaluation:
+            if evaluation.get("verdict") == "fail":
+                cause = str(evaluation.get("root_cause") or "a content quality problem").strip()
+                action = _plain_evaluation_action(evaluation.get("recommended_action"))
+                return {
+                    "tone": "warning",
+                    "text": f"{lead}, but the quality check found {cause} — {action}.",
+                }
+            if evaluation.get("needs_human_review") is True:
+                return {
+                    "tone": "warning",
+                    "text": f"{lead} — the result is uncertain; review the saved output before using it.",
+                }
+            if evaluation.get("verdict") == "pass":
+                evidence = "content and screenshot" if screenshot else "content"
+                return {"tone": "success", "text": f"{lead} — {evidence} verified."}
+            if evaluation.get("status") in {"error", "failed"}:
+                return {
+                    "tone": "warning",
+                    "text": f"{lead} — content was saved, but the quality check failed to run; inspect it manually.",
+                }
+        return {
+            "tone": "success",
+            "text": f"{lead} — content passed gateway checks; review the saved output if quality matters.",
+        }
+
+    diagnosis = report.get("diagnosis")
+    if diagnosis == "validator_rejected":
+        rejected = next(
+            (item for item in reversed(attempts) if item.get("result") == "validation_failed"),
+            {},
+        )
+        block_type = rejected.get("block_type") or final.get("block_type")
+        explanations = {
+            "consent_wall": "the page looks like a consent wall",
+            "captcha": "the page shows a CAPTCHA instead of usable content",
+            "cloudflare": "the page shows a Cloudflare challenge instead of usable content",
+            "empty_content": "the response contains no usable content",
+            "js_required": "the page needs JavaScript rendering",
+        }
+        reason = explanations.get(block_type, "gateway checks found an unusable response")
+        evidence = _matched_evidence(
+            rejected.get("matched_pattern") or rejected.get("validation_detail")
+        )
+        return {
+            "tone": "error",
+            "text": f"Rejected: {reason}{evidence} — retry with rendering or another provider.",
+        }
+
+    if diagnosis == "provider_5xx":
+        failed = next(
+            (
+                item
+                for item in reversed(attempts)
+                if item.get("failure_reason") == "http_5xx" or (item.get("status") or 0) >= 500
+            ),
+            {},
+        )
+        provider = _human_label(failed.get("provider") or final.get("provider"), "A provider")
+        return {
+            "tone": "error",
+            "text": f"Failed: {provider} returned a server error — retry later or choose another provider.",
+        }
+    if diagnosis == "timeout":
+        return {
+            "tone": "error",
+            "text": "Failed: provider attempts timed out — retry with a longer timeout or another provider.",
+        }
+    if diagnosis == "proxy_auth_failed":
+        return {
+            "tone": "error",
+            "text": "Failed: the configured proxy could not connect — ask an operator to check the proxy before retrying.",
+        }
+    if diagnosis == "no_provider_available":
+        return {
+            "tone": "error",
+            "text": "Could not start: no enabled provider supports these capture options — enable a compatible provider or change the options.",
+        }
+    provider_count = len(attempts)
+    tried = f" after trying {provider_count} providers" if provider_count else ""
+    return {
+        "tone": "error",
+        "text": f"Scrape failed{tried} — inspect the provider errors or retry with another provider.",
+    }
+
+
 def _retry_payload(report: dict[str, Any]) -> dict[str, Any]:
     request = report.get("request") if isinstance(report.get("request"), dict) else {}
     metadata = request.get("metadata") if isinstance(request.get("metadata"), dict) else {}
@@ -867,6 +1012,7 @@ def create_console_routes(
                 "trace": _trace_payload(report, artifacts),
                 "artifacts": artifacts,
                 "retry": _retry_payload(report),
+                "outcome": _outcome_summary(report),
             }
         )
 
