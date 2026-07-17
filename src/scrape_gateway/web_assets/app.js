@@ -4,6 +4,13 @@ const TOKEN_KEY = "scrape-gateway.operator-token";
 const LIVE_REFRESH_MS = 15000;
 const ACTIVE_REFRESH_MS = 1000;
 const VIEW_NAMES = new Set(["trace", "output", "evaluation", "visual", "artifacts", "raw"]);
+const JARGON_HELP = {
+  "Audit fail": "The scrape completed, but the saved content failed the AI quality check.",
+  review: "The result is uncertain and needs a person to judge the saved content or screenshot.",
+  "Validator Rejected": "Gateway checks found a block page, empty content, or another unusable response.",
+  "Cache Hit": "The gateway reused a matching saved result instead of contacting a provider.",
+  "Provider 5xx": "A provider returned an HTTP 500–599 server error; the target page may not be the problem.",
+};
 
 function deepLinkSelection() {
   const url = new URL(window.location.href);
@@ -67,6 +74,20 @@ function element(tag, className, text) {
 
 function setText(node, value, fallback = "—") {
   node.textContent = value === undefined || value === null || value === "" ? fallback : String(value);
+}
+
+function explainJargon(node, key) {
+  const explanation = JARGON_HELP[key];
+  node.classList.toggle("has-jargon-help", Boolean(explanation));
+  if (!explanation) {
+    node.removeAttribute("title");
+    node.removeAttribute("aria-label");
+    node.removeAttribute("tabindex");
+    return;
+  }
+  node.title = explanation;
+  node.tabIndex = 0;
+  node.setAttribute("aria-label", `${node.textContent}. ${explanation}`);
 }
 
 function titleCase(value) {
@@ -371,6 +392,7 @@ function compactAuditBadge(run) {
   const labels = { pass: "Pass", fail: "Audit fail", review: "Review", unaudited: "No audit" };
   const badge = element("span", "compact-badge", labels[verdict]);
   badge.dataset.verdict = verdict;
+  explainJargon(badge, verdict === "fail" ? "Audit fail" : verdict === "review" ? "review" : null);
   return badge;
 }
 
@@ -405,7 +427,15 @@ function renderRunRow(run) {
 
   const foot = element("span", "run-row-foot");
   foot.append(element("time", "", formatDate(run.started_at)));
-  foot.append(element("span", "", run.pending ? "Awaiting trace" : titleCase(run.diagnosis || "unknown")));
+  const diagnosisLabel = run.pending ? "Awaiting trace" : titleCase(run.diagnosis || "unknown");
+  const diagnosis = element("span", "", diagnosisLabel);
+  const diagnosisHelp = {
+    validator_rejected: "Validator Rejected",
+    cache_hit: "Cache Hit",
+    provider_5xx: "Provider 5xx",
+  }[run.diagnosis];
+  explainJargon(diagnosis, diagnosisHelp);
+  foot.append(diagnosis);
   body.append(foot);
   row.append(body);
   return row;
@@ -566,6 +596,7 @@ function renderTraceHeader(detail, pending = false) {
   setText(nodes.traceStatusBadge, pending ? "Running" : status === "ok" ? "Success" : "Failed");
   nodes.traceAuditBadge.dataset.verdict = verdict;
   setText(nodes.traceAuditBadge, { pass: "Audit pass", fail: "Audit fail", review: "Needs review", unaudited: pending ? "Audit pending" : "No audit" }[verdict]);
+  explainJargon(nodes.traceAuditBadge, verdict === "fail" ? "Audit fail" : verdict === "review" ? "review" : null);
   const forcedProvider = report.request?.metadata?.preferred_provider || report.request?.provider;
   nodes.forcedProviderBadge.hidden = !forcedProvider;
   setText(nodes.forcedProviderBadge, forcedProvider ? `Forced: ${titleCase(forcedProvider)}` : "", "");
@@ -592,6 +623,13 @@ function renderTraceHeader(detail, pending = false) {
   metadata.forEach(([label, value]) => nodes.traceMetadata.append(metadataItem(label, value)));
 }
 
+function renderOutcome(detail, pending = false) {
+  const outcome = detail.outcome;
+  nodes.outcomeSummary.hidden = pending || !outcome?.text;
+  nodes.outcomeSummary.dataset.tone = outcome?.tone || "info";
+  setText(nodes.outcomeText, outcome?.text, "");
+}
+
 function stepSymbol(status) {
   return { ok: "✓", error: "!", warning: "!", skipped: "–", running: "•", info: "i" }[status] || "i";
 }
@@ -616,7 +654,13 @@ function renderTraceRow(step, total) {
   const copy = element("span", "step-copy");
   const nameLine = element("span", "step-name-line");
   nameLine.append(element("strong", "", step.name || "Unnamed step"));
-  nameLine.append(element("span", "step-outcome", step.outcome || "unknown"));
+  const outcome = element("span", "step-outcome", titleCase(step.outcome || "unknown"));
+  let jargon = null;
+  if (step.kind === "validation" && step.outcome === "rejected") jargon = "Validator Rejected";
+  if (step.kind === "cache" && step.outcome === "hit") jargon = "Cache Hit";
+  if (step.outcome === "provider_5xx") jargon = "Provider 5xx";
+  explainJargon(outcome, jargon);
+  nameLine.append(outcome);
   copy.append(nameLine, element("span", "step-summary", step.summary || "No step summary recorded."));
   main.append(copy);
 
@@ -1066,6 +1110,7 @@ function renderInspector(detail, { pending = false, keepView = false } = {}) {
   nodes.workspaceContent.hidden = false;
   nodes.workspaceContent.classList.toggle("is-pending", pending);
   renderTraceHeader(detail, pending);
+  renderOutcome(detail, pending);
   renderTraceTimeline(detail.trace, { live: pending });
   renderOutput(detail);
   renderEvaluation(detail.report || {});
@@ -1534,7 +1579,7 @@ function collectNodes() {
     "refresh-button", "settings-button", "new-scrape-button", "auth-button", "run-count", "last-updated",
     "metric-success", "metric-audit-fail", "metric-review", "judge-cost", "run-search",
     "status-filter", "run-list", "trace-workspace", "workspace-empty", "empty-new-scrape-button",
-    "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer",
+    "workspace-loading", "workspace-content", "activity-bar", "activity-title", "activity-detail", "activity-timer", "outcome-summary", "outcome-text",
     "trace-status-badge", "trace-audit-badge", "forced-provider-badge", "copy-run-id-button", "trace-url", "trace-metadata",
     "retry-button", "copy-link-button", "copy-url-button", "open-url-button", "artifact-count", "trace-step-count", "trace-timeline",
     "step-inspector", "content-toolbar", "content-viewer", "evaluation-subtitle", "evaluation-content",

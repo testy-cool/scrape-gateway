@@ -765,7 +765,7 @@ textarea::placeholder {
 
 .workspace-content {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -964,6 +964,58 @@ textarea::placeholder {
 .trace-actions {
   flex: 0 0 auto;
   gap: 7px;
+}
+
+.outcome-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  color: #cfddff;
+  background: #172035;
+  border-bottom: 1px solid #2d4269;
+}
+
+.outcome-summary[data-tone="success"] {
+  color: #bcebd5;
+  background: #14251f;
+  border-color: #28523f;
+}
+
+.outcome-summary[data-tone="warning"] {
+  color: #f4dba8;
+  background: #292216;
+  border-color: #5b4927;
+}
+
+.outcome-summary[data-tone="error"] {
+  color: #ffd0d4;
+  background: #2a171b;
+  border-color: #613039;
+}
+
+.outcome-summary p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.outcome-mark {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.has-jargon-help {
+  text-decoration: underline dotted currentColor;
+  text-underline-offset: 3px;
+  cursor: help;
 }
 
 .view-tabs {

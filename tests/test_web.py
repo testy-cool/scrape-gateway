@@ -459,6 +459,70 @@ async def test_run_detail_builds_a_cache_bypassing_retry_payload(tmp_path: Path)
     }
 
 
+def test_plain_language_outcome_confirms_verified_success() -> None:
+    from scrape_gateway.web import _outcome_summary
+
+    outcome = _outcome_summary(
+        {
+            "success": True,
+            "elapsed_ms": 2000,
+            "final": {"provider": "browserless", "screenshot_bytes": 2048},
+            "evaluation": {"status": "completed", "verdict": "pass"},
+        }
+    )
+
+    assert outcome == {
+        "tone": "success",
+        "text": "Scraped via Browserless in 2.0 s — content and screenshot verified.",
+    }
+
+
+def test_plain_language_outcome_explains_validator_rejection() -> None:
+    from scrape_gateway.web import _outcome_summary
+
+    outcome = _outcome_summary(
+        {
+            "success": False,
+            "diagnosis": "validator_rejected",
+            "attempts": [
+                {
+                    "provider": "browserless",
+                    "result": "validation_failed",
+                    "block_type": "consent_wall",
+                    "matched_pattern": "accept cookies to continue",
+                }
+            ],
+            "final": {"provider": "browserless"},
+        }
+    )
+
+    assert outcome == {
+        "tone": "error",
+        "text": (
+            "Rejected: the page looks like a consent wall "
+            "(matched 'accept cookies to continue') — retry with rendering or another provider."
+        ),
+    }
+
+
+def test_plain_language_outcome_explains_provider_server_errors() -> None:
+    from scrape_gateway.web import _outcome_summary
+
+    outcome = _outcome_summary(
+        {
+            "success": False,
+            "diagnosis": "provider_5xx",
+            "attempts": [{"provider": "browserless", "status": 502, "failure_reason": "http_5xx"}],
+            "final": {"provider": "browserless"},
+        }
+    )
+
+    assert outcome == {
+        "tone": "error",
+        "text": "Failed: Browserless returned a server error — retry later or choose another provider.",
+    }
+
+
 async def test_run_detail_exposes_an_ordered_trace_without_inventing_step_timings(
     tmp_path: Path,
 ) -> None:
@@ -666,6 +730,8 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
         "forced-provider-badge",
         "retry-button",
         "copy-link-button",
+        "outcome-summary",
+        "outcome-text",
         "live-toggle",
         "run-list",
         "trace-workspace",
@@ -712,6 +778,12 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert 'searchParams.get("tab")' in script.text
     assert "buildRunLink" in script.text
     assert "Run no longer available" in script.text
+    assert "JARGON_HELP" in script.text
+    assert "Audit fail" in script.text
+    assert "Validator Rejected" in script.text
+    assert "Cache Hit" in script.text
+    assert "Provider 5xx" in script.text
+    assert ".outcome-summary" in css.text
     assert "setInterval" in script.text
     assert "textContent" in script.text
     assert "grid-template-columns: 320px minmax(0, 1fr)" in css.text
