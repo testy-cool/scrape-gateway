@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-07-17
+
+### Fixed
+- Repository lint and formatting drift no longer stops GitHub Actions before the test suite can run.
+
 ## [0.10.0] - 2026-07-17
 
 ### Added
