@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import time
@@ -49,19 +50,40 @@ class ScrapeDriveProvider(ProviderAdapter):
 
         start = _start_tier(request)
         tiers = TIER_ORDER[TIER_ORDER.index(start) :]
+        attempted_tiers: list[str] = []
+        provider_start = time.perf_counter()
 
-        last_result: ScrapeResult | None = None
-        for tier in tiers:
-            result = await self._attempt(request, tier)
-            if result.success:
-                return result
-            last_result = result
-            if tier != tiers[-1]:
-                _log(
-                    f"    [{self.name}] {tier} failed, escalating to {tiers[tiers.index(tier) + 1]}"
-                )
+        try:
+            async with asyncio.timeout(request.timeout_seconds):
+                last_result: ScrapeResult | None = None
+                for tier in tiers:
+                    attempted_tiers.append(tier)
+                    result = await self._attempt(request, tier)
+                    if result.success:
+                        return result
+                    last_result = result
+                    if tier != tiers[-1]:
+                        _log(
+                            f"    [{self.name}] {tier} failed, escalating to "
+                            f"{tiers[tiers.index(tier) + 1]}"
+                        )
 
-        return last_result  # type: ignore[return-value]
+                return last_result  # type: ignore[return-value]
+        except TimeoutError:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                error=(
+                    f"ScrapeDrive exceeded its {request.timeout_seconds:g}s total timeout budget"
+                ),
+                failure_reason=FailureReason.TIMEOUT,
+                latency_ms=int((time.perf_counter() - provider_start) * 1000),
+                metadata={
+                    "attempted_tiers": attempted_tiers,
+                    "timeout_seconds": request.timeout_seconds,
+                },
+            )
 
     async def _attempt(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
         params: dict[str, str] = {

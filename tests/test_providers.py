@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 import respx
 
-from scrape_gateway.models import FailureReason, ScrapeRequest
+from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.providers.raw_http import RawHttpProvider
 from scrape_gateway.providers.scrape_do import ScrapeDoProvider
 from scrape_gateway.providers.scrapedrive import ScrapeDriveProvider
@@ -173,6 +175,31 @@ class TestScrapeDrive:
 
         assert result.success is True
         assert observed == [17]
+
+    async def test_timeout_budget_covers_all_tier_escalations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        attempted_tiers = []
+
+        async def slow_failure(self, request, tier):
+            attempted_tiers.append(tier)
+            await asyncio.sleep(0.02)
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                error=f"{tier} failed",
+                failure_reason=FailureReason.PROVIDER_ERROR,
+            )
+
+        monkeypatch.setattr(ScrapeDriveProvider, "_attempt", slow_failure)
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=0.03)
+        )
+
+        assert result.failure_reason == FailureReason.TIMEOUT
+        assert "hyperdrive" not in attempted_tiers
 
     @respx.mock
     async def test_json_response(self):
