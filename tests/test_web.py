@@ -234,9 +234,19 @@ async def test_active_scrape_exposes_incremental_trace_steps(tmp_path: Path) -> 
         await asyncio.wait_for(gateway.started.wait(), timeout=1)
 
         active = (await client.get("/api/runs")).json()["active_runs"][0]
-        assert [step["id"] for step in active["steps"]] == ["request", "provider-1"]
-        assert active["steps"][1]["status"] == "running"
-        assert active["steps"][1]["attributes"]["screenshot_requested"] is True
+        assert [step["id"] for step in active["steps"]] == ["request", "routing", "provider-1"]
+        assert active["steps"][2]["status"] == "running"
+        assert active["steps"][2]["attributes"]["screenshot_requested"] is True
+        assert active["provider"] == "browserless"
+        assert active["activity"] == "Waiting for Browserless"
+        assert active["current_step"] == {
+            "id": "provider-1",
+            "name": "Browserless request",
+            "kind": "provider",
+            "status": "running",
+            "outcome": "requesting",
+            "offset_ms": active["steps"][2]["offset_ms"],
+        }
 
         gateway.release.set()
         await request_task
@@ -576,6 +586,10 @@ async def test_console_shell_exposes_a_dense_trace_explorer(tmp_path: Path) -> N
     assert "screenshotArtifact" in script.text
     assert "restoreActiveScrape" in script.text
     assert "runsPayload.active_runs" in script.text
+    assert "updateLiveRunClock" in script.text
+    assert "data-live-elapsed" in script.text
+    assert 'classList.toggle("is-pending"' in script.text
+    assert ".workspace-content.is-pending" in css.text
     assert 'fetchJson("/api/settings")' in script.text
     assert 'fetchJson("/api/settings", { method: "PUT"' in script.text
     assert "renderProviderSettings" in script.text

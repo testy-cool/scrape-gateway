@@ -657,6 +657,8 @@ def create_console_routes(
             "started_at": datetime.now(timezone.utc).isoformat(),
             "status": "running",
             "diagnosis": "in_progress",
+            "activity": "Selecting an available provider.",
+            "provider": None,
             "payload": {
                 "url": scrape_request.url,
                 "evaluation_goal": metadata.get("evaluation_goal", ""),
@@ -682,8 +684,25 @@ def create_console_routes(
                 "duration_ms": None,
                 "timing": "order_only",
                 "attributes": active_entry["payload"],
-            }
+            },
+            {
+                "id": "routing",
+                "parent_id": None,
+                "name": "Build provider route",
+                "kind": "routing",
+                "status": "running",
+                "outcome": "planning",
+                "summary": "Selecting an available provider.",
+                "offset_ms": 0,
+                "duration_ms": None,
+                "timing": "order_only",
+                "attributes": {},
+            },
         ]
+        active_entry["current_step"] = {
+            key: active_entry["steps"][-1][key]
+            for key in ("id", "name", "kind", "status", "outcome", "offset_ms")
+        }
         active_scrapes[active_id] = active_entry
         scrape_request.metadata["run_id"] = active_id
         progress_start = time.perf_counter()
@@ -705,11 +724,20 @@ def create_console_routes(
             if existing is None:
                 step["offset_ms"] = int((time.perf_counter() - progress_start) * 1000)
                 active_entry["steps"].append(step)
+                current_step = step
             else:
                 offset_ms = existing.get("offset_ms", 0)
                 existing.update(step)
                 existing["offset_ms"] = offset_ms
+                current_step = existing
             active_entry["activity"] = step["summary"]
+            provider = step.get("attributes", {}).get("provider")
+            if provider:
+                active_entry["provider"] = provider
+            active_entry["current_step"] = {
+                key: current_step.get(key)
+                for key in ("id", "name", "kind", "status", "outcome", "offset_ms")
+            }
             active_entry["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         async def execute_scrape() -> ScrapeResult:
