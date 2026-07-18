@@ -13,7 +13,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
 
 _TOKEN = os.environ.get("SGW_MCP_TOKEN", "")
 _PORT = int(os.environ.get("SGW_MCP_PORT", "8100"))
@@ -125,9 +126,19 @@ def _apply_console_settings(settings: dict):
 
 
 def _create_service_app() -> Starlette:
+    from .service import create_app, health_payload
     from .web import create_console_routes
 
     mcp_app = mcp.streamable_http_app()
+    rest_app = create_app(
+        gateway_factory=_get_gateway,
+        token=_TOKEN,
+        route_prefix="",
+        include_health=False,
+    )
+
+    async def health(request) -> JSONResponse:
+        return JSONResponse(health_payload(_get_gateway()))
 
     @asynccontextmanager
     async def lifespan(application: Starlette) -> AsyncIterator[None]:
@@ -141,6 +152,8 @@ def _create_service_app() -> Starlette:
                 get_gateway=_get_gateway,
                 apply_settings=_apply_console_settings,
             ),
+            Route("/health", endpoint=health),
+            Mount("/v1", app=rest_app),
             Mount("/", app=mcp_app),
         ],
         lifespan=lifespan,
