@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-07-18
+
+### Added
+- Opt-in Requests, Botasaurus, Playwright, Pydoll, Helium, and Scrapy extensions turn the deterministic engines from the Zenbook ScrapingEvals lab into Gateway providers.
+- The `sg-cdp` extension registers Chrome CDP and Lightpanda providers for rendered HTML from externally managed browser endpoints, with PNG screenshots on Chrome.
+
+### Changed
+- Scrapy requests run in isolated child processes so Twisted reactor state cannot leak into long-running CLI, REST, or MCP processes.
+- The source registry and provider documentation map thirteen available local-engine packages back to the ScrapingEvals tool catalog and distinguish agent workflows from deterministic URL providers.
+
 ## [0.16.0] - 2026-07-18
 
 ### Added
