@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-07-18
+
+### Added
+- Scrapfly, Firecrawl, Jina Reader, ZenRows, Oxylabs, Bright Data Web Unlocker, and Spider Cloud expand the hosted API routing catalog with provider-native options and response handling.
+- Crawl4AI adds a self-hosted Docker API route for rendered HTML, native Markdown, selectors, mobile viewports, and screenshots.
+- Opt-in Scrapling, Camoufox, SeleniumBase CDP Mode, Patchright, Nodriver, and Crawlee extensions keep local browser engines out of the default installation.
+- A staged spider-rs extension defines the provider contract while its upstream Linux package remains unbuildable.
+
+### Changed
+- The extension registry exposes source-installable Browserless and local-engine packages directly from this repository.
+- Provider documentation now covers all fifteen built-ins and the isolated local-engine installation model.
+
 ## [0.15.0] - 2026-07-18
 
 ### Added
