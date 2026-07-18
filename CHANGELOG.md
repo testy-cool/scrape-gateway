@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-07-18
+
+### Added
+- Domain recipe YAML files can define provider order, request settings, validation phrases, known failure content, and cache freshness for matching sites and subdomains.
+- `sgw serve` exposes FastAPI endpoints for scraping, cache artifacts, learned domain statistics, health checks, and interactive OpenAPI documentation.
+- A production-ready Docker Compose definition provides a persistent data volume, health check, environment template, and a direct Coolify import path.
+
+### Changed
+- The persistent MCP and browser-console process also serves the token-protected REST API under `/v1` and a public `/health` endpoint.
+- Domain memory supports gateways constructed outside the ASGI worker thread while keeping operations synchronous and transactional.
+
 ## [0.14.0] - 2026-07-18
 
 ### Added
