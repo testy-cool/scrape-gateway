@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-18
+
+### Added
+- `sgw url` and `sgw run` can write the selected HTML or Markdown content to an existing directory with `--output`/`-o`, while Rich status stays in the console.
+- `sgw telemetry --summary` aggregates domain success rates, common diagnoses, average attempts and cost, and provider wins per attempt over the selected recent reports, with optional JSON output.
+- The README compares all eight current adapters by JavaScript, screenshot, native Markdown, country, CAPTCHA, and routing cost capability, with a regression test against provider declarations.
+
 ## [0.12.0] - 2026-07-17
 
 ### Added
