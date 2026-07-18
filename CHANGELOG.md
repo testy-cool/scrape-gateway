@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2] - 2026-07-19
+
+### Fixed
+- The Nodriver extension supports current Nodriver releases on Python 3.11 through 3.13 and rejects Python 3.14 before installation, where upstream generated protocol sources fail to parse.
+
 ## [0.17.1] - 2026-07-19
 
 ### Fixed
