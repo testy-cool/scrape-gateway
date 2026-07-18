@@ -82,7 +82,11 @@ def test_summarize_telemetry_aggregates_domains_diagnoses_costs_and_provider_hit
         },
     ]
 
-    summary = summarize_telemetry(reports)
+    with patch(
+        "scrape_gateway.discovery.discover_providers",
+        return_value={"browserless": object, "raw_http": object},
+    ):
+        summary = summarize_telemetry(reports)
 
     assert summary["runs"] == 3
     assert summary["successful_runs"] == 2
