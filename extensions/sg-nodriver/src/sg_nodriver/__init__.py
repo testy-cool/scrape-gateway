@@ -9,6 +9,24 @@ from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, Scrape
 from scrape_gateway.errors import classify_failure
 
 
+async def _wait_for_document(page, wait_event: str | None, timeout_seconds: float) -> None:
+    accepted_states = {"complete"}
+    if wait_event not in {"load", "networkidle"}:
+        accepted_states.add("interactive")
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_seconds
+    while True:
+        try:
+            state = await page.evaluate("document.readyState", return_by_value=True)
+        except Exception:  # noqa: BLE001 - the execution context may still be attaching
+            state = None
+        if state in accepted_states:
+            return
+        if loop.time() >= deadline:
+            raise TimeoutError(f"document did not reach {sorted(accepted_states)}")
+        await asyncio.sleep(0.05)
+
+
 class NodriverProvider(ProviderAdapter):
     name = "nodriver"
     cost_rank = 16
@@ -22,6 +40,7 @@ class NodriverProvider(ProviderAdapter):
 
             browser = await nodriver.start(headless=True)
             page = await browser.get(request.url)
+            await _wait_for_document(page, request.wait_event, request.timeout_seconds)
             if request.wait_selector:
                 await page.select(request.wait_selector, timeout=request.timeout_seconds)
             if request.extra_wait_ms:
