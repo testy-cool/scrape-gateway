@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-18
+
+### Added
+- `sgw meta` and `sgw url --meta` now extract Twitter Card tags, JSON-LD blocks, canonical and icon URLs, charset, and robots directives alongside existing OpenGraph keys.
+
+### Changed
+- Relative canonical and icon URLs resolve against the scraped page, while malformed JSON-LD blocks are skipped without hiding other valid metadata.
+
 ## [0.13.1] - 2026-07-18
 
 ### Fixed
