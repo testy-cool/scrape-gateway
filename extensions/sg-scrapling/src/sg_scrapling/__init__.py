@@ -5,6 +5,7 @@ import time
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_failure
+from scrape_gateway.headers import browser_context_headers
 
 
 class ScraplingProvider(ProviderAdapter):
@@ -25,7 +26,7 @@ class ScraplingProvider(ProviderAdapter):
                     network_idle=request.wait_event == "networkidle",
                     wait_selector=request.wait_selector,
                     wait=request.extra_wait_ms,
-                    extra_headers=request.headers or None,
+                    extra_headers=browser_context_headers(request.headers) or None,
                     block_ads=request.block_ads,
                     timeout=int(request.timeout_seconds * 1000),
                 )

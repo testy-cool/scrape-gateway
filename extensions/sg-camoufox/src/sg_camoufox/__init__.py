@@ -4,6 +4,7 @@ import time
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_failure
+from scrape_gateway.headers import browser_context_headers
 
 
 class CamoufoxProvider(ProviderAdapter):
@@ -18,7 +19,7 @@ class CamoufoxProvider(ProviderAdapter):
 
             async with AsyncCamoufox(headless=True) as browser:
                 page = await browser.new_page(
-                    extra_http_headers=request.headers or None,
+                    extra_http_headers=browser_context_headers(request.headers) or None,
                     no_viewport=True,
                 )
                 await page.goto(

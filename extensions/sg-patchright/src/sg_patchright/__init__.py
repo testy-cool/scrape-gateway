@@ -4,6 +4,7 @@ import time
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_failure
+from scrape_gateway.headers import browser_context_headers
 
 
 class PatchrightProvider(ProviderAdapter):
@@ -19,7 +20,9 @@ class PatchrightProvider(ProviderAdapter):
             async with async_playwright() as playwright:
                 browser = await playwright.chromium.launch(headless=True)
                 try:
-                    page = await browser.new_page(extra_http_headers=request.headers or None)
+                    page = await browser.new_page(
+                        extra_http_headers=browser_context_headers(request.headers) or None
+                    )
                     await page.goto(
                         request.url,
                         wait_until=request.wait_event or "domcontentloaded",

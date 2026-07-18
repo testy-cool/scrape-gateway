@@ -5,6 +5,7 @@ import time
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_exception, classify_failure
+from scrape_gateway.headers import browser_context_headers
 
 
 class _CdpProvider(ProviderAdapter):
@@ -35,8 +36,9 @@ class _CdpProvider(ProviderAdapter):
                 )
                 context = browser.contexts[0] if browser.contexts else await browser.new_context()
                 page = await context.new_page()
-                if request.headers:
-                    await page.set_extra_http_headers(request.headers)
+                extra_headers = browser_context_headers(request.headers)
+                if extra_headers:
+                    await page.set_extra_http_headers(extra_headers)
                 response = await page.goto(
                     request.url,
                     wait_until=request.wait_event or "domcontentloaded",
