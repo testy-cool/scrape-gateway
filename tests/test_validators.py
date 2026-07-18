@@ -70,6 +70,34 @@ def test_js_required():
     assert result.block_type == "js_shell"
 
 
+def test_ebay_error_page_is_not_accepted_as_useful_content():
+    html = (
+        "<html><head><title>Error Page | eBay</title></head><body>"
+        "<h1>SORRY</h1><p>Something went wrong on our end.</p>"
+        "<p>Please go back and try again or go to eBay Homepage.</p>" + "x" * 200 + "</body></html>"
+    )
+
+    result = validate_content(html)
+
+    assert not result.passed
+    assert result.block_type == "generic_error"
+    assert result.matched_pattern == "something went wrong on our end"
+
+
+def test_generic_error_phrase_on_full_page_is_not_a_block_signature():
+    html = (
+        "<html><body><article><h1>Troubleshooting guide</h1>"
+        "<p>The message says something went wrong on our end.</p>"
+        + "x" * 8_192
+        + "</article></body></html>"
+    )
+
+    result = validate_content(html)
+
+    assert result.passed
+    assert result.block_type is None
+
+
 def test_create_account_marketing_copy_not_login_wall():
     html = (
         "<html><body><h1>Developer platform</h1>"

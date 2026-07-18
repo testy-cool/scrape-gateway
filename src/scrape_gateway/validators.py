@@ -31,6 +31,9 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
         "please turn javascript on",
         "you need to enable javascript",
     ],
+    "generic_error": [
+        "something went wrong on our end",
+    ],
     "login_wall": [
         "sign in to continue",
         "log in to continue",
@@ -47,6 +50,7 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
 }
 
 CONSENT_WALL_MAX_CONTENT_CHARS = 8_192
+GENERIC_ERROR_MAX_CONTENT_CHARS = 8_192
 
 
 @dataclass(slots=True)
@@ -99,6 +103,8 @@ def validate_content(
     checks_run.append("block_signatures")
     for sig_type, patterns in BLOCK_SIGNATURES.items():
         if sig_type == "consent_wall" and len(text) >= CONSENT_WALL_MAX_CONTENT_CHARS:
+            continue
+        if sig_type == "generic_error" and len(text) >= GENERIC_ERROR_MAX_CONTENT_CHARS:
             continue
         for pattern in patterns:
             if pattern in text:

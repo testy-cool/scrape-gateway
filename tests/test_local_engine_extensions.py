@@ -18,6 +18,14 @@ from scrape_gateway import ProviderAdapter, ScrapeRequest
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "https://example.com/products"
 HTML = "<html><body><h1>Products</h1><p>Local browser result with useful content.</p></body></html>"
+BROWSER_HEADERS = {
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "User-Agent": "synthetic user agent",
+    "Accept": "text/html,*/*",
+    "X-Test": "yes",
+}
+FILTERED_BROWSER_HEADERS = {"X-Test": "yes"}
 
 
 def load_extension(package: str):
@@ -128,7 +136,7 @@ async def test_playwright_returns_response_status_html_and_screenshot(monkeypatc
 
     class Browser(FakeBrowser):
         async def new_page(self, **kwargs):
-            assert kwargs["extra_http_headers"] == {"X-Test": "yes"}
+            assert kwargs["extra_http_headers"] == FILTERED_BROWSER_HEADERS
             return Page()
 
     class Playwright:
@@ -154,7 +162,7 @@ async def test_playwright_returns_response_status_html_and_screenshot(monkeypatc
     provider = load_extension("sg-playwright").PlaywrightProvider()
 
     result = await provider.scrape(
-        ScrapeRequest(TARGET, headers={"X-Test": "yes"}, screenshot=True)
+        ScrapeRequest(TARGET, headers=BROWSER_HEADERS.copy(), screenshot=True)
     )
 
     assert result.success is True
@@ -373,6 +381,9 @@ async def test_cdp_providers_attach_to_configured_endpoint(monkeypatch) -> None:
     class Page(FakePage):
         url = TARGET
 
+        async def set_extra_http_headers(self, headers):
+            assert headers == FILTERED_BROWSER_HEADERS
+
         async def close(self):
             return None
 
@@ -405,7 +416,9 @@ async def test_cdp_providers_attach_to_configured_endpoint(monkeypatch) -> None:
     monkeypatch.setenv("CHROME_CDP_URL", "http://127.0.0.1:9222")
     provider = load_extension("sg-cdp").ChromeCdpProvider()
 
-    result = await provider.scrape(ScrapeRequest(TARGET, screenshot=True))
+    result = await provider.scrape(
+        ScrapeRequest(TARGET, headers=BROWSER_HEADERS.copy(), screenshot=True)
+    )
 
     assert result.success is True
     assert result.html == HTML
@@ -440,6 +453,39 @@ async def test_scrapling_uses_async_static_fetcher(monkeypatch) -> None:
     assert result.success is True
     assert result.html == HTML
     assert result.route == "scrapling:http"
+
+
+async def test_scrapling_filters_browser_managed_headers_for_stealth_fetcher(
+    monkeypatch,
+) -> None:
+    response = types.SimpleNamespace(
+        status=200,
+        body=HTML.encode(),
+        encoding="utf-8",
+        url=TARGET,
+    )
+
+    class StealthyFetcher:
+        @staticmethod
+        def fetch(url, **kwargs):
+            assert url == TARGET
+            assert kwargs["extra_headers"] == FILTERED_BROWSER_HEADERS
+            return response
+
+    fetchers = types.ModuleType("scrapling.fetchers")
+    fetchers.AsyncFetcher = object
+    fetchers.StealthyFetcher = StealthyFetcher
+    monkeypatch.setitem(sys.modules, "scrapling", types.ModuleType("scrapling"))
+    monkeypatch.setitem(sys.modules, "scrapling.fetchers", fetchers)
+    provider = load_extension("sg-scrapling").ScraplingProvider()
+
+    result = await provider.scrape(
+        ScrapeRequest(TARGET, headers=BROWSER_HEADERS.copy(), render_js=True)
+    )
+
+    assert result.success is True
+    assert result.html == HTML
+    assert result.route == "scrapling:stealth"
 
 
 async def test_spider_rs_fetches_one_page_off_thread(monkeypatch) -> None:
@@ -515,13 +561,20 @@ async def test_camoufox_returns_rendered_html_and_screenshot(monkeypatch) -> Non
     provider = load_extension("sg-camoufox").CamoufoxProvider()
 
     result = await provider.scrape(
-        ScrapeRequest(TARGET, screenshot=True, wait_selector="#products", extra_wait_ms=250)
+        ScrapeRequest(
+            TARGET,
+            headers=BROWSER_HEADERS.copy(),
+            screenshot=True,
+            wait_selector="#products",
+            extra_wait_ms=250,
+        )
     )
 
     assert result.success is True
     assert result.html == HTML
     assert result.screenshot == b"browser-png"
     assert new_page_kwargs["no_viewport"] is True
+    assert new_page_kwargs["extra_http_headers"] == FILTERED_BROWSER_HEADERS
 
 
 async def test_seleniumbase_uses_async_cdp_mode(monkeypatch) -> None:
@@ -570,9 +623,18 @@ class FakePlaywright:
 
 
 async def test_patchright_uses_async_playwright_contract(monkeypatch) -> None:
+    class Browser(FakeBrowser):
+        async def new_page(self, **kwargs):
+            assert kwargs["extra_http_headers"] == FILTERED_BROWSER_HEADERS
+            return FakePage()
+
+    class Playwright(FakePlaywright):
+        async def launch(self, **kwargs):
+            return Browser()
+
     class Manager:
         async def __aenter__(self):
-            return FakePlaywright()
+            return Playwright()
 
         async def __aexit__(self, *args):
             return None
@@ -583,7 +645,9 @@ async def test_patchright_uses_async_playwright_contract(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "patchright.async_api", api)
     provider = load_extension("sg-patchright").PatchrightProvider()
 
-    result = await provider.scrape(ScrapeRequest(TARGET, screenshot=True))
+    result = await provider.scrape(
+        ScrapeRequest(TARGET, headers=BROWSER_HEADERS.copy(), screenshot=True)
+    )
 
     assert result.success is True
     assert result.html == HTML

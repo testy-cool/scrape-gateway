@@ -4,6 +4,7 @@ import time
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_exception, classify_failure
+from scrape_gateway.headers import browser_context_headers
 
 
 class PlaywrightProvider(ProviderAdapter):
@@ -20,7 +21,7 @@ class PlaywrightProvider(ProviderAdapter):
                 browser = await playwright.chromium.launch(headless=True)
                 try:
                     page_options: dict[str, object] = {
-                        "extra_http_headers": request.headers or None,
+                        "extra_http_headers": browser_context_headers(request.headers) or None,
                     }
                     if request.mobile:
                         page_options.update(

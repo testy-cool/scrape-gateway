@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from ..errors import classify_failure
+from ..headers import browser_context_headers
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -59,8 +60,9 @@ class Crawl4AIProvider(ProviderAdapter):
         browser_params: dict[str, Any] = {"headless": True}
         if request.mobile:
             browser_params.update({"viewport_width": 390, "viewport_height": 844})
-        if request.headers:
-            browser_params["headers"] = request.headers
+        extra_headers = browser_context_headers(request.headers)
+        if extra_headers:
+            browser_params["headers"] = extra_headers
 
         crawler_params: dict[str, Any] = {
             "stream": False,
