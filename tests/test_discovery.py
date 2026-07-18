@@ -33,6 +33,7 @@ SHIPPED_PROVIDERS = frozenset(
         "oxylabs",
         "brightdata",
         "spider_cloud",
+        "crawl4ai",
     }
 )
 from scrape_gateway.models import ScrapeRequest, ScrapeResult

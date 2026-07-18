@@ -1,0 +1,24 @@
+[project]
+name = "sg-spider-rs"
+version = "0.1.0"
+description = "Fast spider-rs single-page provider for scrape-gateway"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "scrape-gateway>=0.15.0",
+  "spider-rs @ git+https://github.com/spider-rs/spider-py@v0.0.58",
+]
+
+[project.entry-points."scrape_gateway.providers"]
+spider_rs = "sg_spider_rs:SpiderRsProvider"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sg_spider_rs"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

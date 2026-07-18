@@ -27,9 +27,58 @@
 - name: sg-browserless
   type: provider
   description: Browserless rendered HTML and screenshots via your own browser service
-  package: sg-browserless
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-browserless
   url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-browserless
+  status: available
+
+- name: sg-scrapling
+  type: provider
+  description: Scrapling HTTP and stealth-browser fetching
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-scrapling
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-scrapling
+  status: available
+
+- name: sg-spider-rs
+  type: provider
+  description: Fast Rust-backed single-page fetching through spider-rs
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-spider-rs
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-spider-rs
   status: planned
+
+- name: sg-camoufox
+  type: provider
+  description: Anti-detect Firefox rendering and screenshots through Camoufox
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-camoufox
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-camoufox
+  status: available
+
+- name: sg-seleniumbase
+  type: provider
+  description: SeleniumBase async CDP Mode rendering and screenshots
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-seleniumbase
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-seleniumbase
+  status: available
+
+- name: sg-patchright
+  type: provider
+  description: Patched Chromium rendering and screenshots through Patchright
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-patchright
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-patchright
+  status: available
+
+- name: sg-nodriver
+  type: provider
+  description: Direct Chrome DevTools rendering and screenshots through Nodriver
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-nodriver
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-nodriver
+  status: available
+
+- name: sg-crawlee
+  type: provider
+  description: Bounded Crawlee Playwright rendering and screenshots
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-crawlee
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-crawlee
+  status: available
 
 - name: sg-amazon-paapi
   type: provider

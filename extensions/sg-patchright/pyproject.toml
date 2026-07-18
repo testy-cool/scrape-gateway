@@ -1,0 +1,18 @@
+[project]
+name = "sg-patchright"
+version = "0.1.0"
+description = "Patchright Chromium provider for scrape-gateway"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = ["scrape-gateway>=0.15.0", "patchright>=1.55"]
+
+[project.entry-points."scrape_gateway.providers"]
+patchright = "sg_patchright:PatchrightProvider"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sg_patchright"]
