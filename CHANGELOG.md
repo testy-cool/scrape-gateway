@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3] - 2026-07-19
+
+### Fixed
+- Browser-backed providers leave navigation-only fetch metadata, resource Accept values, request priority, and user-agent selection to the browser engine so CSS and JavaScript subrequests are not rejected or fingerprinted inconsistently.
+- Short generic error responses such as eBay's error page are rejected instead of being accepted as useful scrape results.
+
 ## [0.17.2] - 2026-07-19
 
 ### Fixed
