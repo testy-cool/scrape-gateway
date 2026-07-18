@@ -142,6 +142,13 @@ runtime into the gateway environment.
 
 | Extension | Provider | Runtime | Capabilities |
 |---|---|---|---|
+| `extensions/sg-requests` | `requests` | Python Requests worker thread | HTML |
+| `extensions/sg-botasaurus` | `botosaurus` | Botasaurus Request | HTML, fingerprinted HTTP |
+| `extensions/sg-playwright` | `playwright` | direct Playwright Chromium | HTML, JS, screenshot |
+| `extensions/sg-pydoll` | `pydoll` | direct Chrome DevTools | HTML, JS, screenshot |
+| `extensions/sg-helium` | `helium` | Helium / Selenium Chrome | HTML, JS, screenshot |
+| `extensions/sg-scrapy` | `scrapy` | isolated Twisted crawler worker | HTML |
+| `extensions/sg-cdp` | `chrome_cdp`, `lightpanda` | external CDP browser | HTML, JS; Chrome screenshots |
 | `extensions/sg-scrapling` | `scrapling` | Scrapling HTTP / stealth Patchright | HTML, JS/stealth |
 | `extensions/sg-spider-rs` | `spider_rs` | Rust-backed Page API | single-page HTML |
 | `extensions/sg-camoufox` | `camoufox` | fingerprinted Firefox | HTML, JS, screenshot |
@@ -151,7 +158,7 @@ runtime into the gateway environment.
 | `extensions/sg-crawlee` | `crawlee` | bounded PlaywrightCrawler | HTML, JS, screenshot |
 
 Install instructions and required browser bootstrap commands live in each extension's README.
-The adapter contracts follow the official [Scrapling fetcher guide](https://scrapling.readthedocs.io/en/latest/fetching/choosing.html), [spider-rs Python guide](https://github.com/spider-rs/spider-py), [Camoufox Python API](https://camoufox.com/python/usage/), [SeleniumBase CDP Mode](https://seleniumbase.io/examples/cdp_mode/ReadMe/), [Patchright Python API](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), [Nodriver API](https://ultrafunkamsterdam.github.io/nodriver/nodriver/quickstart.html), and [Crawlee PlaywrightCrawler API](https://crawlee.dev/python/api/class/PlaywrightCrawler).
+The adapter contracts follow the official [Playwright Python API](https://playwright.dev/python/docs/api/class-playwright), [Playwright CDP API](https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp), [Pydoll API](https://pydoll.tech/), [Scrapy API](https://docs.scrapy.org/en/latest/), [Scrapling fetcher guide](https://scrapling.readthedocs.io/en/latest/fetching/choosing.html), [spider-rs Python guide](https://github.com/spider-rs/spider-py), [Camoufox Python API](https://camoufox.com/python/usage/), [SeleniumBase CDP Mode](https://seleniumbase.io/examples/cdp_mode/ReadMe/), [Patchright Python API](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), [Nodriver API](https://ultrafunkamsterdam.github.io/nodriver/nodriver/quickstart.html), and [Crawlee PlaywrightCrawler API](https://crawlee.dev/python/api/class/PlaywrightCrawler).
 
 `sg-spider-rs` is staged rather than marked available: upstream PyPI 0.0.57 has invalid
 metadata and the v0.0.58 Git source currently fails to compile against the `spider` crate

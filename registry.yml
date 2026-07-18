@@ -31,6 +31,55 @@
   url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-browserless
   status: available
 
+- name: sg-requests
+  type: provider
+  description: Python Requests HTTP baseline from the ScrapingEvals lab
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-requests
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-requests
+  status: available
+
+- name: sg-botasaurus
+  type: provider
+  description: Botasaurus fingerprint-aware request client
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-botasaurus
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-botasaurus
+  status: available
+
+- name: sg-playwright
+  type: provider
+  description: Direct Playwright Chromium rendering and screenshots
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-playwright
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-playwright
+  status: available
+
+- name: sg-pydoll
+  type: provider
+  description: Direct Chrome DevTools rendering and screenshots through Pydoll
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-pydoll
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-pydoll
+  status: available
+
+- name: sg-helium
+  type: provider
+  description: Helium Selenium browser rendering and screenshots
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-helium
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-helium
+  status: available
+
+- name: sg-scrapy
+  type: provider
+  description: Isolated single-page Scrapy crawler worker
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-scrapy
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-scrapy
+  status: available
+
+- name: sg-cdp
+  type: provider
+  description: Chrome and Lightpanda browser endpoints over CDP
+  package: git+https://github.com/testy-cool/scrape-gateway.git#subdirectory=extensions/sg-cdp
+  url: https://github.com/testy-cool/scrape-gateway/tree/main/extensions/sg-cdp
+  status: available
+
 - name: sg-scrapling
   type: provider
   description: Scrapling HTTP and stealth-browser fetching
@@ -84,12 +133,6 @@
   type: provider
   description: Amazon Product Advertising API — structured product data, no proxies needed
   url: https://github.com/scrape-gateway/sg-amazon-paapi
-  status: planned
-
-- name: sg-playwright
-  type: provider
-  description: Full browser rendering via Playwright — JS-heavy sites, SPAs, screenshots
-  url: https://github.com/scrape-gateway/sg-playwright
   status: planned
 
 - name: sg-selenium

@@ -172,6 +172,12 @@ prompts, validators, or routing.
 
 Drop a provider `.py` file in `~/.config/scrape-gateway/providers/`, drop a command `.py` file in `~/.config/scrape-gateway/commands/`, or install from the registry with `sgw extensions`. See [docs/extensions.md](docs/extensions.md).
 
+The source registry includes opt-in adapters for the deterministic engines from the
+Zenbook ScrapingEvals lab: Requests, Botasaurus, Playwright, Pydoll, Helium, Scrapy,
+Chrome CDP, Lightpanda, Scrapling, Camoufox, SeleniumBase, Patchright, Nodriver, and
+Crawlee. They remain separate packages so a deployment installs only the browser and
+crawler runtimes it intends to use.
+
 ## Python API
 
 ```python

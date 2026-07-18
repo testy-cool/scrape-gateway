@@ -138,11 +138,20 @@ sgw url https://example.com --render-js --screenshot -p browserless
 With `--screenshot`, the extension fetches `/content` and `/screenshot` concurrently
 so the result contains both rendered HTML and visual evidence for validation or AI audit.
 
-### Local browser and crawler providers
+### ScrapingEvals local engine providers
 
-Six available source extensions keep heavyweight engines out of the default installation:
+Thirteen available source extensions turn the deterministic engines from the Zenbook
+ScrapingEvals lab into optional Gateway providers while keeping heavyweight dependencies
+out of the default installation:
 
 ```bash
+uv pip install -e extensions/sg-requests
+uv pip install -e extensions/sg-botasaurus
+uv pip install -e extensions/sg-playwright
+uv pip install -e extensions/sg-pydoll
+uv pip install -e extensions/sg-helium
+uv pip install -e extensions/sg-scrapy
+uv pip install -e extensions/sg-cdp
 uv pip install -e extensions/sg-scrapling
 uv pip install -e extensions/sg-camoufox
 uv pip install -e extensions/sg-seleniumbase
@@ -151,8 +160,20 @@ uv pip install -e extensions/sg-nodriver
 uv pip install -e extensions/sg-crawlee
 ```
 
-Use only the package or packages needed by the deployment. Scrapling, Camoufox,
-Patchright, and Crawlee require the browser bootstrap command documented in their
-package README after installation. `sg-spider-rs` is also staged in-tree, but its
-README documents the upstream Linux build failure that keeps it out of the available
-registry until the dependency is installable.
+Use only the package or packages needed by the deployment. Playwright, Scrapling,
+Camoufox, Patchright, and Crawlee require the browser bootstrap command documented in
+their package README after installation. Pydoll and Helium use an installed Chrome or
+Chromium. `sg-cdp` attaches to `CHROME_CDP_URL` or `LIGHTPANDA_CDP_URL` instead of
+starting a browser. Scrapy runs each crawl in a child process so Twisted's reactor never
+pollutes the long-running Gateway process.
+
+The ScrapingEvals Requests and HTTPX baselines map to `requests` and the built-in
+`raw_http` provider respectively. Its separate Camoufox headed/tuned tracks are runtime
+configurations of the `camoufox` engine, not distinct provider contracts.
+
+Agentic tools such as browser-use, Stagehand, and Skyvern are not registered as URL
+providers: their success includes an LLM task and action trace, which does not fit the
+deterministic `scrape(url) -> content` contract. Puppeteer still needs a safe Node
+dependency/bootstrap contract. `sg-spider-rs` is staged in-tree, but its README documents
+the upstream Linux build failure that keeps it out of the available registry until the
+dependency is installable.
