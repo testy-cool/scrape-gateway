@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4] - 2026-07-19
+
+### Fixed
+- Nodriver waits for the requested document readiness state before capturing HTML, selectors, or screenshots, preventing partial documents from being reported as complete.
+
 ## [0.17.3] - 2026-07-19
 
 ### Fixed
