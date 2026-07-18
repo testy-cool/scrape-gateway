@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2026-07-19
+
+### Fixed
+- Camoufox disables Playwright's default viewport command so its Firefox protocol remains compatible with Playwright 1.61.
+- Nodriver excludes the malformed 0.50.3 release and captures screenshots through the supported filename-based API.
+
 ## [0.17.0] - 2026-07-18
 
 ### Added
