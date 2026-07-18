@@ -23,9 +23,7 @@ class SpiderRsProvider(ProviderAdapter):
             return page.get_html()
 
         try:
-            html = await asyncio.wait_for(
-                asyncio.to_thread(fetch), timeout=request.timeout_seconds
-            )
+            html = await asyncio.wait_for(asyncio.to_thread(fetch), timeout=request.timeout_seconds)
             failure = classify_failure(200, html)
             return ScrapeResult(
                 request.url,

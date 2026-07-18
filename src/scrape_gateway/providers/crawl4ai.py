@@ -102,10 +102,10 @@ class Crawl4AIProvider(ProviderAdapter):
             status_code = int(item.get("status_code") or response.status_code)
             failure = classify_failure(status_code, html or markdown)
             provider_success = bool(item.get("success", data.get("success", False)))
-            if (
-                (not response.is_success or not provider_success)
-                and failure in {None, FailureReason.EMPTY_CONTENT}
-            ):
+            if (not response.is_success or not provider_success) and failure in {
+                None,
+                FailureReason.EMPTY_CONTENT,
+            }:
                 failure = FailureReason.PROVIDER_ERROR
             screenshot = _decode_screenshot(item.get("screenshot"))
             screenshot_error = request.screenshot and screenshot is None
@@ -126,7 +126,9 @@ class Crawl4AIProvider(ProviderAdapter):
                 markdown=markdown,
                 screenshot=screenshot,
                 failure_reason=(
-                    FailureReason.PROVIDER_ERROR if screenshot_error and failure is None else failure
+                    FailureReason.PROVIDER_ERROR
+                    if screenshot_error and failure is None
+                    else failure
                 ),
                 error=str(error) if error else None,
                 latency_ms=int((time.perf_counter() - start) * 1000),
