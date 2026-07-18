@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from scrape_gateway.models import ScrapeResult
 from scrape_gateway.telemetry import (
     TelemetryRecorder,
@@ -100,6 +102,43 @@ def test_summarize_telemetry_aggregates_domains_diagnoses_costs_and_provider_hit
         {"provider": "browserless", "attempts": 2, "wins": 1, "hit_rate_pct": 50.0},
         {"provider": "raw_http", "attempts": 2, "wins": 1, "hit_rate_pct": 50.0},
     ]
+
+
+def test_summarize_telemetry_limits_provider_hits_to_discovered_registry() -> None:
+    reports = [
+        {
+            "domain": "example.com",
+            "success": True,
+            "diagnosis": "success",
+            "attempts": [
+                {"provider": "header_capture", "cost": 0},
+                {"provider": "raw_http", "cost": 0},
+            ],
+            "final": {"provider": "raw_http"},
+        },
+        {
+            "domain": "example.com",
+            "success": True,
+            "diagnosis": "success",
+            "attempts": [
+                {"provider": "extension_provider", "cost": 1},
+                {"provider": "success", "cost": 0},
+            ],
+            "final": {"provider": "success"},
+        },
+    ]
+
+    with patch(
+        "scrape_gateway.discovery.discover_providers",
+        return_value={"raw_http": object, "extension_provider": object},
+    ):
+        summary = summarize_telemetry(reports)
+
+    assert summary["providers"] == [
+        {"provider": "raw_http", "attempts": 1, "wins": 1, "hit_rate_pct": 100.0},
+        {"provider": "extension_provider", "attempts": 1, "wins": 0, "hit_rate_pct": 0.0},
+    ]
+    assert summary["non_provider_attempts"] == 2
 
 
 def test_recorder_saves_final_visual_and_text_evidence_without_ai_evaluation(tmp_path) -> None:

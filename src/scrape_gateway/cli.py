@@ -566,6 +566,13 @@ def _print_telemetry_summary(summary: dict, *, limit: int) -> None:
             f"[{style}]{rate:.1f}%[/]",
         )
     console.print(providers)
+    non_provider_attempts = summary.get("non_provider_attempts", 0)
+    if non_provider_attempts:
+        suffix = "record" if non_provider_attempts == 1 else "records"
+        console.print(
+            f"[dim]({non_provider_attempts} non-provider {suffix} omitted; provider names "
+            "come from the resolved registry.)[/]"
+        )
     console.print(
         "[dim]Tuning hint: providers with many attempts and a low hit rate are candidates "
         "to move later in the routing order.[/]"

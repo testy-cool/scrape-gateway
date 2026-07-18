@@ -302,6 +302,9 @@ def load_recent_reports(
 
 
 def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
+    from .discovery import discover_providers
+
+    provider_names = set(discover_providers())
     domain_runs: Counter[str] = Counter()
     domain_successes: Counter[str] = Counter()
     diagnosis_counts: Counter[str] = Counter()
@@ -309,6 +312,7 @@ def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
     provider_wins: Counter[str] = Counter()
     successful_runs = 0
     attempt_count = 0
+    non_provider_attempts = 0
     total_cost = 0.0
 
     for report in reports:
@@ -330,15 +334,17 @@ def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
             if not isinstance(attempt, dict):
                 continue
             provider = str(attempt.get("provider") or "")
-            if provider and provider != "cache":
+            if provider in provider_names:
                 provider_attempts[provider] += 1
+            elif provider and provider != "cache":
+                non_provider_attempts += 1
             cost = attempt.get("cost")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 total_cost += float(cost)
 
         final = report.get("final")
         winner = str(final.get("provider") or "") if isinstance(final, dict) else ""
-        if success and winner and winner != "cache":
+        if success and winner in provider_names:
             provider_wins[winner] += 1
 
     run_count = len(reports)
@@ -386,6 +392,7 @@ def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "domains": domains,
         "diagnoses": diagnoses,
         "providers": providers,
+        "non_provider_attempts": non_provider_attempts,
     }
 
 
