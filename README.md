@@ -80,19 +80,36 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-7 built-in, 3 free. Router tries cheapest first.
+Seven built-in providers plus the bundled Browserless extension. The router tries
+lower cost ranks first.
 
-| Provider | Cost | JS | Geo | Anti-bot |
-|---|---|---|---|---|
-| `raw_http` | free | no | no | none |
-| `wreq` | free | no | no | TLS fingerprinting |
-| `curl_cffi` | free | no | no | TLS fingerprinting |
-| `scrapedrive` | paid | yes | yes | full (3 tiers) |
-| `scrape_do` | paid | yes | yes | residential proxies |
-| `scrapingbee` | paid | yes | yes | premium proxies |
-| `scraperapi` | paid | yes | yes | premium proxies |
+| Provider | JS | Screenshot | Markdown | Country | CAPTCHA | Cost tier |
+|---|---|---|---|---|---|---|
+| `raw_http` | No | No | No | No | No | Free · rank 0 |
+| `wreq` | No | No | No | No | No | Free · rank 2 |
+| `curl_cffi` | No | No | No | No | No | Free · rank 3 |
+| `browserless` | Yes | Yes | No | No | No | Self-hosted · rank 20 |
+| `scrapedrive` | Yes | Yes | Yes | Yes | Yes (hyperdrive) | Paid · rank 25 |
+| `scrape_do` | Yes | No | No | Yes | Yes (automatic) | Paid · rank 30 |
+| `scrapingbee` | Yes | No | No | Yes | Yes (premium proxy) | Paid · rank 35 |
+| `scraperapi` | Yes | Yes | No | Yes | Yes (retry/bypass) | Paid · rank 40 |
 
-Add API keys in `.env` to enable paid providers. Without them, `sgw` uses free providers only.
+The feature columns reflect what each adapter declares and wires into `sgw`, not
+every feature sold by the upstream service. The router can convert successful
+HTML to Markdown after capture, so `-f markdown` still works when native Markdown
+is `No`. CAPTCHA means handling an access challenge, not solving a CAPTCHA embedded
+in a form. The service-specific claims are documented by
+[ScrapeDrive](https://scrapedrive.com/docs/),
+[Scrape.do](https://scrape.do/documentation/),
+[ScrapingBee](https://www.scrapingbee.com/documentation/remote-mcp/), and
+[ScraperAPI](https://docs.scraperapi.com/resources/faq/anti-bots-and-captchas).
+Browserless itself offers CAPTCHA products, but this adapter uses only its
+`/content` and `/screenshot` REST endpoints; the
+[open-source Browserless image](https://docs.browserless.io/enterprise/open-source)
+does not include CAPTCHA solving.
+
+Add API keys in `.env` to enable paid providers. Browserless uses its own service
+URL and token. Without those credentials, `sgw` uses the three free providers.
 
 ## AI scrape-quality audits
 
