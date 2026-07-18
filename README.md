@@ -8,7 +8,8 @@
   <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
 </p>
 
-One command, seven providers. Free ones tried first, paid ones only when needed. Domain memory skips the trial-and-error on repeat visits.
+One command, fourteen built-in providers. Free ones are tried first, paid ones only when
+needed. Domain memory skips the trial-and-error on repeat visits.
 
 For sites with known requirements, domain recipes can pin an ordered route, request
 settings, validation rules, failure phrases, and cache freshness without changing code.
@@ -96,7 +97,7 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-Seven built-in providers plus the bundled Browserless extension. The router tries
+Fourteen built-in providers plus the bundled Browserless extension. The router tries
 lower cost ranks first.
 
 | Provider | JS | Screenshot | Markdown | Country | CAPTCHA | Cost tier |
@@ -104,11 +105,18 @@ lower cost ranks first.
 | `raw_http` | No | No | No | No | No | Free · rank 0 |
 | `wreq` | No | No | No | No | No | Free · rank 2 |
 | `curl_cffi` | No | No | No | No | No | Free · rank 3 |
+| `jina_reader` | Yes | No | Yes | No | No | Free · rank 8 |
 | `browserless` | Yes | Yes | No | No | No | Self-hosted · rank 20 |
+| `spider_cloud` | Yes | No | Yes | No | Yes | Paid · rank 24 |
 | `scrapedrive` | Yes | Yes | Yes | Yes | Yes (hyperdrive) | Paid · rank 25 |
+| `firecrawl` | Yes | Yes | Yes | Yes | Yes | Paid · rank 26 |
 | `scrape_do` | Yes | No | No | Yes | Yes (automatic) | Paid · rank 30 |
+| `scrapfly` | Yes | No | No | Yes | Yes (ASP) | Paid · rank 32 |
+| `zenrows` | Yes | No | No | Yes | Yes | Paid · rank 34 |
 | `scrapingbee` | Yes | No | No | Yes | Yes (premium proxy) | Paid · rank 35 |
 | `scraperapi` | Yes | Yes | No | Yes | Yes (retry/bypass) | Paid · rank 40 |
+| `oxylabs` | Yes | Yes | No | Yes | Yes | Paid · rank 45 |
+| `brightdata` | Yes | Yes | No | No | Yes | Paid · rank 50 |
 
 The feature columns reflect what each adapter declares and wires into `sgw`, not
 every feature sold by the upstream service. The router can convert successful
@@ -118,7 +126,9 @@ in a form. The service-specific claims are documented by
 [ScrapeDrive](https://scrapedrive.com/docs/),
 [Scrape.do](https://scrape.do/documentation/),
 [ScrapingBee](https://www.scrapingbee.com/documentation/remote-mcp/), and
-[ScraperAPI](https://docs.scraperapi.com/resources/faq/anti-bots-and-captchas).
+[ScraperAPI](https://docs.scraperapi.com/resources/faq/anti-bots-and-captchas),
+plus each additional provider's official API reference in
+[`docs/providers.md`](docs/providers.md).
 Browserless itself offers CAPTCHA products, but this adapter uses only its
 `/content` and `/screenshot` REST endpoints; the
 [open-source Browserless image](https://docs.browserless.io/enterprise/open-source)

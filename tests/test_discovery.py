@@ -26,6 +26,13 @@ SHIPPED_PROVIDERS = frozenset(
         "scrape_do",
         "scrapingbee",
         "scraperapi",
+        "scrapfly",
+        "firecrawl",
+        "jina_reader",
+        "zenrows",
+        "oxylabs",
+        "brightdata",
+        "spider_cloud",
     }
 )
 from scrape_gateway.models import ScrapeRequest, ScrapeResult
@@ -123,8 +130,19 @@ class TestBuiltinProviders:
 
     def test_paid_providers_have_higher_cost(self):
         providers = _entrypoint_providers()
-        for name in ("scrapedrive", "scrape_do", "scrapingbee", "scraperapi"):
-            assert providers[name].cost_rank >= 25
+        for name in (
+            "scrapedrive",
+            "scrape_do",
+            "scrapingbee",
+            "scraperapi",
+            "scrapfly",
+            "firecrawl",
+            "zenrows",
+            "oxylabs",
+            "brightdata",
+            "spider_cloud",
+        ):
+            assert providers[name].cost_rank >= 20
 
     def test_readme_capability_matrix_matches_every_current_provider(self):
         providers = {
