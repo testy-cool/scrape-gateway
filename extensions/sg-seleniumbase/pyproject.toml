@@ -1,0 +1,18 @@
+[project]
+name = "sg-seleniumbase"
+version = "0.1.0"
+description = "SeleniumBase CDP Mode provider for scrape-gateway"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = ["scrape-gateway>=0.15.0", "seleniumbase>=4.45"]
+
+[project.entry-points."scrape_gateway.providers"]
+seleniumbase = "sg_seleniumbase:SeleniumBaseProvider"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sg_seleniumbase"]

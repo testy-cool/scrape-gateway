@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import time
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
+from scrape_gateway.errors import classify_failure
+
+
+class SeleniumBaseProvider(ProviderAdapter):
+    name = "seleniumbase"
+    cost_rank = 14
+    capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        start = time.perf_counter()
+
+        browser = None
+        try:
+            from seleniumbase.undetected.cdp_driver import start_async
+
+            browser = await start_async(
+                headless=True,
+                incognito=True,
+                mobile=request.mobile,
+                ad_block=request.block_ads,
+            )
+            page = await browser.get(request.url)
+            if request.wait_selector:
+                await page.select(request.wait_selector, timeout=request.timeout_seconds)
+            if request.extra_wait_ms:
+                await page.sleep(request.extra_wait_ms / 1000)
+            html = await page.get_content()
+            screenshot = None
+            if request.screenshot:
+                with TemporaryDirectory(prefix="sgw-seleniumbase-") as directory:
+                    screenshot_path = Path(directory) / "page.png"
+                    await page.save_screenshot(
+                        filename=screenshot_path, format="png", full_page=True
+                    )
+                    screenshot = screenshot_path.read_bytes()
+            failure = classify_failure(200, html)
+            return ScrapeResult(
+                request.url,
+                self.name,
+                failure is None,
+                status_code=200,
+                html=html,
+                screenshot=screenshot,
+                failure_reason=failure,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                route="seleniumbase:cdp",
+            )
+        except Exception as exc:  # noqa: BLE001
+            reason = (
+                FailureReason.TIMEOUT
+                if "timeout" in f"{type(exc).__name__} {exc}".lower()
+                else FailureReason.PROVIDER_ERROR
+            )
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=str(exc),
+                failure_reason=reason,
+            )
+        finally:
+            if browser is not None:
+                browser.stop()

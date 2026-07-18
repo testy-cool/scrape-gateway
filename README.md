@@ -8,7 +8,7 @@
   <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
 </p>
 
-One command, fourteen built-in providers. Free ones are tried first, paid ones only when
+One command, fifteen built-in providers. Free ones are tried first, paid ones only when
 needed. Domain memory skips the trial-and-error on repeat visits.
 
 For sites with known requirements, domain recipes can pin an ordered route, request
@@ -97,7 +97,7 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-Fourteen built-in providers plus the bundled Browserless extension. The router tries
+Fifteen built-in providers plus the bundled Browserless extension. The router tries
 lower cost ranks first.
 
 | Provider | JS | Screenshot | Markdown | Country | CAPTCHA | Cost tier |
@@ -106,6 +106,7 @@ lower cost ranks first.
 | `wreq` | No | No | No | No | No | Free · rank 2 |
 | `curl_cffi` | No | No | No | No | No | Free · rank 3 |
 | `jina_reader` | Yes | No | Yes | No | No | Free · rank 8 |
+| `crawl4ai` | Yes | Yes | Yes | No | No | Self-hosted · rank 18 |
 | `browserless` | Yes | Yes | No | No | No | Self-hosted · rank 20 |
 | `spider_cloud` | Yes | No | Yes | No | Yes | Paid · rank 24 |
 | `scrapedrive` | Yes | Yes | Yes | Yes | Yes (hyperdrive) | Paid · rank 25 |
@@ -134,8 +135,9 @@ Browserless itself offers CAPTCHA products, but this adapter uses only its
 [open-source Browserless image](https://docs.browserless.io/enterprise/open-source)
 does not include CAPTCHA solving.
 
-Add API keys in `.env` to enable paid providers. Browserless uses its own service
-URL and token. Without those credentials, `sgw` uses the three free providers.
+Add API keys in `.env` to enable paid providers. Crawl4AI and Browserless use their
+own service URLs. Without paid credentials, `sgw` still has four keyless providers
+and can route to either self-hosted service when configured.
 
 ## AI scrape-quality audits
 

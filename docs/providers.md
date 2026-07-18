@@ -1,6 +1,6 @@
 # Providers
 
-14 built-in, 4 usable without a paid credential. The router tries lower cost ranks first,
+15 built-in, 5 usable without a paid credential. The router tries lower cost ranks first,
 then escalates to paid services.
 
 | Provider | Cost Rank | Free | JS | Geo | Anti-bot | Notes |
@@ -9,6 +9,7 @@ then escalates to paid services.
 | `wreq` | 2 | yes | no | no | TLS fingerprinting | Impersonates real browser TLS |
 | `curl_cffi` | 3 | yes | no | no | TLS fingerprinting | Similar to wreq, different engine |
 | `jina_reader` | 8 | yes | yes | no | managed browser | Markdown-first; API key is optional |
+| `crawl4ai` | 18 | self-hosted | yes | no | browser | Docker API; HTML, Markdown, screenshots |
 | `spider_cloud` | 24 | no | yes | no | smart mode | Hosted Spider single-page API |
 | `scrapedrive` | 25 | no | yes | yes | full | 3 tiers: standard / advanced / hyperdrive |
 | `firecrawl` | 26 | no | yes | yes | stealth proxy | Native HTML, Markdown, and screenshots |
@@ -91,6 +92,16 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - Reported API credits become `cost_units`; CLOB responses are downloaded transparently
 - Official contract: [Scrapfly Scrape API](https://scrapfly.io/docs/scrape-api/getting-started)
 
+### Crawl4AI
+
+- Endpoint: `POST {CRAWL4AI_URL}/crawl`
+- Auth: optional `CRAWL4AI_TOKEN` bearer token; Crawl4AI 0.9 enables auth by default
+- Sends typed `BrowserConfig` and `CrawlerRunConfig` objects accepted by the Docker API
+- Gateway cache bypasses Crawl4AI's internal cache to avoid two independent freshness layers
+- Wait selectors map to `wait_for=css:<selector>`; viewport, headers, timeout, delay, and screenshot map to their native config fields
+- Decodes native Markdown objects and base64 screenshots from the crawl result
+- Official contract: [Crawl4AI self-hosting](https://docs.crawl4ai.com/core/self-hosting/)
+
 ### ZenRows
 
 - Endpoint: `GET https://api.zenrows.com/v1/`
@@ -123,3 +134,26 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - Endpoints: `{BROWSERLESS_URL}/content` and `{BROWSERLESS_URL}/screenshot`
 - Request auth: `Authorization: Bearer <BROWSERLESS_TOKEN>` keeps credentials out of request URLs and logs
 - `wait_event=networkidle` maps to Browserless/Puppeteer `networkidle2`
+
+### Local engine extensions
+
+Each engine is isolated in its own package so installing one does not pull every browser
+runtime into the gateway environment.
+
+| Extension | Provider | Runtime | Capabilities |
+|---|---|---|---|
+| `extensions/sg-scrapling` | `scrapling` | Scrapling HTTP / stealth Patchright | HTML, JS/stealth |
+| `extensions/sg-spider-rs` | `spider_rs` | Rust-backed Page API | single-page HTML |
+| `extensions/sg-camoufox` | `camoufox` | fingerprinted Firefox | HTML, JS, screenshot |
+| `extensions/sg-seleniumbase` | `seleniumbase` | SeleniumBase async CDP Mode | HTML, JS, screenshot |
+| `extensions/sg-patchright` | `patchright` | patched Chromium | HTML, JS, screenshot |
+| `extensions/sg-nodriver` | `nodriver` | direct Chrome DevTools | HTML, JS, screenshot |
+| `extensions/sg-crawlee` | `crawlee` | bounded PlaywrightCrawler | HTML, JS, screenshot |
+
+Install instructions and required browser bootstrap commands live in each extension's README.
+The adapter contracts follow the official [Scrapling fetcher guide](https://scrapling.readthedocs.io/en/latest/fetching/choosing.html), [spider-rs Python guide](https://github.com/spider-rs/spider-py), [Camoufox Python API](https://camoufox.com/python/usage/), [SeleniumBase CDP Mode](https://seleniumbase.io/examples/cdp_mode/ReadMe/), [Patchright Python API](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), [Nodriver API](https://ultrafunkamsterdam.github.io/nodriver/nodriver/quickstart.html), and [Crawlee PlaywrightCrawler API](https://crawlee.dev/python/api/class/PlaywrightCrawler).
+
+`sg-spider-rs` is staged rather than marked available: upstream PyPI 0.0.57 has invalid
+metadata and the v0.0.58 Git source currently fails to compile against the `spider` crate
+version it resolves on Linux. The adapter and contract tests remain in-tree so it can be
+enabled as soon as upstream ships a buildable dependency.

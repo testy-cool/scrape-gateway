@@ -1,6 +1,6 @@
 # Writing extensions
 
-The 7 built-in providers cover most scraping needs, but you can add your own — an Amazon Product API, a Wayback Machine fetcher, a headless browser, anything that takes a URL and returns content.
+The 15 built-in providers cover most scraping needs, but you can add your own — an Amazon Product API, a Wayback Machine fetcher, a headless browser, anything that takes a URL and returns content.
 
 You can also add custom CLI commands, such as a sitemap discovery command backed by Trafilatura.
 
@@ -34,7 +34,7 @@ If your provider needs a pip package, set `install_requires` — `sgw` will prom
 
 ```bash
 sgw extensions                    # browse available extensions
-sgw extensions sg-playwright      # install one into sgw's own venv
+sgw extensions sg-camoufox        # install one into sgw's own venv
 ```
 
 ## 3. Publish a pip package
@@ -137,3 +137,22 @@ sgw url https://example.com --render-js --screenshot -p browserless
 
 With `--screenshot`, the extension fetches `/content` and `/screenshot` concurrently
 so the result contains both rendered HTML and visual evidence for validation or AI audit.
+
+### Local browser and crawler providers
+
+Six available source extensions keep heavyweight engines out of the default installation:
+
+```bash
+uv pip install -e extensions/sg-scrapling
+uv pip install -e extensions/sg-camoufox
+uv pip install -e extensions/sg-seleniumbase
+uv pip install -e extensions/sg-patchright
+uv pip install -e extensions/sg-nodriver
+uv pip install -e extensions/sg-crawlee
+```
+
+Use only the package or packages needed by the deployment. Scrapling, Camoufox,
+Patchright, and Crawlee require the browser bootstrap command documented in their
+package README after installation. `sg-spider-rs` is also staged in-tree, but its
+README documents the upstream Linux build failure that keeps it out of the available
+registry until the dependency is installable.

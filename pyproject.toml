@@ -52,6 +52,7 @@ zenrows = "scrape_gateway.providers.zenrows:ZenRowsProvider"
 oxylabs = "scrape_gateway.providers.oxylabs:OxylabsProvider"
 brightdata = "scrape_gateway.providers.brightdata:BrightDataProvider"
 spider_cloud = "scrape_gateway.providers.spider_cloud:SpiderCloudProvider"
+crawl4ai = "scrape_gateway.providers.crawl4ai:Crawl4AIProvider"
 
 [build-system]
 requires = ["hatchling"]
