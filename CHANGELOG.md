@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-07-18
+
+### Fixed
+- Provider hit-rate summaries now include only names from the resolved provider registry, including extension providers, and report omitted non-provider attempt records separately.
+- Pytest redirects relative run, evaluation, memory, cache, and log paths into its temporary directory instead of polluting an operator's local `.scrape-gateway` history.
+
 ## [0.13.0] - 2026-07-18
 
 ### Added
