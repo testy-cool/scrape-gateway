@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import sys
+import tomllib
 import types
 from pathlib import Path
 
@@ -490,12 +491,19 @@ class FakeBrowser:
 
 
 async def test_camoufox_returns_rendered_html_and_screenshot(monkeypatch) -> None:
+    new_page_kwargs: dict[str, object] = {}
+
+    class CamoufoxBrowser(FakeBrowser):
+        async def new_page(self, **kwargs):
+            new_page_kwargs.update(kwargs)
+            return FakePage()
+
     class AsyncCamoufox:
         def __init__(self, **kwargs):
             assert kwargs["headless"] is True
 
         async def __aenter__(self):
-            return FakeBrowser()
+            return CamoufoxBrowser()
 
         async def __aexit__(self, *args):
             return None
@@ -513,6 +521,7 @@ async def test_camoufox_returns_rendered_html_and_screenshot(monkeypatch) -> Non
     assert result.success is True
     assert result.html == HTML
     assert result.screenshot == b"browser-png"
+    assert new_page_kwargs["no_viewport"] is True
 
 
 async def test_seleniumbase_uses_async_cdp_mode(monkeypatch) -> None:
@@ -581,14 +590,21 @@ async def test_patchright_uses_async_playwright_contract(monkeypatch) -> None:
     assert result.screenshot == b"browser-png"
 
 
-async def test_nodriver_uses_base64_screenshot_without_temp_files(monkeypatch) -> None:
+def test_nodriver_excludes_broken_0_50_3_release() -> None:
+    pyproject = tomllib.loads((ROOT / "extensions" / "sg-nodriver" / "pyproject.toml").read_text())
+
+    assert "nodriver>=0.48,<0.50.3" in pyproject["project"]["dependencies"]
+
+
+async def test_nodriver_reads_filename_based_screenshot(monkeypatch) -> None:
     class Page:
         async def get_content(self):
             return HTML
 
-        async def save_screenshot(self, **kwargs):
-            assert kwargs["as_base64"] is True
-            return base64.b64encode(b"nodriver-png").decode()
+        async def save_screenshot(self, filename, **kwargs):
+            assert kwargs == {"format": "png", "full_page": True}
+            Path(filename).write_bytes(b"nodriver-png")
+            return str(filename)
 
     class Browser:
         async def get(self, url):

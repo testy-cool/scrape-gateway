@@ -5,7 +5,7 @@ description = "Nodriver Chrome provider for scrape-gateway"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-dependencies = ["scrape-gateway>=0.15.0", "nodriver>=0.48"]
+dependencies = ["scrape-gateway>=0.15.0", "nodriver>=0.48,<0.50.3"]
 
 [project.entry-points."scrape_gateway.providers"]
 nodriver = "sg_nodriver:NodriverProvider"
