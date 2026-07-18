@@ -590,10 +590,11 @@ async def test_patchright_uses_async_playwright_contract(monkeypatch) -> None:
     assert result.screenshot == b"browser-png"
 
 
-def test_nodriver_excludes_broken_0_50_3_release() -> None:
+def test_nodriver_excludes_unsupported_python_3_14_runtime() -> None:
     pyproject = tomllib.loads((ROOT / "extensions" / "sg-nodriver" / "pyproject.toml").read_text())
 
-    assert "nodriver>=0.48,<0.50.3" in pyproject["project"]["dependencies"]
+    assert pyproject["project"]["requires-python"] == ">=3.11,<3.14"
+    assert "nodriver>=0.48" in pyproject["project"]["dependencies"]
 
 
 async def test_nodriver_reads_filename_based_screenshot(monkeypatch) -> None:
