@@ -12,7 +12,7 @@ sgw url https://example.com --no-cache         # bypass cache
 sgw url https://example.com -f markdown        # get markdown instead of HTML
 sgw url https://example.com -f markdown -o page.md
 sgw url https://example.com --tier advanced    # force ScrapeDrive tier
-sgw url https://example.com --meta             # extract OG metadata inline
+sgw url https://example.com --meta             # extract page metadata inline
 sgw url https://example.com --debug-artifacts  # save failed response bodies
 ```
 
@@ -123,14 +123,18 @@ sgw run urls.txt -p scrapedrive --tier advanced
 sgw run urls.txt -f markdown -o pages.md
 ```
 
-## `sgw meta` — Extract OpenGraph metadata
+## `sgw meta` — Extract page metadata
 
-Extracts OG tags as clean JSON. Pipe to `jq` or use in scripts.
+Extracts OpenGraph and Twitter Card tags, JSON-LD blocks, canonical and icon URLs,
+charset, and robots directives as clean JSON. Existing `og:*` keys stay at the top
+level; Twitter keys use the same `twitter:*` shape. Relative canonical and icon URLs
+are resolved against the scraped page. Pipe the result to `jq` or use it in scripts.
 
 ```bash
 sgw meta https://example.com
 sgw meta https://example.com --render-js
 sgw meta https://example.com 2>/dev/null | jq '.["og:image"]'
+sgw meta https://example.com 2>/dev/null | jq '.json_ld'
 ```
 
 ## `sgw history` — Track page changes over time

@@ -68,7 +68,7 @@ being committed.
 | `sgw follow <url> <n>` | Scrape link #n from a page |
 | `sgw recipe <file>` | Replay a saved YAML workflow |
 | `sgw run <file>` | Batch scrape URLs from a text file |
-| `sgw meta <url>` | Extract OpenGraph metadata as JSON |
+| `sgw meta <url>` | Extract social, JSON-LD, and document metadata as JSON |
 | `sgw history <url>` | Show scrape timeline and page changes |
 | `sgw telemetry` | Inspect reports or aggregate routing metrics with `--summary` |
 | `sgw evaluations` | Aggregate AI quality audits and review recurring failures |
