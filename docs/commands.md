@@ -142,12 +142,19 @@ sgw history https://example.com
 sgw history https://example.com -n 5    # last 5 scrapes
 ```
 
-## `sgw telemetry` — Inspect scrape reports
+## `sgw telemetry` — Inspect and aggregate scrape reports
 
 Shows recent telemetry reports with diagnosis codes and recommended actions.
+`--summary` turns the selected last N reports into success rates by domain,
+diagnosis frequency, average attempts and cost, and provider wins per attempt.
+Use the provider hit-rate table to spot heavily tried providers that belong
+later in the routing order. Add `--json` for the same aggregates as structured
+data.
 
 ```bash
 sgw telemetry                         # table of recent reports
+sgw telemetry --summary -n 100        # actionable aggregates over the last 100
+sgw telemetry --summary --json        # aggregate JSON for scripts
 sgw telemetry --json                  # full JSON output
 sgw telemetry -d example.com          # filter by domain
 sgw telemetry --diagnosis validator_rejected

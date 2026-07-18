@@ -70,7 +70,7 @@ being committed.
 | `sgw run <file>` | Batch scrape URLs from a text file |
 | `sgw meta <url>` | Extract OpenGraph metadata as JSON |
 | `sgw history <url>` | Show scrape timeline and page changes |
-| `sgw telemetry` | Inspect recent scrape reports |
+| `sgw telemetry` | Inspect reports or aggregate routing metrics with `--summary` |
 | `sgw evaluations` | Aggregate AI quality audits and review recurring failures |
 | `sgw providers` | List all available providers |
 | `sgw extensions` | Browse/install community extensions |

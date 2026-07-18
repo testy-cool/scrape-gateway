@@ -463,11 +463,22 @@ def telemetry(
     domain: str | None = typer.Option(None, "--domain", "-d", help="Filter by domain"),
     diagnosis: str | None = typer.Option(None, "--diagnosis", help="Filter by diagnosis code"),
     json_output: bool = typer.Option(False, "--json", help="Print full reports as JSON"),
+    summary: bool = typer.Option(False, "--summary", help="Aggregate the selected reports"),
 ) -> None:
     """Inspect recent scrape telemetry reports."""
-    from .telemetry import load_recent_reports
+    from .telemetry import load_recent_reports, summarize_telemetry
 
     reports = load_recent_reports(limit=limit, domain=domain, diagnosis=diagnosis)
+    if summary:
+        aggregate = summarize_telemetry(reports)
+        if json_output:
+            print(json.dumps(aggregate, indent=2, ensure_ascii=False))
+            return
+        if not reports:
+            console.print("[yellow]No telemetry reports found[/]")
+            return
+        _print_telemetry_summary(aggregate, limit=limit)
+        return
     if json_output:
         print(json.dumps(reports, indent=2, ensure_ascii=False))
         return
@@ -496,6 +507,69 @@ def telemetry(
             str(report.get("_path", "")),
         )
     console.print(table)
+
+
+def _print_telemetry_summary(summary: dict, *, limit: int) -> None:
+    metrics = Table.grid(expand=True)
+    metrics.add_column(justify="center")
+    metrics.add_column(justify="center")
+    metrics.add_column(justify="center")
+    metrics.add_column(justify="center")
+    metrics.add_row(
+        f"[bold]{summary['runs']}[/]\n[dim]Runs analyzed[/]",
+        f"[bold]{summary['success_rate_pct']:.1f}%[/]\n[dim]Success rate[/]",
+        f"[bold]{summary['average_attempt_count']:.2f}[/]\n[dim]Avg attempts[/]",
+        f"[bold]{summary['average_cost']:.2f}[/]\n[dim]Avg cost[/]",
+    )
+    console.print(Panel(metrics, title=f"Telemetry Summary — Last {limit} Runs"))
+
+    domains = Table(title="Success Rate by Domain")
+    domains.add_column("Domain")
+    domains.add_column("Runs", justify="right")
+    domains.add_column("Succeeded", justify="right")
+    domains.add_column("Rate", justify="right")
+    for item in summary["domains"]:
+        rate = item["success_rate_pct"]
+        style = "green" if rate >= 90 else "yellow" if rate >= 70 else "red"
+        domains.add_row(
+            item["domain"],
+            str(item["runs"]),
+            str(item["successes"]),
+            f"[{style}]{rate:.1f}%[/]",
+        )
+    console.print(domains)
+
+    diagnoses = Table(title="Most Common Diagnoses")
+    diagnoses.add_column("Diagnosis")
+    diagnoses.add_column("Runs", justify="right")
+    diagnoses.add_column("Share", justify="right")
+    for item in summary["diagnoses"]:
+        diagnoses.add_row(
+            item["diagnosis"],
+            str(item["count"]),
+            f"{item['share_pct']:.1f}%",
+        )
+    console.print(diagnoses)
+
+    providers = Table(title="Provider Hit Rate (wins / attempts)")
+    providers.add_column("Provider")
+    providers.add_column("Attempts", justify="right")
+    providers.add_column("Wins", justify="right")
+    providers.add_column("Hit rate", justify="right")
+    for item in summary["providers"]:
+        rate = item["hit_rate_pct"]
+        style = "green" if rate >= 80 else "yellow" if rate >= 50 else "red"
+        providers.add_row(
+            item["provider"],
+            str(item["attempts"]),
+            str(item["wins"]),
+            f"[{style}]{rate:.1f}%[/]",
+        )
+    console.print(providers)
+    console.print(
+        "[dim]Tuning hint: providers with many attempts and a low hit rate are candidates "
+        "to move later in the routing order.[/]"
+    )
 
 
 @app.command()
