@@ -46,6 +46,35 @@ def _build_gateway(provider: str | None = None) -> ScrapeGateway:
     return gateway
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", "--host", help="Address to bind"),
+    port: int = typer.Option(8100, "--port", min=1, max=65535, help="Port to bind"),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        envvar="SGW_SERVICE_TOKEN",
+        help="Optional bearer token (or set SGW_SERVICE_TOKEN)",
+    ),
+) -> None:
+    """Expose the gateway through its FastAPI HTTP service."""
+
+    import os
+
+    try:
+        import uvicorn
+
+        from .service import create_app
+    except ImportError as exc:
+        console.print(
+            '[red]Service dependencies are missing. Install with `pip install -e ".[server]"`.[/]'
+        )
+        raise typer.Exit(1) from exc
+
+    service = create_app(token=token or os.environ.get("SGW_MCP_TOKEN", ""))
+    uvicorn.run(service, host=host, port=port)
+
+
 def _hints(cmd: str, url: str = "", **ctx) -> None:
     console.print("\n[dim]---[/]")
     url_display = url or "<url>"

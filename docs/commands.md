@@ -1,5 +1,19 @@
 # Commands
 
+## `sgw serve` — Run the HTTP API
+
+Starts the FastAPI service with scrape, cache, domain-statistics, and health endpoints.
+Install `.[server]` first. Protect `/v1` with `--token` or `SGW_SERVICE_TOKEN` when the
+service is reachable beyond localhost.
+
+```bash
+pip install -e ".[server]"
+sgw serve --host 127.0.0.1 --port 8100
+SGW_SERVICE_TOKEN=choose-a-token sgw serve
+```
+
+See [HTTP service](http-service.md) for the endpoint contract and curl examples.
+
 ## `sgw url` — Scrape a single page
 
 Tries providers from cheapest to most expensive until one succeeds. Results are cached locally so repeat scrapes are instant and free. Domain memory remembers which provider worked. Use `--output`/`-o` to write the selected HTML or Markdown content to a file while keeping the rich scrape summary in the console. The parent directory must already exist and an existing file is overwritten.

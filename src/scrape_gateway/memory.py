@@ -12,7 +12,9 @@ class DomainMemory:
     def __init__(self, db_path: str | Path = ".scrape-gateway/memory.sqlite") -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
+        # Service-mode dependencies may construct the gateway before the ASGI worker
+        # thread starts. Individual operations remain synchronous and transactional.
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._migrate()
 

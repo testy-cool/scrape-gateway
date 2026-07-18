@@ -76,6 +76,7 @@ being committed.
 
 | Command | What it does |
 |---|---|
+| `sgw serve` | Run the FastAPI scrape, cache, stats, and health service |
 | `sgw url <url>` | Scrape one page through the provider chain |
 | `sgw extract <url>` | Pull structured data (JSON/CSV) from listing pages |
 | `sgw detect <url>` | Recon — find repeated elements before extracting |
@@ -176,6 +177,7 @@ More: [docs/python-api.md](docs/python-api.md)
 - [Architecture](docs/architecture.md) — how the router, cache, and memory work
 - [Configuration](docs/configuration.md) — YAML config and `.env` setup
 - [Domain recipes](recipes/README.md) — per-site routing, validation, and cache rules
+- [HTTP service](docs/http-service.md) — FastAPI endpoints, auth, and curl examples
 - [Extensions](docs/extensions.md) — writing custom providers
 - [Python API](docs/python-api.md) — using sgw as a library
 - [Providers](docs/providers.md) — provider details and API mapping
