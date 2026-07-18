@@ -22,6 +22,18 @@ sgw selftest           # verify installation
 sgw url https://example.com
 ```
 
+Run the persistent MCP server and browser console with Docker Compose:
+
+```bash
+cp .env.example .env   # optionally set SGW_MCP_TOKEN and provider keys
+docker compose up -d --build
+curl http://localhost:8100/api/status
+```
+
+Compose exposes port 8100 and keeps cache, telemetry, memory, and operator
+settings in the named `sgw-data` volume. The same file can be imported into
+Coolify as a Docker Compose application.
+
 ## Browser console
 
 The HTTP service includes a browser console at `/`. The MCP endpoint stays at
