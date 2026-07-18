@@ -2,6 +2,13 @@
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def isolate_local_gateway_state(tmp_path, monkeypatch):
+    """Keep relative gateway persistence paths out of the developer's real history."""
+    monkeypatch.chdir(tmp_path)
+
+
 # ── Human-readable descriptions for every test ──────────────────
 # Maps test node IDs to (description, why_it_matters) tuples.
 

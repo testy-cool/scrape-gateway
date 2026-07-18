@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from scrape_gateway.cache import ArtifactCache
+from scrape_gateway.config import EvaluationConfig, GatewayConfig
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
@@ -49,6 +50,19 @@ class FailProvider(ProviderAdapter):
 def tmp_dir():
     with tempfile.TemporaryDirectory() as tmp:
         yield Path(tmp)
+
+
+def test_default_gateway_state_is_isolated_to_pytest_tmp_path(tmp_path):
+    gateway = ScrapeGateway.from_config(GatewayConfig(evaluation=EvaluationConfig(mode="audit")))
+    state_paths = [
+        gateway.cache.root,
+        gateway.memory.db_path,
+        gateway.telemetry.root,
+        gateway.evaluator.config.cache_root,
+    ]
+    gateway.memory.conn.close()
+
+    assert all(Path(path).resolve().is_relative_to(tmp_path) for path in state_paths)
 
 
 async def test_routes_to_first_success(tmp_dir):
