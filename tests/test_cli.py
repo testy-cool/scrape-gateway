@@ -429,7 +429,10 @@ def test_telemetry_summary_prints_actionable_aggregates():
             "domain": "example.com",
             "success": True,
             "diagnosis": "success",
-            "attempts": [{"provider": "raw_http", "cost": 0}],
+            "attempts": [
+                {"provider": "header_capture", "cost": 0},
+                {"provider": "raw_http", "cost": 0},
+            ],
             "final": {"provider": "raw_http"},
         },
         {
@@ -440,7 +443,13 @@ def test_telemetry_summary_prints_actionable_aggregates():
             "final": {"provider": "raw_http"},
         },
     ]
-    with patch("scrape_gateway.telemetry.load_recent_reports", return_value=reports):
+    with (
+        patch("scrape_gateway.telemetry.load_recent_reports", return_value=reports),
+        patch(
+            "scrape_gateway.discovery.discover_providers",
+            return_value={"raw_http": object},
+        ),
+    ):
         result = runner.invoke(app, ["telemetry", "--summary"])
 
     assert result.exit_code == 0
@@ -450,6 +459,8 @@ def test_telemetry_summary_prints_actionable_aggregates():
     assert "validator_rejected" in result.output
     assert "Provider Hit Rate" in result.output
     assert "raw_http" in result.output
+    assert "header_capture" not in result.output
+    assert "1 non-provider record omitted" in result.output
 
 
 def test_cache_key_differs_by_render_js():
