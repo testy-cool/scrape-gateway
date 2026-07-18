@@ -301,6 +301,94 @@ def load_recent_reports(
     return reports[:limit]
 
 
+def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
+    domain_runs: Counter[str] = Counter()
+    domain_successes: Counter[str] = Counter()
+    diagnosis_counts: Counter[str] = Counter()
+    provider_attempts: Counter[str] = Counter()
+    provider_wins: Counter[str] = Counter()
+    successful_runs = 0
+    attempt_count = 0
+    total_cost = 0.0
+
+    for report in reports:
+        domain = str(report.get("domain") or "unknown")
+        domain_runs[domain] += 1
+        success = report.get("success") is True
+        if success:
+            successful_runs += 1
+            domain_successes[domain] += 1
+
+        diagnosis = str(report.get("diagnosis") or "unknown")
+        diagnosis_counts[diagnosis] += 1
+
+        attempts = report.get("attempts")
+        if not isinstance(attempts, list):
+            attempts = []
+        attempt_count += len(attempts)
+        for attempt in attempts:
+            if not isinstance(attempt, dict):
+                continue
+            provider = str(attempt.get("provider") or "")
+            if provider and provider != "cache":
+                provider_attempts[provider] += 1
+            cost = attempt.get("cost")
+            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                total_cost += float(cost)
+
+        final = report.get("final")
+        winner = str(final.get("provider") or "") if isinstance(final, dict) else ""
+        if success and winner and winner != "cache":
+            provider_wins[winner] += 1
+
+    run_count = len(reports)
+    domains = [
+        {
+            "domain": domain,
+            "runs": runs,
+            "successes": domain_successes[domain],
+            "success_rate_pct": round(domain_successes[domain] / runs * 100, 1),
+        }
+        for domain, runs in sorted(domain_runs.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    diagnoses = [
+        {
+            "diagnosis": diagnosis,
+            "count": count,
+            "share_pct": round(count / run_count * 100, 1),
+        }
+        for diagnosis, count in sorted(
+            diagnosis_counts.items(), key=lambda item: (-item[1], item[0])
+        )
+    ]
+    providers = [
+        {
+            "provider": provider,
+            "attempts": provider_attempts[provider],
+            "wins": provider_wins[provider],
+            "hit_rate_pct": round(provider_wins[provider] / provider_attempts[provider] * 100, 1)
+            if provider_attempts[provider]
+            else 0.0,
+        }
+        for provider in sorted(
+            provider_attempts.keys() | provider_wins.keys(),
+            key=lambda provider: (-provider_attempts[provider], -provider_wins[provider], provider),
+        )
+    ]
+
+    return {
+        "runs": run_count,
+        "successful_runs": successful_runs,
+        "success_rate_pct": round(successful_runs / run_count * 100, 1) if run_count else 0.0,
+        "average_attempt_count": round(attempt_count / run_count, 2) if run_count else 0.0,
+        "total_cost": round(total_cost, 4),
+        "average_cost": round(total_cost / run_count, 2) if run_count else 0.0,
+        "domains": domains,
+        "diagnoses": diagnoses,
+        "providers": providers,
+    }
+
+
 def _is_actionable_opportunity(text: str) -> bool:
     normalized = text.strip().lower().rstrip(".")
     if normalized in {"none", "n/a", "not applicable"}:

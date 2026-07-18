@@ -423,6 +423,35 @@ def test_telemetry_command_prints_recent_reports():
     assert "success" in result.output
 
 
+def test_telemetry_summary_prints_actionable_aggregates():
+    reports = [
+        {
+            "domain": "example.com",
+            "success": True,
+            "diagnosis": "success",
+            "attempts": [{"provider": "raw_http", "cost": 0}],
+            "final": {"provider": "raw_http"},
+        },
+        {
+            "domain": "example.com",
+            "success": False,
+            "diagnosis": "validator_rejected",
+            "attempts": [{"provider": "raw_http", "cost": 0}],
+            "final": {"provider": "raw_http"},
+        },
+    ]
+    with patch("scrape_gateway.telemetry.load_recent_reports", return_value=reports):
+        result = runner.invoke(app, ["telemetry", "--summary"])
+
+    assert result.exit_code == 0
+    assert "Telemetry Summary — Last 20 Runs" in result.output
+    assert "Success rate" in result.output
+    assert "50.0%" in result.output
+    assert "validator_rejected" in result.output
+    assert "Provider Hit Rate" in result.output
+    assert "raw_http" in result.output
+
+
 def test_cache_key_differs_by_render_js():
     from scrape_gateway.cache import ArtifactCache
 
