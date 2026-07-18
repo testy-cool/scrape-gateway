@@ -45,6 +45,13 @@ scrapedrive = "scrape_gateway.providers.scrapedrive:ScrapeDriveProvider"
 scrape_do = "scrape_gateway.providers.scrape_do:ScrapeDoProvider"
 scrapingbee = "scrape_gateway.providers.scrapingbee:ScrapingBeeProvider"
 scraperapi = "scrape_gateway.providers.scraperapi:ScraperApiProvider"
+scrapfly = "scrape_gateway.providers.scrapfly:ScrapflyProvider"
+firecrawl = "scrape_gateway.providers.firecrawl:FirecrawlProvider"
+jina_reader = "scrape_gateway.providers.jina_reader:JinaReaderProvider"
+zenrows = "scrape_gateway.providers.zenrows:ZenRowsProvider"
+oxylabs = "scrape_gateway.providers.oxylabs:OxylabsProvider"
+brightdata = "scrape_gateway.providers.brightdata:BrightDataProvider"
+spider_cloud = "scrape_gateway.providers.spider_cloud:SpiderCloudProvider"
 
 [build-system]
 requires = ["hatchling"]

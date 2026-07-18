@@ -9,10 +9,20 @@ SCRAPEDRIVE_API_KEY=your_key_here
 SCRAPE_DO_TOKEN=your_token_here
 SCRAPINGBEE_API_KEY=your_key_here
 SCRAPERAPI_API_KEY=your_key_here
+SCRAPFLY_API_KEY=your_key_here
+FIRECRAWL_API_KEY=your_key_here
+JINA_API_KEY=your_optional_key_here
+ZENROWS_API_KEY=your_key_here
+OXYLABS_USERNAME=your_username
+OXYLABS_PASSWORD=your_password
+BRIGHTDATA_API_KEY=your_key_here
+BRIGHTDATA_WEB_UNLOCKER_ZONE=your_zone
+SPIDER_CLOUD_API_KEY=your_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here  # only needed for AI evaluation
 ```
 
-Without paid API keys, `sgw` uses free providers only (raw_http, wreq, curl_cffi).
+Without paid API keys, `sgw` uses raw_http, wreq, curl_cffi, and the key-optional
+Jina Reader tier.
 
 Optional proxy:
 ```bash
