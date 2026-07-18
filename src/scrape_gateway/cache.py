@@ -33,17 +33,24 @@ class ArtifactCache:
             "screenshot": folder / "screenshot.bin",
         }
 
-    def get_html(self, url: str, render_js: bool = False) -> str | None:
+    def get_html(
+        self,
+        url: str,
+        render_js: bool = False,
+        *,
+        ttl_seconds: int | None = None,
+    ) -> str | None:
         paths = self.paths_for_url(url, render_js=render_js)
         html_path = paths["html"]
         meta_path = paths["meta"]
         if not html_path.exists():
             return None
-        if self.ttl_seconds > 0 and meta_path.exists():
+        effective_ttl = self.ttl_seconds if ttl_seconds is None else ttl_seconds
+        if effective_ttl > 0 and meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text())
                 fetched_at = meta.get("fetched_at", 0)
-                if time.time() - fetched_at > self.ttl_seconds:
+                if time.time() - fetched_at > effective_ttl:
                     return None
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -55,10 +62,11 @@ class ArtifactCache:
         render_js: bool = False,
         *,
         require_screenshot: bool = False,
+        ttl_seconds: int | None = None,
     ) -> ScrapeResult | None:
         """Restore a complete cached result without mixing artifact generations."""
 
-        html = self.get_html(url, render_js=render_js)
+        html = self.get_html(url, render_js=render_js, ttl_seconds=ttl_seconds)
         if html is None:
             return None
 

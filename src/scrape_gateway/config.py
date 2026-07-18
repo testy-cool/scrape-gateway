@@ -84,6 +84,7 @@ class GatewayConfig:
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     request: RequestConfig = field(default_factory=RequestConfig)
     memory_path: str = ".scrape-gateway/memory.sqlite"
+    recipes_root: str = "recipes"
 
 
 _TTL_SUFFIXES = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -252,6 +253,10 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         )
     )
 
+    recipes_root = Path(raw.get("recipes_root", "recipes"))
+    if not recipes_root.is_absolute():
+        recipes_root = config_path.parent / recipes_root
+
     return GatewayConfig(
         providers=providers,
         cache=cache,
@@ -260,4 +265,5 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         evaluation=evaluation,
         request=request,
         memory_path=raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
+        recipes_root=str(recipes_root),
     )
