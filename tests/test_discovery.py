@@ -4,7 +4,9 @@ Ensures the ProviderAdapter API stays stable so extensions don't break,
 and that discovery finds providers from all three sources.
 """
 
+import importlib.util
 import inspect
+import sys
 from pathlib import Path
 
 
@@ -123,6 +125,51 @@ class TestBuiltinProviders:
         providers = _entrypoint_providers()
         for name in ("scrapedrive", "scrape_do", "scrapingbee", "scraperapi"):
             assert providers[name].cost_rank >= 25
+
+    def test_readme_capability_matrix_matches_every_current_provider(self):
+        providers = {
+            name: provider
+            for name, provider in _entrypoint_providers().items()
+            if name in SHIPPED_PROVIDERS
+        }
+        browserless_path = (
+            Path(__file__).resolve().parents[1]
+            / "extensions/sg-browserless/src/sg_browserless/__init__.py"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "sg_browserless_readme_test", browserless_path
+        )
+        assert spec and spec.loader
+        browserless_module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = browserless_module
+        spec.loader.exec_module(browserless_module)
+        providers["browserless"] = browserless_module.BrowserlessProvider
+
+        header = "| Provider | JS | Screenshot | Markdown | Country | CAPTCHA | Cost tier |"
+        readme_lines = (Path(__file__).resolve().parents[1] / "README.md").read_text().splitlines()
+        assert header in readme_lines, "README provider capability matrix is missing"
+        header_index = readme_lines.index(header)
+        rows = {}
+        for line in readme_lines[header_index + 2 :]:
+            if not line.startswith("|"):
+                break
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            rows[cells[0].strip("`")] = dict(zip(header.strip("|").split("|"), cells))
+
+        assert set(rows) == set(providers)
+        capability_columns = {
+            " JS ": "render_js",
+            " Screenshot ": "screenshot",
+            " Markdown ": "markdown",
+            " Country ": "country",
+        }
+        for name, provider in providers.items():
+            for column, capability in capability_columns.items():
+                documented = rows[name][column].lower().startswith("yes")
+                assert documented is (capability in provider.capabilities), (
+                    f"README {column.strip()} capability is stale for {name}"
+                )
+            assert f"rank {provider.cost_rank}" in rows[name][" Cost tier "].lower()
 
 
 # -- Discovery tests ----------------------------------------------------------
