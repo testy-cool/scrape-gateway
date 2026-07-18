@@ -2,12 +2,13 @@
 
 ## Metadata extraction improvements
 
-Currently `sgw meta` extracts OpenGraph tags only. Future additions:
+`sgw meta` now extracts social, structured, and document metadata. Remaining additions:
 
-- [ ] Twitter Card tags (`twitter:title`, `twitter:image`, etc.)
-- [ ] JSON-LD structured data (schema.org)
-- [ ] Canonical URL (`<link rel="canonical">`)
-- [ ] Favicon / apple-touch-icon URLs
-- [ ] charset / language detection
-- [ ] `<meta name="robots">` directives
+- [x] Twitter Card tags (`twitter:title`, `twitter:image`, etc.)
+- [x] JSON-LD structured data (schema.org)
+- [x] Canonical URL (`<link rel="canonical">`)
+- [x] Favicon / apple-touch-icon URLs
+- [x] charset detection
+- [ ] language detection
+- [x] `<meta name="robots">` directives
 - [ ] Structured output on `ScrapeResult.metadata` (not just CLI print)

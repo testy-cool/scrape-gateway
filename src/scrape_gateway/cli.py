@@ -99,20 +99,37 @@ def _hints(cmd: str, url: str = "", **ctx) -> None:
         console.print("[dim]sgw links <url> -f compact      # extract links for LLM[/]")
 
 
-def _extract_og_meta(html: str) -> dict[str, str]:
+def _extract_page_metadata(html: str, base_url: str | None = None) -> dict[str, object]:
     import re
+    from urllib.parse import urljoin
+
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
-    og: dict[str, str] = {}
+    metadata: dict[str, object] = {}
     for tag in soup.find_all("meta"):
-        prop = tag.get("property", "") or tag.get("name", "")
-        content = tag.get("content", "")
-        if prop.startswith("og:") and content:
-            og[prop] = content
-    if not og.get("og:title") and soup.title and soup.title.string:
-        og["og:title"] = soup.title.string.strip()
-    if not og.get("og:image"):
+        key = str(tag.get("property", "") or tag.get("name", "")).strip().lower()
+        content = str(tag.get("content", "")).strip()
+        if key.startswith(("og:", "twitter:")) and content:
+            metadata[key] = content
+        if key == "robots" and content:
+            metadata["robots"] = content
+
+        charset = str(tag.get("charset", "")).strip()
+        if charset and "charset" not in metadata:
+            metadata["charset"] = charset
+        if (
+            str(tag.get("http-equiv", "")).strip().lower() == "content-type"
+            and content
+            and "charset" not in metadata
+        ):
+            match = re.search(r"charset\s*=\s*['\"]?([^\s;'\">]+)", content, re.IGNORECASE)
+            if match:
+                metadata["charset"] = match.group(1)
+
+    if not metadata.get("og:title") and soup.title and soup.title.string:
+        metadata["og:title"] = soup.title.string.strip()
+    if not metadata.get("og:image"):
         best_src, best_area = "", 0
         for img in soup.find_all("img", src=True):
             src = img["src"]
@@ -129,8 +146,46 @@ def _extract_og_meta(html: str) -> dict[str, str]:
             elif area == 0 and not best_area and not best_src:
                 best_src = src
         if best_src:
-            og["og:image"] = re.sub(r"&amp;", "&", best_src)
-    return og
+            metadata["og:image"] = re.sub(r"&amp;", "&", best_src)
+
+    json_ld: list[object] = []
+    for script in soup.find_all("script"):
+        script_type = str(script.get("type", "")).split(";", 1)[0].strip().lower()
+        if script_type != "application/ld+json":
+            continue
+        payload = script.string or script.get_text()
+        if not payload or not payload.strip():
+            continue
+        try:
+            json_ld.append(json.loads(payload))
+        except json.JSONDecodeError:
+            continue
+    if json_ld:
+        metadata["json_ld"] = json_ld
+
+    for link in soup.find_all("link", href=True):
+        rel = link.get("rel", [])
+        rel_tokens = {part.lower() for part in (rel if isinstance(rel, list) else rel.split())}
+        href = str(link["href"]).strip()
+        if not href:
+            continue
+        resolved_href = urljoin(base_url, href) if base_url else href
+        if "canonical" in rel_tokens and "canonical" not in metadata:
+            metadata["canonical"] = resolved_href
+        if "apple-touch-icon" in rel_tokens and "apple_touch_icon" not in metadata:
+            metadata["apple_touch_icon"] = resolved_href
+        elif "icon" in rel_tokens and "favicon" not in metadata:
+            metadata["favicon"] = resolved_href
+
+    return metadata
+
+
+def _extract_og_meta(html: str) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in _extract_page_metadata(html).items()
+        if key.startswith("og:") and isinstance(value, str)
+    }
 
 
 def _print_result(result) -> None:
@@ -223,7 +278,7 @@ def url(
     tier: str | None = typer.Option(
         None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
     ),
-    meta: bool = typer.Option(False, "--meta", help="Extract and print OpenGraph metadata as JSON"),
+    meta: bool = typer.Option(False, "--meta", help="Extract and print page metadata as JSON"),
     debug_artifacts: bool = typer.Option(
         False, "--debug-artifacts", help="Save failed response bodies in the telemetry run folder"
     ),
@@ -255,7 +310,7 @@ def url(
       sgw url https://example.com -p scrapedrive  # force a provider
       sgw url https://example.com --tier advanced  # force ScrapeDrive tier
       sgw url https://example.com --no-cache      # fresh scrape
-      sgw url https://example.com --meta          # extract OG metadata
+      sgw url https://example.com --meta          # extract page metadata
       sgw url https://example.com -f markdown -o page.md  # save content
       sgw url https://example.com --referer https://google.com  # spoof referer
     """
@@ -296,8 +351,8 @@ def url(
             )
         _print_result(result)
         if meta and result.success and result.html:
-            og = _extract_og_meta(result.html)
-            print(json.dumps(og, indent=2, ensure_ascii=False))
+            page_metadata = _extract_page_metadata(result.html, result.url)
+            print(json.dumps(page_metadata, indent=2, ensure_ascii=False))
         elif meta and result.success and not result.html:
             console.print("[yellow]--meta requires HTML content; try without --format markdown[/]")
         if output and result.success:
@@ -418,16 +473,17 @@ def meta(
     no_cache: bool = typer.Option(False, "--no-cache"),
     render_js: bool = typer.Option(False, "--render-js", help="Render JS before extracting"),
 ) -> None:
-    """Extract OpenGraph metadata from a URL.
+    """Extract social, structured, and document metadata from a URL.
 
-    OG tags are designed for crawlers — they're in static HTML, no JS needed.
-    Prints clean JSON to stdout — pipe to jq or use in scripts.
+    Extracts OpenGraph and Twitter Card tags, JSON-LD, canonical and icon URLs,
+    charset, and robots directives. These normally live in static HTML, so no
+    JavaScript is needed. Prints clean JSON to stdout for jq or scripts.
 
     Examples:
       sgw meta https://example.com
       sgw meta https://facebook.com/some/post
       sgw meta https://example.com --render-js  # if site needs JS
-      sgw meta https://example.com 2>/dev/null | jq .og:image
+      sgw meta https://example.com 2>/dev/null | jq '.json_ld'
     """
 
     async def run() -> None:
@@ -448,11 +504,11 @@ def meta(
         if not result.html:
             console.print("[red]No HTML content returned[/]")
             raise typer.Exit(1)
-        og = _extract_og_meta(result.html)
-        if og:
-            print(json.dumps(og, indent=2, ensure_ascii=False))
+        page_metadata = _extract_page_metadata(result.html, result.url)
+        if page_metadata:
+            print(json.dumps(page_metadata, indent=2, ensure_ascii=False))
         else:
-            console.print("[yellow]No OpenGraph tags found[/]")
+            console.print("[yellow]No page metadata found[/]")
 
     asyncio.run(run())
 

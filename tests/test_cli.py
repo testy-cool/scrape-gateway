@@ -308,6 +308,89 @@ def test_extract_og_meta_empty():
     assert og == {}
 
 
+def test_extract_page_metadata_combines_social_structured_and_document_metadata():
+    from scrape_gateway.cli import _extract_page_metadata
+
+    html = """<html><head>
+    <meta charset="UTF-8">
+    <meta property="og:title" content="OpenGraph title">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Twitter title">
+    <meta property="twitter:image" content="https://cdn.example.com/card.jpg">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="/articles/canonical">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="https://cdn.example.com/touch.png">
+    <script type="application/ld+json">
+      {"@context": "https://schema.org", "@type": "Article", "headline": "Story"}
+    </script>
+    </head><body>ok</body></html>"""
+
+    metadata = _extract_page_metadata(html, "https://example.com/articles/story")
+
+    assert metadata == {
+        "og:title": "OpenGraph title",
+        "twitter:card": "summary_large_image",
+        "twitter:title": "Twitter title",
+        "twitter:image": "https://cdn.example.com/card.jpg",
+        "json_ld": [
+            {
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Story",
+            }
+        ],
+        "canonical": "https://example.com/articles/canonical",
+        "favicon": "https://example.com/favicon.ico",
+        "apple_touch_icon": "https://cdn.example.com/touch.png",
+        "charset": "UTF-8",
+        "robots": "index, follow",
+    }
+
+
+def test_extract_page_metadata_skips_invalid_json_ld_and_reads_content_type_charset():
+    from scrape_gateway.cli import _extract_page_metadata
+
+    html = """<html><head>
+    <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <script type="application/ld+json">not valid JSON</script>
+    <script type="application/ld+json">[{"@type": "Product"}]</script>
+    </head><body>ok</body></html>"""
+
+    metadata = _extract_page_metadata(html)
+
+    assert metadata["charset"] == "windows-1252"
+    assert metadata["json_ld"] == [[{"@type": "Product"}]]
+
+
+def test_meta_command_prints_non_opengraph_metadata():
+    html_with_metadata = """<html><head>
+    <meta name="twitter:card" content="summary">
+    <link rel="canonical" href="https://example.com/canonical">
+    </head><body>ok content here to pass validation</body></html>"""
+
+    async def fake_scrape(request, *, use_cache=True, use_memory=True):
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html=html_with_metadata,
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        gw = mock_gw.return_value
+        gw.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["meta", "https://example.com/page"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "twitter:card": "summary",
+        "canonical": "https://example.com/canonical",
+    }
+
+
 def test_meta_flag_prints_json():
     html_with_og = """<html><head>
     <meta property="og:title" content="Test OG">
