@@ -17,7 +17,10 @@ class CamoufoxProvider(ProviderAdapter):
             from camoufox.async_api import AsyncCamoufox
 
             async with AsyncCamoufox(headless=True) as browser:
-                page = await browser.new_page(extra_http_headers=request.headers or None)
+                page = await browser.new_page(
+                    extra_http_headers=request.headers or None,
+                    no_viewport=True,
+                )
                 await page.goto(
                     request.url,
                     wait_until=request.wait_event or "domcontentloaded",

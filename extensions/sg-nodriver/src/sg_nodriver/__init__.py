@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import time
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
 from scrape_gateway.errors import classify_failure
@@ -28,8 +29,14 @@ class NodriverProvider(ProviderAdapter):
             html = await page.get_content()
             screenshot = None
             if request.screenshot:
-                encoded = await page.save_screenshot(format="png", full_page=True, as_base64=True)
-                screenshot = base64.b64decode(encoded)
+                with TemporaryDirectory(prefix="sgw-nodriver-") as directory:
+                    screenshot_path = Path(directory) / "page.png"
+                    await page.save_screenshot(
+                        filename=screenshot_path,
+                        format="png",
+                        full_page=True,
+                    )
+                    screenshot = screenshot_path.read_bytes()
             failure = classify_failure(200, html)
             return ScrapeResult(
                 request.url,
