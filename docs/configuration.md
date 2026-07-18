@@ -28,6 +28,8 @@ cache:
   ttl: 24h
   root: .scrape-gateway/artifacts
 
+recipes_root: recipes
+
 providers:
   - raw_http
   - wreq
@@ -53,6 +55,33 @@ evaluation:
   include_screenshot: true
   cache_root: .scrape-gateway/evaluations
 ```
+
+## Domain recipes
+
+Domain recipes capture the routing and validation facts learned for a specific site.
+Create `recipes/<domain>.yml` (or point `recipes_root` at another directory) to declare
+an ordered provider route, request defaults, required or forbidden content, known
+failure phrases, and a domain-specific cache TTL.
+
+```yaml
+domain: shop.example
+routes:
+  - provider: scrapedrive
+    settings:
+      country_code: US
+      render_js: true
+      scrape_tier: advanced
+validators:
+  min_text_chars: 500
+  must_contain_any: [reviews, pricing]
+failure_patterns:
+  blocked: [temporarily unavailable, access denied]
+ttl: 14d
+```
+
+Explicit per-request provider selection wins over a recipe. Otherwise routing priority
+is recipe, configured strategy, learned domain memory, then provider cost. See
+[`recipes/README.md`](../recipes/README.md) for the full field list.
 
 ## AI evaluation
 

@@ -21,6 +21,7 @@ from .memory import DomainMemory
 from .models import FailureReason, ScrapeRequest, ScrapeResult
 from .provider import ProviderAdapter
 from .progress import emit_progress
+from .recipes import DomainRecipeStore
 from .telemetry import TelemetryRecorder, new_run_id, safe_metadata, utc_now
 from .validators import validate_content
 
@@ -255,6 +256,7 @@ class ScrapeGateway:
         evaluator=None,
         default_timeout_seconds: float = 45,
         provider_timeouts: dict[str, float] | None = None,
+        recipes: DomainRecipeStore | None = None,
     ) -> None:
         self.providers = list(providers if providers is not None else _default_providers())
         self.cache = cache or ArtifactCache()
@@ -264,6 +266,7 @@ class ScrapeGateway:
         self.evaluator = evaluator
         self.default_timeout_seconds = default_timeout_seconds
         self.provider_timeouts = provider_timeouts or {}
+        self.recipes = recipes or DomainRecipeStore()
 
     @classmethod
     def from_config(cls, config: GatewayConfig | None = None) -> ScrapeGateway:
@@ -290,6 +293,7 @@ class ScrapeGateway:
                 for provider in config.providers
                 if provider.enabled and provider.timeout_seconds is not None
             },
+            recipes=DomainRecipeStore(config.recipes_root),
         )
 
     async def _evaluate_result(
@@ -411,6 +415,10 @@ class ScrapeGateway:
     ) -> ScrapeResult:
         if not request.url.startswith(("http://", "https://")):
             request.url = f"https://{request.url}"
+        recipe = self.recipes.for_url(request.url)
+        if recipe:
+            recipe.apply_to_request(request)
+            _log(f"  [recipe] matched {recipe.domain}")
         if "Referer" not in request.headers and "referer" not in request.headers:
             if request.referer is None:
                 request.headers["Referer"] = _auto_referer(request.url)
@@ -453,6 +461,7 @@ class ScrapeGateway:
                 request.url,
                 render_js=request.render_js,
                 require_screenshot=request.screenshot,
+                ttl_seconds=recipe.ttl_seconds if recipe else None,
             )
             if result:
                 _log("  [cache] HIT")
@@ -593,7 +602,9 @@ class ScrapeGateway:
             if result.success:
                 screenshot_only = bool(request.screenshot and result.screenshot and not result.html)
                 if not request.skip_validation and not screenshot_only:
-                    validation = validate_content(result.html)
+                    validation = validate_content(
+                        result.html, **(recipe.validation_kwargs if recipe else {})
+                    )
                     emit_progress(
                         id=f"validation-{provider_index}",
                         parent_id=provider_step_id,
@@ -823,17 +834,34 @@ class ScrapeGateway:
         providers = sorted(self.providers, key=lambda p: p.cost_rank)
 
         request_provider = request.metadata.get("preferred_provider")
-        preferred_provider = (
-            request_provider if isinstance(request_provider, str) else self.strategy.provider
-        )
+        preferred_provider = request_provider if isinstance(request_provider, str) else None
         if preferred_provider:
-            source = "request" if request_provider else "strategy"
             preferred = [p for p in providers if p.name == preferred_provider]
             rest = [p for p in providers if p.name != preferred_provider]
             if preferred:
-                _log(f"  [{source}] preferred provider: {preferred_provider}")
+                _log(f"  [request] preferred provider: {preferred_provider}")
                 return preferred + rest
-            _log(f"  [{source}] preferred provider {preferred_provider!r} not found, falling back")
+            _log(f"  [request] preferred provider {preferred_provider!r} not found, falling back")
+
+        recipe_providers = request.metadata.get("recipe_providers")
+        if isinstance(recipe_providers, list) and recipe_providers:
+            positions = {name: index for index, name in enumerate(recipe_providers)}
+            matched = [provider for provider in providers if provider.name in positions]
+            matched.sort(key=lambda provider: positions[provider.name])
+            if matched:
+                rest = [provider for provider in providers if provider.name not in positions]
+                _log(f"  [recipe] route: {'/'.join(provider.name for provider in matched)}")
+                return matched + rest
+
+        if self.strategy.provider:
+            preferred = [p for p in providers if p.name == self.strategy.provider]
+            rest = [p for p in providers if p.name != self.strategy.provider]
+            if preferred:
+                _log(f"  [strategy] preferred provider: {self.strategy.provider}")
+                return preferred + rest
+            _log(
+                f"  [strategy] preferred provider {self.strategy.provider!r} not found, falling back"
+            )
 
         pref = self.memory.preferred_provider(request.url)
         if pref:

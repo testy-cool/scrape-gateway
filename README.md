@@ -10,6 +10,9 @@
 
 One command, seven providers. Free ones tried first, paid ones only when needed. Domain memory skips the trial-and-error on repeat visits.
 
+For sites with known requirements, domain recipes can pin an ordered route, request
+settings, validation rules, failure phrases, and cache freshness without changing code.
+
 ## Quick start
 
 ```bash
@@ -172,6 +175,7 @@ More: [docs/python-api.md](docs/python-api.md)
 - [Commands](docs/commands.md) — full reference with examples
 - [Architecture](docs/architecture.md) — how the router, cache, and memory work
 - [Configuration](docs/configuration.md) — YAML config and `.env` setup
+- [Domain recipes](recipes/README.md) — per-site routing, validation, and cache rules
 - [Extensions](docs/extensions.md) — writing custom providers
 - [Python API](docs/python-api.md) — using sgw as a library
 - [Providers](docs/providers.md) — provider details and API mapping
