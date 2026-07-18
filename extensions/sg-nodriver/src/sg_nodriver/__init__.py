@@ -28,9 +28,7 @@ class NodriverProvider(ProviderAdapter):
             html = await page.get_content()
             screenshot = None
             if request.screenshot:
-                encoded = await page.save_screenshot(
-                    format="png", full_page=True, as_base64=True
-                )
+                encoded = await page.save_screenshot(format="png", full_page=True, as_base64=True)
                 screenshot = base64.b64decode(encoded)
             failure = classify_failure(200, html)
             return ScrapeResult(

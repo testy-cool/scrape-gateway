@@ -41,9 +41,7 @@ async def test_crawl4ai_maps_current_docker_api_contract() -> None:
         )
     )
 
-    result = await Crawl4AIProvider(
-        base_url="http://crawl4ai.test:11235", token="secret"
-    ).scrape(
+    result = await Crawl4AIProvider(base_url="http://crawl4ai.test:11235", token="secret").scrape(
         ScrapeRequest(
             TARGET,
             render_js=True,
@@ -115,9 +113,7 @@ async def test_crawl4ai_propagates_failed_crawl_result() -> None:
         )
     )
 
-    result = await Crawl4AIProvider(base_url="http://crawl4ai.test").scrape(
-        ScrapeRequest(TARGET)
-    )
+    result = await Crawl4AIProvider(base_url="http://crawl4ai.test").scrape(ScrapeRequest(TARGET))
 
     assert result.success is False
     assert result.status_code == 403
@@ -131,9 +127,7 @@ async def test_crawl4ai_reports_api_level_auth_failure() -> None:
         return_value=httpx.Response(401, json={"detail": "Invalid bearer token"})
     )
 
-    result = await Crawl4AIProvider(base_url="http://crawl4ai.test").scrape(
-        ScrapeRequest(TARGET)
-    )
+    result = await Crawl4AIProvider(base_url="http://crawl4ai.test").scrape(ScrapeRequest(TARGET))
 
     assert result.success is False
     assert result.status_code == 401

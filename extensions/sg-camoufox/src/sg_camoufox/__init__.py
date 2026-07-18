@@ -31,7 +31,9 @@ class CamoufoxProvider(ProviderAdapter):
                     await page.wait_for_timeout(request.extra_wait_ms)
                 html = await page.content()
                 screenshot = (
-                    await page.screenshot(full_page=True, type="png") if request.screenshot else None
+                    await page.screenshot(full_page=True, type="png")
+                    if request.screenshot
+                    else None
                 )
             failure = classify_failure(200, html)
             return ScrapeResult(
