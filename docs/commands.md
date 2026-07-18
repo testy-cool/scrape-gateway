@@ -2,7 +2,7 @@
 
 ## `sgw url` — Scrape a single page
 
-Tries providers from cheapest to most expensive until one succeeds. Results are cached locally so repeat scrapes are instant and free. Domain memory remembers which provider worked.
+Tries providers from cheapest to most expensive until one succeeds. Results are cached locally so repeat scrapes are instant and free. Domain memory remembers which provider worked. Use `--output`/`-o` to write the selected HTML or Markdown content to a file while keeping the rich scrape summary in the console. The parent directory must already exist and an existing file is overwritten.
 
 ```bash
 sgw url https://example.com                    # basic scrape
@@ -10,6 +10,7 @@ sgw url https://example.com --render-js        # JS-heavy SPA
 sgw url https://example.com -p scrapedrive     # force a provider
 sgw url https://example.com --no-cache         # bypass cache
 sgw url https://example.com -f markdown        # get markdown instead of HTML
+sgw url https://example.com -f markdown -o page.md
 sgw url https://example.com --tier advanced    # force ScrapeDrive tier
 sgw url https://example.com --meta             # extract OG metadata inline
 sgw url https://example.com --debug-artifacts  # save failed response bodies
@@ -111,12 +112,15 @@ output: results.json
 
 ## `sgw run` — Batch scrape from a file
 
-Scrapes each URL in a text file and shows a summary table.
+Scrapes each URL in a text file and shows a summary table. Use `--output`/`-o`
+to save successful scrape contents in input order; the parent directory must
+already exist and an existing file is overwritten.
 
 ```bash
 sgw run urls.txt
 sgw run urls.txt --render-js -p scrapedrive
 sgw run urls.txt -p scrapedrive --tier advanced
+sgw run urls.txt -f markdown -o pages.md
 ```
 
 ## `sgw meta` — Extract OpenGraph metadata

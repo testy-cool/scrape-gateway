@@ -178,6 +178,29 @@ def _print_result(result) -> None:
     console.print(Panel(table, title=title, border_style="green" if result.success else "red"))
 
 
+def _validate_output_path(output: Path | None) -> None:
+    if output is None:
+        return
+    if not output.parent.is_dir():
+        console.print(f"[red]Output directory does not exist:[/] {output.parent}")
+        raise typer.Exit(2)
+
+
+def _write_output(output: Path, content: str, *, description: str) -> None:
+    try:
+        output.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        console.print(f"[red]Could not write output file {output}:[/] {exc}")
+        raise typer.Exit(2) from exc
+    console.print(f"[green]Wrote {description} to {output}[/]")
+
+
+def _result_content(result, output_format: str) -> str:
+    if output_format == "markdown":
+        return result.markdown or ""
+    return result.html or ""
+
+
 @app.command()
 def url(
     target_url: str,
@@ -212,6 +235,9 @@ def url(
     referer: str | None = typer.Option(
         None, "--referer", help="Referer header (default: auto Google search URL, '' to disable)"
     ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write scrape content to this file"
+    ),
 ) -> None:
     """Scrape one URL through the gateway.
 
@@ -230,8 +256,11 @@ def url(
       sgw url https://example.com --tier advanced  # force ScrapeDrive tier
       sgw url https://example.com --no-cache      # fresh scrape
       sgw url https://example.com --meta          # extract OG metadata
+      sgw url https://example.com -f markdown -o page.md  # save content
       sgw url https://example.com --referer https://google.com  # spoof referer
     """
+
+    _validate_output_path(output)
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -271,6 +300,12 @@ def url(
             print(json.dumps(og, indent=2, ensure_ascii=False))
         elif meta and result.success and not result.html:
             console.print("[yellow]--meta requires HTML content; try without --format markdown[/]")
+        if output and result.success:
+            _write_output(
+                output,
+                _result_content(result, fmt),
+                description="scrape content",
+            )
         _hints("url", target_url)
         if not result.success:
             raise typer.Exit(1)
@@ -487,6 +522,9 @@ def run(
     referer: str | None = typer.Option(
         None, "--referer", help="Referer header (default: auto Google search URL, '' to disable)"
     ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write successful scrape contents to this file"
+    ),
 ) -> None:
     """Scrape URLs from a text file, one URL per line.
 
@@ -500,8 +538,11 @@ def run(
     Examples:
       sgw run urls.txt
       sgw run urls.txt --render-js -p scrapedrive
+      sgw run urls.txt -f markdown -o pages.md
       sgw run urls.txt --referer https://google.com
     """
+
+    _validate_output_path(output)
 
     async def execute() -> None:
         gateway = _build_gateway(provider)
@@ -511,6 +552,7 @@ def run(
         urls = [line.strip() for line in urls_file.read_text().splitlines() if line.strip()]
         successes = 0
         total_cost = 0.0
+        output_contents: list[str] = []
 
         table = Table(title="Batch Results")
         table.add_column("#", style="dim", width=4)
@@ -541,6 +583,8 @@ def run(
                 )
             successes += int(result.success)
             total_cost += result.cost_units
+            if output and result.success:
+                output_contents.append(_result_content(result, output_format))
             status_style = "green" if result.success else "red"
             table.add_row(
                 str(i),
@@ -558,6 +602,12 @@ def run(
             f"[red]{len(urls) - successes} failed[/] | "
             f"cost [cyan]{total_cost}[/]"
         )
+        if output:
+            _write_output(
+                output,
+                "\n".join(output_contents),
+                description=f"{len(output_contents)} scrape results",
+            )
 
     asyncio.run(execute())
 

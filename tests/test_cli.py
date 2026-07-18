@@ -76,6 +76,72 @@ def test_evaluation_goal_flag_sets_metadata():
     assert req.metadata["evaluation_goal"] == "Capture every visible product and price"
 
 
+def test_url_output_writes_selected_content_and_reports_path(tmp_path):
+    output_path = tmp_path / "page.md"
+    output_path.write_text("stale content")
+
+    async def fake_scrape(request, *, use_cache=True, use_memory=True):
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html="<main>HTML result</main>",
+            markdown="# Markdown result",
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(
+            app,
+            ["url", "https://example.com", "--format", "markdown", "-o", str(output_path)],
+        )
+
+    assert result.exit_code == 0
+    assert output_path.read_text() == "# Markdown result"
+    assert "Wrote scrape content to" in result.output
+    assert str(output_path) in result.output
+
+
+def test_url_output_rejects_missing_parent_directory(tmp_path):
+    output_path = tmp_path / "missing" / "page.html"
+
+    result, request = _run_url("https://example.com", "--output", str(output_path))
+
+    assert result.exit_code == 2
+    assert "Output directory does not exist" in result.output
+    assert request is None
+    assert not output_path.exists()
+
+
+def test_run_output_writes_each_successful_scrape_in_input_order(tmp_path):
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("https://one.example\nhttps://two.example\n")
+    output_path = tmp_path / "batch.html"
+
+    async def fake_scrape(request):
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html=f"<main>{request.url}</main>",
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["run", str(urls_file), "--output", str(output_path)])
+
+    assert result.exit_code == 0
+    assert output_path.read_text() == (
+        "<main>https://one.example</main>\n<main>https://two.example</main>"
+    )
+    assert "Wrote 2 scrape results to" in result.output
+    assert str(output_path) in result.output
+
+
 def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkeypatch):
     output = StringIO()
     monkeypatch.setattr(
