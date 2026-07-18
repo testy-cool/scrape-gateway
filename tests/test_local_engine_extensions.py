@@ -663,6 +663,16 @@ def test_nodriver_excludes_unsupported_python_3_14_runtime() -> None:
 
 async def test_nodriver_reads_filename_based_screenshot(monkeypatch) -> None:
     class Page:
+        def __init__(self):
+            self.ready_states = iter(["loading", "interactive"])
+            self.ready_state_checks = 0
+
+        async def evaluate(self, expression, **kwargs):
+            assert expression == "document.readyState"
+            assert kwargs == {"return_by_value": True}
+            self.ready_state_checks += 1
+            return next(self.ready_states)
+
         async def get_content(self):
             return HTML
 
@@ -671,10 +681,12 @@ async def test_nodriver_reads_filename_based_screenshot(monkeypatch) -> None:
             Path(filename).write_bytes(b"nodriver-png")
             return str(filename)
 
+    page = Page()
+
     class Browser:
         async def get(self, url):
             assert url == TARGET
-            return Page()
+            return page
 
         def stop(self):
             return None
@@ -692,6 +704,7 @@ async def test_nodriver_reads_filename_based_screenshot(monkeypatch) -> None:
     assert result.success is True
     assert result.html == HTML
     assert result.screenshot == b"nodriver-png"
+    assert page.ready_state_checks == 2
 
 
 async def test_crawlee_captures_one_playwright_request(monkeypatch) -> None:
