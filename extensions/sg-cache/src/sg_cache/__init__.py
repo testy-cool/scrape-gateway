@@ -51,6 +51,16 @@ def _cache_ttl(ttl: int | None = None) -> int:
     return _load_config().cache.ttl_seconds
 
 
+def _folder_for_key(root: Path, key: str) -> Path:
+    from scrape_gateway.paths import CACHE_KEY_PATTERN, safe_child
+
+    try:
+        return safe_child(root, key, pattern=CACHE_KEY_PATTERN)
+    except ValueError:
+        console.print(f"[red]Invalid cache key:[/] {key}")
+        raise typer.Exit(1) from None
+
+
 def _folder_size(folder: Path) -> int:
     total = 0
     for path in folder.rglob("*"):
@@ -286,7 +296,7 @@ def show(
             target, render_js=render_js
         )["folder"]
     else:
-        folder = cache_root / target
+        folder = _folder_for_key(cache_root, target)
 
     if not folder.exists():
         console.print(f"[red]Cache entry not found:[/] {target}")
@@ -339,7 +349,7 @@ def purge(
                 target, render_js=render_js
             )["folder"]
         else:
-            folder = cache_root / target
+            folder = _folder_for_key(cache_root, target)
         entries = [_entry_from_folder(folder, ttl_seconds=ttl)] if folder.exists() else []
     else:
         entries = _iter_entries(cache_root, ttl_seconds=ttl)

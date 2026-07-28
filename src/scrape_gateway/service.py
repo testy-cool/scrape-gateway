@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import hmac
 import json
-import re
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from typing import Annotated, Literal
@@ -14,10 +13,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .models import ScrapeRequest
+from .paths import CACHE_KEY_PATTERN
 from .router import ScrapeGateway
 from .telemetry import safe_metadata
 
-_CACHE_KEY = re.compile(r"^[0-9a-f]{24}$")
 OutputFormat = Literal["html", "markdown", "screenshot"]
 
 
@@ -145,7 +144,7 @@ def create_app(
 
     @api.get(f"{route_prefix}/cache/{{url_hash}}", dependencies=dependencies)
     async def cache_entry(url_hash: str) -> dict:
-        if not _CACHE_KEY.fullmatch(url_hash):
+        if not CACHE_KEY_PATTERN.fullmatch(url_hash):
             raise HTTPException(status_code=404, detail="Cache entry not found")
         folder = get_gateway().cache.root / url_hash
         meta_path = folder / "meta.json"

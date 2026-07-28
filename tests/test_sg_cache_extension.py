@@ -6,6 +6,10 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+import typer
+from typer.testing import CliRunner
+
 
 def _load_sg_cache():
     path = Path(__file__).resolve().parents[1] / "extensions/sg-cache/src/sg_cache/__init__.py"
@@ -35,6 +39,12 @@ def _write_entry(root: Path, key: str, *, url: str, fetched_at: float) -> Path:
     return folder
 
 
+def _cache_cli(sg_cache):
+    app = typer.Typer()
+    sg_cache.register(app)
+    return CliRunner(), app
+
+
 def test_cache_extension_iterates_entries(tmp_path):
     sg_cache = _load_sg_cache()
     _write_entry(tmp_path, "fresh", url="https://example.com/page", fetched_at=time.time())
@@ -59,3 +69,46 @@ def test_cache_extension_filters_by_domain_and_expiration(tmp_path):
 
     assert {entry.key for entry in domain_entries} == {"a", "b"}
     assert {entry.key for entry in expired_entries} == {"b"}
+
+
+@pytest.mark.parametrize("command", ["show", "purge"])
+@pytest.mark.parametrize("target_kind", ["relative", "absolute"])
+def test_cache_extension_refuses_targets_outside_cache_root(tmp_path, command, target_kind):
+    sg_cache = _load_sg_cache()
+    runner, app = _cache_cli(sg_cache)
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    sibling = _write_entry(
+        tmp_path,
+        f"victim-{command}-{target_kind}",
+        url="https://outside.example/",
+        fetched_at=time.time(),
+    )
+    target = f"../{sibling.name}" if target_kind == "relative" else str(sibling)
+
+    result = runner.invoke(app, ["cache", command, target, "--root", str(cache_root)])
+
+    assert result.exit_code != 0
+    assert "Invalid cache key" in result.output
+    assert sibling.is_dir()
+    assert (sibling / "page.md").read_text() == "hello"
+
+
+def test_cache_extension_purges_valid_artifact_key(tmp_path):
+    sg_cache = _load_sg_cache()
+    runner, app = _cache_cli(sg_cache)
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    key = "a" * 24
+    folder = _write_entry(
+        cache_root,
+        key,
+        url="https://example.com/",
+        fetched_at=time.time(),
+    )
+
+    result = runner.invoke(app, ["cache", "purge", key, "--root", str(cache_root)])
+
+    assert result.exit_code == 0
+    assert "Purged 1 cache entry." in result.output
+    assert not folder.exists()
