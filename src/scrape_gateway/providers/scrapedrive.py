@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import httpx
 
 from ..errors import classify_failure
-from ..models import FailureReason, ScrapeRequest, ScrapeResult
+from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
@@ -51,14 +51,40 @@ class ScrapeDriveProvider(ProviderAdapter):
         start = _start_tier(request)
         tiers = TIER_ORDER[TIER_ORDER.index(start) :]
         attempted_tiers: list[str] = []
+        ledger: list[AttemptLedgerEntry] = []
         provider_start = time.perf_counter()
+        active_tier: str | None = None
+        active_started: float | None = None
 
         try:
             async with asyncio.timeout(request.timeout_seconds):
                 last_result: ScrapeResult | None = None
                 for tier in tiers:
                     attempted_tiers.append(tier)
+                    active_tier = tier
+                    active_started = time.perf_counter()
                     result = await self._attempt(request, tier)
+                    attempt_latency_ms = int((time.perf_counter() - active_started) * 1000)
+                    ledger.append(
+                        AttemptLedgerEntry(
+                            provider=self.name,
+                            route=f"scrapedrive:{tier}",
+                            cost_units=TIER_COST[tier],
+                            cost_provenance="estimated",
+                            success=result.success,
+                            latency_ms=(
+                                result.latency_ms
+                                if result.latency_ms is not None
+                                else attempt_latency_ms
+                            ),
+                            status_code=result.status_code,
+                            failure_reason=result.failure_reason,
+                            block_type=result.block_type,
+                        )
+                    )
+                    result.attempt_ledger = list(ledger)
+                    result.cost_units = result.run_cost_units
+                    result.metadata["attempted_tiers"] = list(attempted_tiers)
                     if result.success:
                         return result
                     last_result = result
@@ -70,6 +96,24 @@ class ScrapeDriveProvider(ProviderAdapter):
 
                 return last_result  # type: ignore[return-value]
         except TimeoutError:
+            if active_tier is not None and len(ledger) < len(attempted_tiers):
+                ledger.append(
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route=f"scrapedrive:{active_tier}",
+                        cost_units=TIER_COST[active_tier],
+                        cost_provenance="estimated",
+                        success=False,
+                        latency_ms=(
+                            int((time.perf_counter() - active_started) * 1000)
+                            if active_started is not None
+                            else None
+                        ),
+                        status_code=None,
+                        failure_reason=FailureReason.TIMEOUT,
+                        block_type=None,
+                    )
+                )
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
@@ -78,11 +122,14 @@ class ScrapeDriveProvider(ProviderAdapter):
                     f"ScrapeDrive exceeded its {request.timeout_seconds:g}s total timeout budget"
                 ),
                 failure_reason=FailureReason.TIMEOUT,
+                cost_units=sum(entry.cost_units for entry in ledger),
                 latency_ms=int((time.perf_counter() - provider_start) * 1000),
+                route=f"scrapedrive:{active_tier}" if active_tier else None,
                 metadata={
                     "attempted_tiers": attempted_tiers,
                     "timeout_seconds": request.timeout_seconds,
                 },
+                attempt_ledger=ledger,
             )
 
     async def _attempt(self, request: ScrapeRequest, tier: str) -> ScrapeResult:

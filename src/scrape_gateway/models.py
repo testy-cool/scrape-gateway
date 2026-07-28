@@ -42,6 +42,32 @@ class ScrapeRequest:
 
 
 @dataclass(slots=True)
+class AttemptLedgerEntry:
+    provider: str
+    route: str | None
+    cost_units: float
+    cost_provenance: Literal["exact", "estimated"]
+    success: bool
+    latency_ms: int | None
+    status_code: int | None
+    failure_reason: FailureReason | None
+    block_type: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "route": self.route,
+            "cost_units": self.cost_units,
+            "cost_provenance": self.cost_provenance,
+            "success": self.success,
+            "latency_ms": self.latency_ms,
+            "status_code": self.status_code,
+            "failure_reason": self.failure_reason.value if self.failure_reason else None,
+            "block_type": self.block_type,
+        }
+
+
+@dataclass(slots=True)
 class ScrapeResult:
     url: str
     provider: str
@@ -59,6 +85,13 @@ class ScrapeResult:
     block_type: str | None = None
     validation_detail: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    attempt_ledger: list[AttemptLedgerEntry] = field(default_factory=list)
+
+    @property
+    def run_cost_units(self) -> float:
+        if not self.attempt_ledger:
+            return self.cost_units
+        return sum(entry.cost_units for entry in self.attempt_ledger)
 
 
 ProviderCapability = Literal["html", "markdown", "screenshot", "country", "render_js", "premium"]

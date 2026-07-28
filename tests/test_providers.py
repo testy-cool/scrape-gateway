@@ -116,6 +116,20 @@ class TestScrapeDrive:
         assert result.html == GOOD_HTML
         assert result.route == "scrapedrive:standard"
         assert result.cost_units == 1
+        assert result.run_cost_units == 1
+        assert [entry.to_dict() for entry in result.attempt_ledger] == [
+            {
+                "provider": "scrapedrive",
+                "route": "scrapedrive:standard",
+                "cost_units": 1,
+                "cost_provenance": "estimated",
+                "success": True,
+                "latency_ms": result.latency_ms,
+                "status_code": 200,
+                "failure_reason": None,
+                "block_type": None,
+            }
+        ]
 
         req = route.calls[0].request
         assert req.url.params["api_key"] == self.API_KEY
@@ -199,7 +213,57 @@ class TestScrapeDrive:
         )
 
         assert result.failure_reason == FailureReason.TIMEOUT
-        assert "hyperdrive" not in attempted_tiers
+        assert attempted_tiers == ["standard", "advanced"]
+        assert result.metadata["attempted_tiers"] == ["standard", "advanced"]
+        assert result.cost_units == 6
+        assert result.run_cost_units == 6
+        assert [entry.route for entry in result.attempt_ledger] == [
+            "scrapedrive:standard",
+            "scrapedrive:advanced",
+        ]
+        assert result.attempt_ledger[-1].failure_reason == FailureReason.TIMEOUT
+
+    @respx.mock
+    async def test_escalation_success_charges_every_started_tier(self):
+        route = respx.get(self.BASE).mock(
+            side_effect=[
+                httpx.Response(403, text="Forbidden"),
+                httpx.Response(429, text="Too many requests"),
+                httpx.Response(200, text=GOOD_HTML),
+            ]
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.success is True
+        assert result.route == "scrapedrive:hyperdrive"
+        assert result.cost_units == 31
+        assert result.run_cost_units == 31
+        assert [entry.route for entry in result.attempt_ledger] == [
+            "scrapedrive:standard",
+            "scrapedrive:advanced",
+            "scrapedrive:hyperdrive",
+        ]
+        assert [entry.cost_units for entry in result.attempt_ledger] == [1, 5, 25]
+        assert [entry.success for entry in result.attempt_ledger] == [False, False, True]
+        assert len(route.calls) == 3
+
+    @respx.mock
+    async def test_all_tier_failure_charges_every_started_tier(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(403, text="Forbidden"))
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.success is False
+        assert result.cost_units == 31
+        assert result.run_cost_units == 31
+        assert [entry.cost_units for entry in result.attempt_ledger] == [1, 5, 25]
+        assert all(entry.success is False for entry in result.attempt_ledger)
+        assert len(route.calls) == 3
 
     @respx.mock
     async def test_json_response(self):

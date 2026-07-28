@@ -2,14 +2,17 @@ import json
 import tempfile
 from pathlib import Path
 
+import httpx
 import pytest
+import respx
 
 from scrape_gateway.cache import ArtifactCache
 from scrape_gateway.config import EvaluationConfig, GatewayConfig
 from scrape_gateway.memory import DomainMemory
-from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
+from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
 from scrape_gateway.progress import observe_progress
+from scrape_gateway.providers.scrapfly import ScrapflyProvider
 from scrape_gateway.router import ScrapeGateway
 from scrape_gateway.telemetry import TelemetryRecorder
 
@@ -74,6 +77,163 @@ async def test_routes_to_first_success(tmp_dir):
     result = await gw.scrape(ScrapeRequest("https://example.com"), use_cache=False)
     assert result.success
     assert result.provider == "success"
+
+
+async def test_router_combines_provider_fallback_ledgers_without_double_counting(tmp_dir):
+    class EstimatedFailure(ProviderAdapter):
+        name = "estimated_failure"
+        cost_rank = 1
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=403,
+                failure_reason=FailureReason.HTTP_403,
+                cost_units=2,
+                latency_ms=10,
+                route="estimated_failure",
+            )
+
+    class RetryingSuccess(ProviderAdapter):
+        name = "retrying_success"
+        cost_rank = 2
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                html=(
+                    "<html><body><h1>Recovered</h1><p>This provider recovered after an "
+                    "internal retry and returned enough content.</p></body></html>"
+                ),
+                cost_units=6,
+                latency_ms=30,
+                route="retrying_success:advanced",
+                attempt_ledger=[
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route="retrying_success:standard",
+                        cost_units=1,
+                        cost_provenance="estimated",
+                        success=False,
+                        latency_ms=10,
+                        status_code=403,
+                        failure_reason=FailureReason.HTTP_403,
+                        block_type=None,
+                    ),
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route="retrying_success:advanced",
+                        cost_units=5,
+                        cost_provenance="exact",
+                        success=True,
+                        latency_ms=20,
+                        status_code=200,
+                        failure_reason=None,
+                        block_type=None,
+                    ),
+                ],
+            )
+
+    gw = ScrapeGateway(
+        providers=[EstimatedFailure(), RetryingSuccess()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_dir / "runs"),
+    )
+
+    result = await gw.scrape(
+        ScrapeRequest("https://example.com"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert result.cost_units == 6
+    assert result.run_cost_units == 8
+    assert [entry.provider for entry in result.attempt_ledger] == [
+        "estimated_failure",
+        "retrying_success",
+        "retrying_success",
+    ]
+    assert [entry.cost_provenance for entry in result.attempt_ledger] == [
+        "estimated",
+        "estimated",
+        "exact",
+    ]
+    report = json.loads(Path(result.metadata["telemetry_report"]).read_text())
+    assert len(report["attempts"]) == 2
+    assert report["run_cost_units"] == 8
+    assert [entry["cost_units"] for entry in report["ledger"]] == [2, 1, 5]
+
+
+async def test_validation_rejection_marks_only_usable_final_sub_attempt_failed(tmp_dir):
+    class InternallyRetriedBlock(ProviderAdapter):
+        name = "internally_retried_block"
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                html=(
+                    "<html><body>Checking your browser before accessing the site. "
+                    "Ray ID: abc123</body></html>" + "x" * 200
+                ),
+                cost_units=6,
+                route="internally_retried_block:advanced",
+                attempt_ledger=[
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route="internally_retried_block:standard",
+                        cost_units=1,
+                        cost_provenance="estimated",
+                        success=False,
+                        latency_ms=10,
+                        status_code=403,
+                        failure_reason=FailureReason.HTTP_403,
+                        block_type=None,
+                    ),
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route="internally_retried_block:advanced",
+                        cost_units=5,
+                        cost_provenance="estimated",
+                        success=True,
+                        latency_ms=20,
+                        status_code=200,
+                        failure_reason=None,
+                        block_type=None,
+                    ),
+                ],
+            )
+
+    result = await ScrapeGateway(
+        providers=[InternallyRetriedBlock()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    ).scrape(
+        ScrapeRequest("https://example.com"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is False
+    assert result.run_cost_units == 6
+    assert result.attempt_ledger[0].success is False
+    assert result.attempt_ledger[0].failure_reason == FailureReason.HTTP_403
+    assert result.attempt_ledger[0].block_type is None
+    assert result.attempt_ledger[1].success is False
+    assert result.attempt_ledger[1].failure_reason is None
+    assert result.attempt_ledger[1].block_type == "cloudflare"
 
 
 async def test_reports_provider_validation_evaluation_and_persistence_progress(tmp_dir):
@@ -183,6 +343,44 @@ async def test_proxy_error_stops_escalation(tmp_dir):
     assert not result.success
     assert result.failure_reason == FailureReason.PROXY_ERROR
     assert call_order == ["proxy_fail"]
+
+
+@respx.mock
+async def test_scrapfly_outer_proxy_error_stops_router_fallback(tmp_dir):
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            407,
+            json={
+                "result": {"content": "", "status_code": 200},
+                "context": {"cost": 7},
+            },
+        )
+    )
+    fallback_called = False
+
+    class ExpensiveSuccess(SuccessProvider):
+        name = "expensive_success"
+        cost_rank = 50
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            nonlocal fallback_called
+            fallback_called = True
+            return await super().scrape(request)
+
+    result = await ScrapeGateway(
+        providers=[ScrapflyProvider(api_key="scrapfly-key"), ExpensiveSuccess()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+    ).scrape(
+        ScrapeRequest("https://example.com"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is False
+    assert result.provider == "scrapfly"
+    assert result.failure_reason == FailureReason.PROXY_ERROR
+    assert fallback_called is False
 
 
 async def test_cache_hit(tmp_dir):

@@ -748,7 +748,7 @@ def run(
                     )
                 )
             successes += int(result.success)
-            total_cost += result.cost_units
+            total_cost += result.run_cost_units
             if output and result.success:
                 output_contents.append(_result_content(result, output_format))
             status_style = "green" if result.success else "red"

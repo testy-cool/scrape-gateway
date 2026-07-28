@@ -8,6 +8,7 @@ import re
 import sys
 import time
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -18,7 +19,7 @@ from markdownify import markdownify as md
 from .cache import ArtifactCache
 from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
-from .models import FailureReason, ScrapeRequest, ScrapeResult
+from .models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from .paths import RUN_ID_PATTERN, safe_child
 from .provider import ProviderAdapter
 from .progress import emit_progress
@@ -115,6 +116,28 @@ _HREFLANG_RE = re.compile(
 
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+def _provider_ledger(
+    provider: ProviderAdapter,
+    result: ScrapeResult,
+    elapsed_ms: int,
+) -> list[AttemptLedgerEntry]:
+    if result.attempt_ledger:
+        return [replace(entry) for entry in result.attempt_ledger]
+    return [
+        AttemptLedgerEntry(
+            provider=provider.name,
+            route=result.route,
+            cost_units=result.cost_units,
+            cost_provenance="estimated",
+            success=result.success,
+            latency_ms=result.latency_ms if result.latency_ms is not None else elapsed_ms,
+            status_code=result.status_code,
+            failure_reason=result.failure_reason,
+            block_type=result.block_type,
+        )
+    ]
 
 
 def _country_from_tld(url: str) -> str | None:
@@ -517,6 +540,7 @@ class ScrapeGateway:
             attributes={"providers": [provider.name for provider in ordered]},
         )
         attempts = []
+        run_ledger: list[AttemptLedgerEntry] = []
         skipped = []
         last_result: ScrapeResult | None = None
         for provider_index, provider in enumerate(ordered, start=1):
@@ -597,6 +621,14 @@ class ScrapeGateway:
                 if result.status_code and 200 <= result.status_code < 400:
                     result.success = True
                     result.failure_reason = None
+            provider_ledger = _provider_ledger(provider, result, int(elapsed * 1000))
+            if provider_ledger[-1].success != result.success:
+                provider_ledger[-1] = replace(
+                    provider_ledger[-1],
+                    success=result.success,
+                    failure_reason=result.failure_reason,
+                    block_type=result.block_type,
+                )
             attempt = {
                 "provider": provider.name,
                 "status": result.status_code,
@@ -635,6 +667,13 @@ class ScrapeGateway:
                     result.validation_detail = validation.detail
                     if not validation.passed:
                         result.success = False
+                        provider_ledger[-1] = replace(
+                            provider_ledger[-1],
+                            success=False,
+                            block_type=validation.block_type,
+                        )
+                        run_ledger.extend(provider_ledger)
+                        result.attempt_ledger = list(run_ledger)
                         self.memory.remember_failure(
                             request.url, provider.name, validation.block_type
                         )
@@ -672,6 +711,8 @@ class ScrapeGateway:
                         )
                         last_result = result
                         continue
+                run_ledger.extend(provider_ledger)
+                result.attempt_ledger = list(run_ledger)
                 if result.html and not result.markdown:
                     result.markdown = md(result.html)
                 attempt["result"] = "success"
@@ -763,6 +804,8 @@ class ScrapeGateway:
                 attempt["error"] = result.error
             if result.html:
                 attempt["chars"] = len(result.html)
+            run_ledger.extend(provider_ledger)
+            result.attempt_ledger = list(run_ledger)
             force_artifacts = (
                 bool(request.metadata.get("debug_artifacts")) or self.evaluator is not None
             )

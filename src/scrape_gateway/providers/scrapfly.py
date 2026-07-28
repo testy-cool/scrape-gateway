@@ -1,13 +1,46 @@
 from __future__ import annotations
 
+import math
 import os
 import time
 
 import httpx
 
 from ..errors import classify_failure
-from ..models import FailureReason, ScrapeRequest, ScrapeResult
+from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
+
+
+def _valid_cost(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        cost = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(cost) or cost < 0:
+        return None
+    return cost
+
+
+def _reported_cost(header_cost: object, context_cost: object) -> tuple[float, str]:
+    for candidate in (header_cost, context_cost):
+        cost = _valid_cost(candidate)
+        if cost is not None:
+            return cost, "exact"
+    return 1, "estimated"
+
+
+def _status_code(value: object, fallback: int) -> int:
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()):
+        return fallback
+    try:
+        status = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError, OverflowError):
+        return fallback
+    return status if 100 <= status <= 599 else fallback
 
 
 class ScrapflyProvider(ProviderAdapter):
@@ -47,48 +80,109 @@ class ScrapflyProvider(ProviderAdapter):
         if isinstance(session, str) and session:
             params["session"] = session
 
+        route = "scrapfly:asp" if request.premium else "scrapfly"
         start = time.perf_counter()
+        response_received = False
+        status_code: int | None = None
+        cost_units = 0.0
+        cost_provenance = "estimated"
+        context: dict = {}
         try:
             async with httpx.AsyncClient(
                 timeout=request.timeout_seconds, follow_redirects=True
             ) as client:
                 response = await client.get(self.base_url, params=params)
-                data = response.json() if response.is_success else {}
-                result_data = data.get("result", {}) if isinstance(data, dict) else {}
+                response_received = True
+                status_code = response.status_code
+                try:
+                    data = response.json()
+                except ValueError:
+                    data = {}
+                raw_context = data.get("context", {}) if isinstance(data, dict) else {}
+                context = raw_context if isinstance(raw_context, dict) else {}
+                cost_units, cost_provenance = _reported_cost(
+                    response.headers.get("x-scrapfly-api-cost"),
+                    context.get("cost"),
+                )
+                raw_result = data.get("result", {}) if isinstance(data, dict) else {}
+                result_data = raw_result if isinstance(raw_result, dict) else {}
+                if response.is_success:
+                    status_code = _status_code(
+                        result_data.get("status_code"),
+                        response.status_code,
+                    )
                 html = result_data.get("content", "")
-                if result_data.get("format") == "clob" and isinstance(html, str):
+                if not isinstance(html, str):
+                    html = ""
+                if response.is_success and result_data.get("format") == "clob":
                     large_response = await client.get(html, params={"key": self.api_key})
+                    if not large_response.is_success:
+                        status_code = large_response.status_code
                     large_response.raise_for_status()
                     html = large_response.text
-            target_status = int(result_data.get("status_code") or response.status_code)
-            failure = classify_failure(target_status, html)
-            cost = response.headers.get("x-scrapfly-api-cost")
-            context = data.get("context", {}) if isinstance(data, dict) else {}
+            failure = classify_failure(status_code, html)
+            success = response.is_success and failure is None
+            latency_ms = int((time.perf_counter() - start) * 1000)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
-                success=response.is_success and failure is None,
-                status_code=target_status,
+                success=success,
+                status_code=status_code,
                 html=html,
                 failure_reason=failure,
-                cost_units=float(cost or context.get("cost") or 1),
-                latency_ms=int((time.perf_counter() - start) * 1000),
-                route="scrapfly:asp" if request.premium else "scrapfly",
+                cost_units=cost_units,
+                latency_ms=latency_ms,
+                route=route,
                 metadata={"context": context},
-            )
-        except httpx.TimeoutException as exc:
-            return ScrapeResult(
-                request.url,
-                self.name,
-                False,
-                error=str(exc),
-                failure_reason=FailureReason.TIMEOUT,
+                attempt_ledger=[
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route=route,
+                        cost_units=cost_units,
+                        cost_provenance=cost_provenance,
+                        success=success,
+                        latency_ms=latency_ms,
+                        status_code=status_code,
+                        failure_reason=failure,
+                        block_type=None,
+                    )
+                ],
             )
         except Exception as exc:  # noqa: BLE001
-            return ScrapeResult(
-                request.url,
-                self.name,
-                False,
+            if isinstance(exc, httpx.TimeoutException):
+                failure_reason = FailureReason.TIMEOUT
+            elif isinstance(exc, httpx.HTTPStatusError):
+                status_code = exc.response.status_code
+                failure_reason = (
+                    classify_failure(status_code, exc.response.text) or FailureReason.PROVIDER_ERROR
+                )
+            else:
+                failure_reason = FailureReason.PROVIDER_ERROR
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            result = ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=status_code,
                 error=str(exc),
-                failure_reason=FailureReason.PROVIDER_ERROR,
+                failure_reason=failure_reason,
+                cost_units=cost_units,
+                latency_ms=latency_ms,
+                route=route if response_received else None,
+                metadata={"context": context} if response_received else {},
             )
+            if response_received:
+                result.attempt_ledger.append(
+                    AttemptLedgerEntry(
+                        provider=self.name,
+                        route=route,
+                        cost_units=cost_units,
+                        cost_provenance=cost_provenance,
+                        success=False,
+                        latency_ms=latency_ms,
+                        status_code=status_code,
+                        failure_reason=failure_reason,
+                        block_type=None,
+                    )
+                )
+            return result

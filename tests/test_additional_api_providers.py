@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from scrape_gateway.models import ScrapeRequest
+from scrape_gateway.models import FailureReason, ScrapeRequest
 from scrape_gateway.providers.brightdata import BrightDataProvider
 from scrape_gateway.providers.firecrawl import FirecrawlProvider
 from scrape_gateway.providers.jina_reader import JinaReaderProvider
@@ -56,7 +56,7 @@ async def test_scrapfly_maps_browser_country_asp_and_cost_budget() -> None:
             200,
             json={
                 "result": {"content": HTML, "status_code": 200},
-                "context": {"cost": 19},
+                "context": {"cost": 7},
             },
             headers={"x-scrapfly-api-cost": "19"},
         )
@@ -77,6 +77,8 @@ async def test_scrapfly_maps_browser_country_asp_and_cost_budget() -> None:
     assert result.html == HTML
     assert result.cost_units == 19
     assert result.route == "scrapfly:asp"
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+    assert result.attempt_ledger[0].cost_units == 19
     params = route.calls[0].request.url.params
     assert params["key"] == "scrapfly-key"
     assert params["url"] == TARGET
@@ -86,6 +88,186 @@ async def test_scrapfly_maps_browser_country_asp_and_cost_budget() -> None:
     assert params["cost_budget"] == "25"
     assert params["wait_for_selector"] == "#products"
     assert params["rendering_wait"] == "1500"
+
+
+@respx.mock
+async def test_scrapfly_marks_context_cost_exact_without_header() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {"content": HTML, "status_code": 200},
+                "context": {"cost": 7},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.cost_units == 7
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+
+
+@respx.mock
+async def test_scrapfly_marks_hardcoded_cost_fallback_estimated() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {"content": HTML, "status_code": 200},
+                "context": {},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.cost_units == 1
+    assert result.attempt_ledger[0].cost_provenance == "estimated"
+
+
+@respx.mock
+async def test_scrapfly_preserves_exact_context_cost_on_failed_response() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            500,
+            json={
+                "result": {"content": "Upstream failure", "status_code": 500},
+                "context": {"cost": 7},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.failure_reason == FailureReason.HTTP_5XX
+    assert result.cost_units == 7
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+
+
+@respx.mock
+async def test_scrapfly_handles_non_json_failed_response_with_estimated_cost() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(500, text="<html>upstream failure</html>")
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.failure_reason == FailureReason.HTTP_5XX
+    assert result.cost_units == 1
+    assert result.attempt_ledger[0].cost_provenance == "estimated"
+
+
+@respx.mock
+async def test_scrapfly_handles_malformed_failed_response_json_shape() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            500,
+            json={"result": "upstream failure", "context": "unavailable"},
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.failure_reason == FailureReason.HTTP_5XX
+    assert result.cost_units == 1
+    assert result.attempt_ledger[0].cost_provenance == "estimated"
+
+
+@respx.mock
+async def test_scrapfly_classifies_failed_api_envelope_from_outer_status() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            407,
+            json={
+                "result": {"content": "", "status_code": 200},
+                "context": {"cost": 7},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.status_code == 407
+    assert result.failure_reason == FailureReason.PROXY_ERROR
+    assert result.cost_units == 7
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+
+
+@pytest.mark.parametrize("invalid_header", ["not-a-number", "nan", "inf", "-1"])
+@respx.mock
+async def test_scrapfly_falls_back_from_invalid_header_to_exact_context_cost(
+    invalid_header: str,
+) -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {"content": HTML, "status_code": 200},
+                "context": {"cost": 7},
+            },
+            headers={"x-scrapfly-api-cost": invalid_header},
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is True
+    assert result.cost_units == 7
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+
+
+@respx.mock
+async def test_scrapfly_falls_back_to_outer_status_when_inner_status_is_malformed() -> None:
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {"content": HTML, "status_code": "not-a-status"},
+                "context": {"cost": 3},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is True
+    assert result.status_code == 200
+    assert result.cost_units == 3
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+
+
+@respx.mock
+async def test_scrapfly_failed_clob_fetch_preserves_reported_spend() -> None:
+    clob_url = "https://storage.scrapfly.test/result"
+    respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    "content": clob_url,
+                    "format": "clob",
+                    "status_code": 200,
+                },
+                "context": {"cost": 7},
+            },
+        )
+    )
+    respx.get(clob_url).mock(return_value=httpx.Response(500, text="storage unavailable"))
+
+    result = await ScrapflyProvider(api_key="scrapfly-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.status_code == 500
+    assert result.failure_reason == FailureReason.HTTP_5XX
+    assert result.cost_units == 7
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+    assert result.attempt_ledger[0].success is False
+    assert result.attempt_ledger[0].latency_ms is not None
 
 
 @respx.mock

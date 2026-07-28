@@ -111,6 +111,36 @@ def test_summarize_telemetry_aggregates_domains_diagnoses_costs_and_provider_hit
     ]
 
 
+def test_summarize_telemetry_derives_cost_from_ledger_when_present() -> None:
+    reports = [
+        {
+            "domain": "example.com",
+            "success": True,
+            "diagnosis": "success",
+            "attempts": [
+                {"provider": "first", "cost": 2},
+                {"provider": "second", "cost": 5},
+            ],
+            "ledger": [
+                {"provider": "first", "cost_units": 2},
+                {"provider": "second", "cost_units": 1},
+                {"provider": "second", "cost_units": 5},
+            ],
+            "run_cost_units": 999,
+            "final": {"provider": "second"},
+        }
+    ]
+
+    with patch(
+        "scrape_gateway.discovery.discover_providers",
+        return_value={"first": object, "second": object},
+    ):
+        summary = summarize_telemetry(reports)
+
+    assert summary["total_cost"] == 8
+    assert summary["average_cost"] == 8
+
+
 def test_summarize_telemetry_limits_provider_hits_to_discovered_registry() -> None:
     reports = [
         {

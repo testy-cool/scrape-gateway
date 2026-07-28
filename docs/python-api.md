@@ -47,6 +47,14 @@ asyncio.run(main())
 | `markdown` | str | Markdown conversion |
 | `error` | str | Error message on failure |
 | `failure_reason` | FailureReason | Classified failure type |
-| `cost_units` | float | Relative cost of this scrape |
+| `cost_units` | float | Provider-local cost total, including that adapter's internal retries |
 | `route` | str | Provider chain path taken |
 | `metadata` | dict | Run ID, telemetry report path, etc. |
+| `attempt_ledger` | list[AttemptLedgerEntry] | Itemized sub-attempts across the complete gateway run |
+| `run_cost_units` | float | Complete run cost derived from `attempt_ledger`, or `cost_units` for legacy results without a ledger |
+
+Each `AttemptLedgerEntry` records the provider, route or tier, cost units,
+exact-versus-estimated cost provenance, success, latency, HTTP status, failure
+reason, and block type. Provider adapters can return their internal
+sub-attempts; `ScrapeGateway` combines those entries across provider fallbacks
+without adding a duplicate outer charge.

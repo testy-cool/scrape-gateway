@@ -8,7 +8,7 @@ from rich.console import Console
 from typer.testing import CliRunner
 
 from scrape_gateway.cli import _print_result, app
-from scrape_gateway.models import FailureReason, ScrapeResult
+from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeResult
 
 runner = CliRunner()
 
@@ -140,6 +140,55 @@ def test_run_output_writes_each_successful_scrape_in_input_order(tmp_path):
     )
     assert "Wrote 2 scrape results to" in result.output
     assert str(output_path) in result.output
+
+
+def test_run_batch_total_sums_each_complete_run_ledger(tmp_path):
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("https://one.example\nhttps://two.example\n")
+    run_costs = iter([7, 9])
+
+    async def fake_scrape(request):
+        run_cost = next(run_costs)
+        return ScrapeResult(
+            url=request.url,
+            provider="winner",
+            success=True,
+            status_code=200,
+            html="<main>complete result</main>",
+            cost_units=5,
+            route="winner",
+            attempt_ledger=[
+                AttemptLedgerEntry(
+                    provider="fallback",
+                    route="fallback",
+                    cost_units=run_cost - 5,
+                    cost_provenance="estimated",
+                    success=False,
+                    latency_ms=10,
+                    status_code=403,
+                    failure_reason=FailureReason.HTTP_403,
+                    block_type=None,
+                ),
+                AttemptLedgerEntry(
+                    provider="winner",
+                    route="winner",
+                    cost_units=5,
+                    cost_provenance="estimated",
+                    success=True,
+                    latency_ms=20,
+                    status_code=200,
+                    failure_reason=None,
+                    block_type=None,
+                ),
+            ],
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["run", str(urls_file)])
+
+    assert result.exit_code == 0
+    assert "cost 16" in result.output
 
 
 def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkeypatch):

@@ -330,6 +330,8 @@ def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
         attempts = report.get("attempts")
         if not isinstance(attempts, list):
             attempts = []
+        ledger = report.get("ledger")
+        has_ledger = isinstance(ledger, list)
         attempt_count += len(attempts)
         for attempt in attempts:
             if not isinstance(attempt, dict):
@@ -339,9 +341,17 @@ def summarize_telemetry(reports: list[dict[str, Any]]) -> dict[str, Any]:
                 provider_attempts[provider] += 1
             elif provider and provider != "cache":
                 non_provider_attempts += 1
-            cost = attempt.get("cost")
-            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-                total_cost += float(cost)
+            if not has_ledger:
+                cost = attempt.get("cost")
+                if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                    total_cost += float(cost)
+        if has_ledger:
+            for entry in ledger:
+                if not isinstance(entry, dict):
+                    continue
+                cost = entry.get("cost_units")
+                if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                    total_cost += float(cost)
 
         final = report.get("final")
         winner = str(final.get("provider") or "") if isinstance(final, dict) else ""
@@ -783,6 +793,8 @@ class TelemetryRecorder:
             "evidence": diagnosis.evidence,
             "final": result_summary(final),
             "attempts": attempts,
+            "ledger": [entry.to_dict() for entry in final.attempt_ledger],
+            "run_cost_units": final.run_cost_units,
             "skipped": skipped,
         }
         if evaluation is not None:
