@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.7] - 2026-07-28
+
+### Fixed
+- MCP and development installs stay on the compatible v1 SDK until the server migrates to the renamed v2 `MCPServer` API, preventing fresh environments from failing to import `mcp.server.fastmcp`.
+
 ## [0.17.6] - 2026-07-28
 
 ### Fixed
