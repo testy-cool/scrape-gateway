@@ -48,7 +48,7 @@ class TestBrowserlessProvider:
 
         assert result.success is False
         assert "Missing" in (result.error or "")
-        assert result.failure_reason == FailureReason.PROVIDER_ERROR
+        assert result.failure_reason == FailureReason.PROVIDER_UNAVAILABLE
 
     @respx.mock
     async def test_content_request_uses_env_and_maps_render_options(
