@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 from datetime import datetime, timezone
 from io import StringIO
@@ -518,6 +519,77 @@ def test_evaluations_command_prints_aggregate_json(tmp_path):
     assert payload["runs_scanned"] == 1
     assert payload["verdict_counts"] == {"fail": 1}
     assert payload["review_queue"][0]["run_id"] == "run-123"
+
+
+def test_calibrate_evaluator_command_replays_recorded_responses(tmp_path):
+    corpus_root = tmp_path / "v1"
+    capture_root = corpus_root / "captures"
+    responses_root = tmp_path / "responses"
+    response_dir = responses_root / "baseline" / "google__gemini-test"
+    capture_root.mkdir(parents=True)
+    response_dir.mkdir(parents=True)
+    html = "<html><main>" + "Complete article content. " * 8 + "</main></html>"
+    (capture_root / "case.html.gz").write_bytes(gzip.compress(html.encode("utf-8"), mtime=0))
+    (corpus_root / "cases.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "case",
+                    "classification": "clean_article",
+                    "human_verdict": "pass",
+                    "human_root_cause": "none",
+                    "human_issue_codes": [],
+                    "split": "dev",
+                    "score": True,
+                    "artifact": "captures/case.html.gz",
+                    "status_code": 200,
+                }
+            ]
+        )
+    )
+    (response_dir / "case.json").write_text(
+        json.dumps(
+            {
+                "case_id": "case",
+                "model": "google/gemini-test",
+                "prompt_version": "scrape-usability-v2",
+                "status": "completed",
+                "elapsed_ms": 100,
+                "usage": {"cost": 0.0001},
+                "judgment": {
+                    "verdict": "pass",
+                    "root_cause": "none",
+                    "issues": [],
+                    "needs_human_review": False,
+                },
+            }
+        )
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "calibrate-evaluator",
+            "--corpus-root",
+            str(corpus_root),
+            "--responses-root",
+            str(responses_root),
+            "--run-name",
+            "baseline",
+            "--model",
+            "google/gemini-test",
+            "--split",
+            "dev",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["mode"] == "offline"
+    assert payload["metrics"]["verdict"]["tpr"] == 1.0
+    assert payload["response_dir"] == str(response_dir)
 
 
 def test_url_exits_nonzero_on_failure():

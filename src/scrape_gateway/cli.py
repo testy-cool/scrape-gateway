@@ -35,6 +35,7 @@ Commands:
   history   See how a page changed across scrapes
   cost      Summarize recorded spend by domain and provider
   evaluations  Aggregate AI quality audits and review recurring failures
+  calibrate-evaluator  Measure the AI audit against human labels
   selftest  Verify the tool works against safe public URLs"""
 )
 console = Console(stderr=True)
@@ -511,6 +512,130 @@ def evaluations(
                 str(item.get("recommended_action") or item.get("error") or "manual review"),
             )
         console.print(review)
+
+
+@app.command("calibrate-evaluator")
+def calibrate_evaluator(
+    corpus_root: Path = typer.Option(
+        Path("tests/fixtures/evaluator_calibration/v1"),
+        "--corpus-root",
+        help="Versioned labelled corpus directory",
+    ),
+    responses_root: Path | None = typer.Option(
+        None,
+        "--responses-root",
+        help="Recorded response root (defaults to CORPUS_ROOT/responses)",
+    ),
+    run_name: str = typer.Option(
+        "baseline",
+        "--run-name",
+        help="Stable response set name, such as baseline or final",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Exact OpenRouter model ID (defaults to evaluation.model)",
+    ),
+    split: str = typer.Option(
+        "dev",
+        "--split",
+        help="train|dev|test|all",
+    ),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="Call the evaluator and record responses; otherwise replay offline",
+    ),
+    concurrency: int = typer.Option(
+        4,
+        "--concurrency",
+        min=1,
+        help="Maximum concurrent live evaluator calls",
+    ),
+    output_format: str = typer.Option(
+        "rich",
+        "--format",
+        "-f",
+        help="rich|json",
+    ),
+) -> None:
+    """Measure the advisory evaluator against the versioned human-labelled corpus.
+
+    Offline replay is the default and never needs an API key. Live runs are manual,
+    record one response per case, refuse overwrites, and claim the held-out test set
+    exactly once for each run/model response directory.
+    """
+    from .calibration import (
+        CalibrationError,
+        build_report,
+        response_directory,
+        run_live,
+    )
+    from .config import load_config
+
+    if split not in {"train", "dev", "test", "all"}:
+        console.print("[red]--split must be train, dev, test, or all[/]")
+        raise typer.Exit(2)
+    if output_format not in {"rich", "json"}:
+        console.print("[red]--format must be rich or json[/]")
+        raise typer.Exit(2)
+
+    selected_model = model or load_config().evaluation.model
+    selected_responses_root = responses_root or corpus_root / "responses"
+    try:
+        response_dir = response_directory(
+            selected_responses_root,
+            run_name=run_name,
+            model=selected_model,
+        )
+        if live:
+            report = asyncio.run(
+                run_live(
+                    corpus_root=corpus_root,
+                    response_dir=response_dir,
+                    split=split,
+                    model=selected_model,
+                    concurrency=concurrency,
+                )
+            )
+        else:
+            report = build_report(
+                corpus_root=corpus_root,
+                response_dir=response_dir,
+                split=split,
+                model=selected_model,
+            )
+    except CalibrationError as exc:
+        console.print(f"[red]Calibration failed:[/] {exc}")
+        raise typer.Exit(2) from exc
+
+    report["response_dir"] = str(response_dir)
+    if output_format == "json":
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    verdict = report["metrics"]["verdict"]
+    review = report["metrics"]["human_review"]
+    cost = report["metrics"]["cost"]
+    latency = report["metrics"]["latency_ms"]
+    deterministic = report["deterministic_comparison"]["summary"]
+    console.print(
+        Panel(
+            f"[bold]{report['case_count']}[/] cases, {report['split']} split\n"
+            f"TPR [cyan]{verdict['tpr']}[/]  TNR [cyan]{verdict['tnr']}[/]  "
+            f"F1 [cyan]{verdict['f1']}[/]\n"
+            f"Review caught [yellow]{review['errors_flagged']}[/] / "
+            f"{review['model_errors']} model errors\n"
+            f"Cost [cyan]${cost['total']:.6f}[/] total, "
+            f"[cyan]${cost['per_judgment']:.6f}[/] / judgment\n"
+            f"Latency p50 [cyan]{latency['p50']} ms[/], "
+            f"p95 [cyan]{latency['p95']} ms[/]\n"
+            f"AI wins [cyan]{deterministic['ai_wins']}[/], "
+            f"free checks win [cyan]{deterministic['deterministic_wins']}[/]",
+            title=f"{report['mode']} calibration · {selected_model}",
+        )
+    )
+    console.print(f"[dim]Recorded responses: {response_dir}[/]")
 
 
 @app.command()
