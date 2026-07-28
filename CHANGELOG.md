@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-07-28
+
+### Added
+- Default routing uses exact-profile attempt-ledger history to prefer the lowest sufficiently supported total spend per successful page, with lower weight for estimated costs and a deterministic daily probe for cheaper providers without recent usable evidence.
+- `max_cost_per_url` now stops provider escalation before the current run ledger plus the next request-aware cost estimate would exceed the ceiling, with a distinct `budget_exceeded` result in Python, CLI, progress, logs, and telemetry.
+
+### Changed
+- ScrapeDrive enforces the remaining allowance before each internal 1-, 5-, or 25-unit tier, and Scrapfly receives a provider-side cost budget capped to the gateway remainder.
+- Explicit request, recipe, and configured strategy routing continue to take precedence over observed-cost ordering; cold and thin histories retain provider cost-rank order.
+
 ## [0.19.0] - 2026-07-28
 
 ### Added
