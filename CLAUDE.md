@@ -23,8 +23,16 @@ What does NOT need a release:
 ## Testing
 
 Run before every commit:
-- `uv run pytest tests/ -v --ignore=tests/test_scraperapi_live.py --ignore=tests/test_scrapedrive_live.py` — unit tests (must pass)
+- `uv run pytest -q --ignore=tests/test_scraperapi_live.py --ignore=tests/test_scrapedrive_live.py` — must pass
+
+  Run it from the repo root with no path argument, exactly as CI does. Restricting it to
+  `tests/` silently skips the extension test suites under `extensions/**`, which CI does
+  collect — a green local run then turns red on the release commit.
+- Never run bare `pytest`. Both `--ignore` flags are what keep the paid live-provider
+  tests out; without them a routine test run spends real money.
 - Live tests need API keys in `.env` and hit real services — run manually when touching providers
+- Lint gates are `ruff check .` and `ruff format --check .`. The dev dependency is pinned
+  below 0.16 because ruff 0.16 expanded its default rule set; see the pin in `pyproject.toml`.
 
 ## Project Layout
 
