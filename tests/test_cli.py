@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from rich.console import Console
 from typer.testing import CliRunner
 
 from scrape_gateway.cli import _print_result, app
-from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeResult
+from scrape_gateway.memory import DomainMemory
+from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 
 runner = CliRunner()
 
@@ -189,6 +192,161 @@ def test_run_batch_total_sums_each_complete_run_ledger(tmp_path):
 
     assert result.exit_code == 0
     assert "cost 16" in result.output
+
+
+def _record_cli_cost_fixture(db_path) -> None:
+    memory = DomainMemory(db_path)
+    recorded_at = datetime.now(timezone.utc)
+    memory.record_attempt_ledger(
+        "run-example",
+        ScrapeRequest("https://example.com/products", render_js=True),
+        [
+            AttemptLedgerEntry(
+                provider="raw_http",
+                route="raw_http",
+                cost_units=2,
+                cost_provenance="estimated",
+                success=False,
+                latency_ms=50,
+                status_code=403,
+                failure_reason=FailureReason.HTTP_403,
+                block_type="cloudflare",
+            ),
+            AttemptLedgerEntry(
+                provider="scrapfly",
+                route="scrapfly:asp",
+                cost_units=5,
+                cost_provenance="exact",
+                success=True,
+                latency_ms=100,
+                status_code=200,
+                failure_reason=None,
+                block_type=None,
+            ),
+        ],
+        recorded_at=recorded_at,
+    )
+    memory.record_attempt_ledger(
+        "run-other",
+        ScrapeRequest("https://other.example/about"),
+        [
+            AttemptLedgerEntry(
+                provider="raw_http",
+                route="raw_http",
+                cost_units=3,
+                cost_provenance="estimated",
+                success=True,
+                latency_ms=25,
+                status_code=200,
+                failure_reason=None,
+                block_type=None,
+            )
+        ],
+        recorded_at=recorded_at,
+    )
+
+
+def test_cost_command_prints_json_spend_by_domain_and_provider(tmp_path):
+    db_path = tmp_path / "memory.sqlite"
+    _record_cli_cost_fixture(db_path)
+
+    with patch(
+        "scrape_gateway.config.load_config",
+        return_value=SimpleNamespace(memory_path=str(db_path)),
+    ):
+        result = runner.invoke(app, ["cost", "--days", "7", "--format", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["days"] == 7
+    assert payload["domain"] is None
+    assert payload["totals"] == {
+        "attempt_count": 3,
+        "successful_attempt_count": 2,
+        "failed_attempt_count": 1,
+        "successful_attempt_cost_units": 8.0,
+        "failed_attempt_cost_units": 2.0,
+        "total_cost_units": 10.0,
+    }
+    assert payload["by_domain"] == [
+        {
+            "domain": "example.com",
+            "attempt_count": 2,
+            "successful_attempt_count": 1,
+            "failed_attempt_count": 1,
+            "successful_attempt_cost_units": 5.0,
+            "failed_attempt_cost_units": 2.0,
+            "total_cost_units": 7.0,
+        },
+        {
+            "domain": "other.example",
+            "attempt_count": 1,
+            "successful_attempt_count": 1,
+            "failed_attempt_count": 0,
+            "successful_attempt_cost_units": 3.0,
+            "failed_attempt_cost_units": 0.0,
+            "total_cost_units": 3.0,
+        },
+    ]
+    assert payload["by_provider"] == [
+        {
+            "provider": "raw_http",
+            "attempt_count": 2,
+            "successful_attempt_count": 1,
+            "failed_attempt_count": 1,
+            "successful_attempt_cost_units": 3.0,
+            "failed_attempt_cost_units": 2.0,
+            "total_cost_units": 5.0,
+        },
+        {
+            "provider": "scrapfly",
+            "attempt_count": 1,
+            "successful_attempt_count": 1,
+            "failed_attempt_count": 0,
+            "successful_attempt_cost_units": 5.0,
+            "failed_attempt_cost_units": 0.0,
+            "total_cost_units": 5.0,
+        },
+    ]
+
+
+def test_cost_command_rich_output_filters_domain_and_separates_failed_spend(tmp_path):
+    db_path = tmp_path / "memory.sqlite"
+    _record_cli_cost_fixture(db_path)
+
+    with patch(
+        "scrape_gateway.config.load_config",
+        return_value=SimpleNamespace(memory_path=str(db_path)),
+    ):
+        result = runner.invoke(
+            app,
+            ["cost", "--days", "7", "--domain", "https://www.example.com/path"],
+        )
+
+    assert result.exit_code == 0
+    assert "Scrape Cost — Last 7 Days" in result.output
+    assert "Spend by Domain" in result.output
+    assert "Spend by Provider" in result.output
+    assert "Successful spend" in result.output
+    assert "Failed spend" in result.output
+    assert "example.com" in result.output
+    assert "raw_http" in result.output
+    assert "scrapfly" in result.output
+    assert "other.example" not in result.output
+
+
+def test_cost_command_handles_empty_ledger(tmp_path):
+    db_path = tmp_path / "memory.sqlite"
+    DomainMemory(db_path)
+
+    with patch(
+        "scrape_gateway.config.load_config",
+        return_value=SimpleNamespace(memory_path=str(db_path)),
+    ):
+        result = runner.invoke(app, ["cost", "--days", "30"])
+
+    assert result.exit_code == 0
+    assert "No cost ledger entries found" in result.output
 
 
 def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkeypatch):

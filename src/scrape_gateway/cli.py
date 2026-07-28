@@ -33,6 +33,7 @@ Commands:
   extract   Pull structured data (JSON/CSV) from those repeated elements
   recipe    Replay a saved scrape+extract workflow from a YAML file
   history   See how a page changed across scrapes
+  cost      Summarize recorded spend by domain and provider
   evaluations  Aggregate AI quality audits and review recurring failures
   selftest  Verify the tool works against safe public URLs"""
 )
@@ -540,6 +541,127 @@ def meta(
             console.print("[yellow]No page metadata found[/]")
 
     asyncio.run(run())
+
+
+_COST_COUNT_FIELDS = (
+    "attempt_count",
+    "successful_attempt_count",
+    "failed_attempt_count",
+)
+_COST_SPEND_FIELDS = (
+    "successful_attempt_cost_units",
+    "failed_attempt_cost_units",
+    "total_cost_units",
+)
+
+
+def _aggregate_cost_rows(rows: list[dict], group_field: str | None = None) -> dict | list[dict]:
+    groups: dict[str, dict] = {}
+    if group_field is None:
+        groups["totals"] = {}
+    for row in rows:
+        group = "totals" if group_field is None else str(row[group_field])
+        aggregate = groups.setdefault(group, {})
+        for field in _COST_COUNT_FIELDS:
+            aggregate[field] = int(aggregate.get(field, 0)) + int(row[field])
+        for field in _COST_SPEND_FIELDS:
+            aggregate[field] = float(aggregate.get(field, 0.0)) + float(row[field])
+
+    if group_field is None:
+        aggregate = groups.get("totals", {})
+        return {
+            **{field: int(aggregate.get(field, 0)) for field in _COST_COUNT_FIELDS},
+            **{field: float(aggregate.get(field, 0.0)) for field in _COST_SPEND_FIELDS},
+        }
+
+    result = [
+        {
+            group_field: group,
+            **{field: int(aggregate.get(field, 0)) for field in _COST_COUNT_FIELDS},
+            **{field: float(aggregate.get(field, 0.0)) for field in _COST_SPEND_FIELDS},
+        }
+        for group, aggregate in groups.items()
+    ]
+    return sorted(
+        result,
+        key=lambda item: (-item["total_cost_units"], str(item[group_field])),
+    )
+
+
+def _print_cost_group(title: str, label: str, rows: list[dict]) -> None:
+    table = Table(title=title)
+    table.add_column(label)
+    table.add_column("Attempts", justify="right")
+    table.add_column("Successful spend", justify="right")
+    table.add_column("Failed spend", justify="right")
+    table.add_column("Total spend", justify="right")
+    for row in rows:
+        table.add_row(
+            str(row[label.lower()]),
+            str(row["attempt_count"]),
+            f"{row['successful_attempt_cost_units']:g}",
+            f"{row['failed_attempt_cost_units']:g}",
+            f"{row['total_cost_units']:g}",
+        )
+    console.print(table)
+
+
+@app.command()
+def cost(
+    days: int = typer.Option(30, "--days", "-n", min=0, help="Recent time window in days"),
+    domain: str | None = typer.Option(None, "--domain", "-d", help="Filter by domain"),
+    output_format: str = typer.Option("rich", "--format", "-f", help="rich|json"),
+) -> None:
+    """Summarize persisted scrape-attempt spend without changing routing."""
+    from .config import load_config
+    from .memory import DomainMemory
+
+    if output_format not in {"rich", "json"}:
+        console.print("[red]--format must be rich or json[/]")
+        raise typer.Exit(2)
+
+    config = load_config()
+    memory = DomainMemory(db_path=config.memory_path)
+    rows = memory.attempt_cost_summary(days=days, domain=domain)
+    normalized_domain = None
+    if domain:
+        normalized_domain = (
+            memory.domain_for_url(domain)
+            if "://" in domain
+            else domain.lower().removeprefix("www.")
+        )
+    report = {
+        "days": days,
+        "domain": normalized_domain,
+        "totals": _aggregate_cost_rows(rows),
+        "by_domain": _aggregate_cost_rows(rows, "domain"),
+        "by_provider": _aggregate_cost_rows(rows, "provider"),
+        "details": rows,
+    }
+
+    if output_format == "json":
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    if not rows:
+        console.print("[yellow]No cost ledger entries found for the selected window.[/]")
+        return
+
+    totals = report["totals"]
+    metrics = Table.grid(expand=True)
+    metrics.add_column(justify="center")
+    metrics.add_column(justify="center")
+    metrics.add_column(justify="center")
+    metrics.add_row(
+        f"[bold]{totals['total_cost_units']:g}[/]\n[dim]Total spend[/]",
+        (f"[bold green]{totals['successful_attempt_cost_units']:g}[/]\n[dim]Successful spend[/]"),
+        (f"[bold red]{totals['failed_attempt_cost_units']:g}[/]\n[dim]Failed spend[/]"),
+    )
+    title = f"Scrape Cost — Last {days} Day{'s' if days != 1 else ''}"
+    if normalized_domain:
+        title += f" — {normalized_domain}"
+    console.print(Panel(metrics, title=title))
+    _print_cost_group("Spend by Domain", "Domain", report["by_domain"])
+    _print_cost_group("Spend by Provider", "Provider", report["by_provider"])
 
 
 @app.command()

@@ -137,6 +137,20 @@ sgw run urls.txt -p scrapedrive --tier advanced
 sgw run urls.txt -f markdown -o pages.md
 ```
 
+## `sgw cost` — Inspect recorded scrape spend
+
+Reads the append-only attempt ledger from the configured memory database and
+summarizes spend over a recent time window. Successful-attempt and
+failed-attempt spend are shown separately in both the domain and provider
+breakdowns. This is a reporting surface only; it does not change routing.
+
+```bash
+sgw cost
+sgw cost --days 7
+sgw cost --domain example.com
+sgw cost --days 90 --format json
+```
+
 ## `sgw meta` — Extract page metadata
 
 Extracts OpenGraph and Twitter Card tags, JSON-LD blocks, canonical and icon URLs,

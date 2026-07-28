@@ -87,6 +87,7 @@ being committed.
 | `sgw run <file>` | Batch scrape URLs from a text file |
 | `sgw meta <url>` | Extract social, JSON-LD, and document metadata as JSON |
 | `sgw history <url>` | Show scrape timeline and page changes |
+| `sgw cost` | Summarize successful and failed attempt spend by domain/provider |
 | `sgw telemetry` | Inspect reports or aggregate routing metrics with `--summary` |
 | `sgw evaluations` | Aggregate AI quality audits and review recurring failures |
 | `sgw providers` | List all available providers |
