@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.5] - 2026-07-28
+
+### Fixed
+- Cache show and purge commands accept only canonical artifact keys and enforce resolved-root containment, preventing relative, absolute, or symlinked targets from escaping the cache root.
+- Run evidence validates caller-supplied IDs before routing and before every telemetry write. Invalid router metadata is replaced without failing the scrape, while direct recorder calls reject unsafe IDs.
+
 ## [0.17.4] - 2026-07-19
 
 ### Fixed
