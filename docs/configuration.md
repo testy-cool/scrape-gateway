@@ -74,10 +74,17 @@ evaluation:
 
 Routing decisions use recent rows from the attempt ledger for the exact combination of
 domain, country, JavaScript rendering, premium mode, mobile mode, and screenshot mode.
-Evidence does not fall back across profiles. The default `evidence_window` is seven days;
-after a skipped provider's failures age out, the router places one half-open recovery
-probe ahead of the current learned winner. A failed probe closes the provider for another
-window, while a successful probe restores it immediately.
+Evidence does not fall back across profiles. After at least five attempts and two
+successes, the router orders providers by total spend per success, including spend from
+failed attempts. Exact provider-reported costs have full weight and adapter estimates
+have half weight. Until that threshold is met, the existing cost-rank order remains
+unchanged.
+
+The default `evidence_window` is seven days. Once per 24 hours, one cheaper provider
+without recent usable evidence may move ahead of the observed leader as an exploration
+probe. After a skipped provider's failures age out, the router places one half-open
+recovery probe ahead of the current learned winner. A failed probe closes the provider
+for another window, while a successful probe restores it immediately.
 
 Missing or invalid provider credentials and local provider configuration failures are
 recorded as provider availability failures, not evidence that the target domain is
@@ -111,7 +118,8 @@ ttl: 14d
 ```
 
 Explicit per-request provider selection wins over a recipe. Otherwise routing priority
-is recipe, configured strategy, learned domain memory, then provider cost. See
+is recipe, configured strategy, observed exact-profile cost effectiveness, then cold-start
+provider cost rank. See
 [`recipes/README.md`](../recipes/README.md) for the full field list.
 
 ## AI evaluation

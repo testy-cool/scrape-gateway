@@ -795,6 +795,7 @@ class TelemetryRecorder:
             "attempts": attempts,
             "ledger": [entry.to_dict() for entry in final.attempt_ledger],
             "run_cost_units": final.run_cost_units,
+            "routing_decision": safe_metadata(request.metadata.get("routing_decision")),
             "skipped": skipped,
         }
         if evaluation is not None:

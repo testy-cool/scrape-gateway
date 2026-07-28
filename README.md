@@ -8,8 +8,9 @@
   <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
 </p>
 
-One command, fifteen built-in providers. Free ones are tried first, paid ones only when
-needed. Domain memory skips the trial-and-error on repeat visits.
+One command, fifteen built-in providers. Cold domains start with free and low-cost
+providers; repeat visits use the attempt ledger to minimize total spend per successful
+page without forgetting the price of failed attempts.
 
 For sites with known requirements, domain recipes can pin an ordered route, request
 settings, validation rules, failure phrases, and cache freshness without changing code.
@@ -98,8 +99,9 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-Fifteen built-in providers plus the bundled Browserless extension. The router tries
-lower cost ranks first.
+Fifteen built-in providers plus the bundled Browserless extension. Cost ranks provide
+the cold-start order; sufficiently supported domain history replaces it with observed
+total spend per success.
 
 | Provider | JS | Screenshot | Markdown | Country | CAPTCHA | Cost tier |
 |---|---|---|---|---|---|---|

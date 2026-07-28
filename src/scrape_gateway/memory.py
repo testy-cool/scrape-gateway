@@ -336,6 +336,134 @@ class DomainMemory:
             *_NON_DOMAIN_FAILURE_REASONS,
         )
 
+    def provider_cost_effectiveness(
+        self,
+        request: ScrapeRequest | str,
+        *,
+        as_of: datetime | None = None,
+    ) -> list[dict]:
+        """Return recent exact-profile spend normalized by successful outcomes.
+
+        Exact provider-reported costs receive full weight. Estimated costs and their
+        outcomes receive half weight so guesses influence the route without competing
+        equally with provider-reported billing evidence.
+        """
+
+        request = self._request(request)
+        rows = self.conn.execute(
+            """
+            with evidence as (
+              select *
+              from attempt_ledger
+              where domain = ?
+                and recorded_at >= ? and recorded_at <= ?
+                and country is ? collate nocase
+                and render_js = ?
+                and premium = ?
+                and mobile = ?
+                and screenshot = ?
+                and (
+                  success = 1
+                  or failure_reason is null
+                  or failure_reason not in (?, ?)
+                )
+            )
+            select provider,
+                   count(*) as attempt_count,
+                   sum(success) as successful_attempt_count,
+                   sum(case when cost_provenance = 'exact' then 1 else 0 end)
+                     as exact_attempt_count,
+                   sum(case when cost_provenance = 'estimated' then 1 else 0 end)
+                     as estimated_attempt_count,
+                   sum(case when cost_provenance = 'exact' then 1.0 else 0.5 end)
+                     as weighted_attempt_count,
+                   sum(
+                     cost_units
+                     * case when cost_provenance = 'exact' then 1.0 else 0.5 end
+                   ) as weighted_cost_units,
+                   sum(
+                     success
+                     * case when cost_provenance = 'exact' then 1.0 else 0.5 end
+                   ) as weighted_success_count,
+                   max(recorded_at) as last_attempt_at,
+                   (
+                     select route
+                     from evidence as latest_success
+                     where latest_success.provider = evidence.provider
+                       and latest_success.success = 1
+                     order by recorded_at desc, id desc
+                     limit 1
+                   ) as last_success_tier
+            from evidence
+            group by provider
+            order by provider
+            """,
+            self._profile_params(request, as_of=as_of),
+        ).fetchall()
+        scores = []
+        for row in rows:
+            score = dict(row)
+            weighted_successes = float(score["weighted_success_count"] or 0)
+            score["cost_per_success"] = (
+                float(score["weighted_cost_units"]) / weighted_successes
+                if weighted_successes
+                else None
+            )
+            scores.append(score)
+        return scores
+
+    def provider_due_for_cost_exploration(
+        self,
+        request: ScrapeRequest | str,
+        provider: str,
+        *,
+        interval_seconds: int,
+        as_of: datetime | None = None,
+    ) -> bool:
+        """Return whether a provider lacks usable evidence inside the probe interval."""
+
+        if interval_seconds <= 0:
+            raise ValueError("cost exploration interval must be positive")
+        request = self._request(request)
+        window_end = as_of or self._clock()
+        if window_end.tzinfo is None or window_end.utcoffset() is None:
+            raise ValueError("as_of must include a timezone")
+        window_end = window_end.astimezone(timezone.utc)
+        probe_start = window_end - timedelta(seconds=interval_seconds)
+        row = self.conn.execute(
+            """
+            select 1
+            from attempt_ledger
+            where domain = ?
+              and recorded_at >= ? and recorded_at <= ?
+              and country is ? collate nocase
+              and render_js = ?
+              and premium = ?
+              and mobile = ?
+              and screenshot = ?
+              and (
+                success = 1
+                or failure_reason is null
+                or failure_reason not in (?, ?)
+              )
+              and provider = ?
+            limit 1
+            """,
+            (
+                self.domain_for_url(request.url),
+                self._utc_timestamp(probe_start),
+                self._utc_timestamp(window_end),
+                request.country,
+                int(request.render_js),
+                int(request.premium),
+                int(request.mobile),
+                int(request.screenshot),
+                *_NON_DOMAIN_FAILURE_REASONS,
+                provider,
+            ),
+        ).fetchone()
+        return row is None
+
     def preferred_provider(
         self,
         request: ScrapeRequest | str,

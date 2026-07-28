@@ -267,18 +267,31 @@ def test_legacy_aggregate_history_is_preserved_but_does_not_drive_routing(tmp_pa
     assert memory.preferred_provider(request) is None
 
 
-def test_learned_winner_moves_first_without_removing_cheaper_providers(tmp_path) -> None:
+def test_cost_effective_winner_moves_first_without_removing_recent_cheaper_provider(
+    tmp_path,
+) -> None:
     memory = DomainMemory(
         tmp_path / "memory.sqlite",
         evidence_window_seconds=7 * 86400,
         clock=lambda: NOW,
     )
     request = ScrapeRequest("https://example.com/products")
+    for index in range(5):
+        _record(
+            memory,
+            f"winner-{index}",
+            request,
+            _entry("winner", success=True, route="winner:advanced"),
+        )
     _record(
         memory,
-        "winner",
+        "recent-cheap-failure",
         request,
-        _entry("winner", success=True, route="winner:advanced"),
+        _entry(
+            "cheap",
+            success=False,
+            failure_reason=FailureReason.HTTP_403,
+        ),
     )
 
     class StubProvider(ProviderAdapter):

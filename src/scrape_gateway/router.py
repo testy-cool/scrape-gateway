@@ -29,6 +29,9 @@ from .validators import validate_content
 
 LOG_DIR = Path(".scrape-gateway")
 LOG_FILE = LOG_DIR / "scrape.log"
+MIN_COST_EFFECTIVENESS_ATTEMPTS = 5
+MIN_COST_EFFECTIVENESS_SUCCESSES = 2
+COST_EXPLORATION_INTERVAL_SECONDS = 24 * 60 * 60
 
 logger = logging.getLogger("scrape_gateway")
 
@@ -533,14 +536,23 @@ class ScrapeGateway:
             _log("  [cache] MISS")
 
         ordered = self._ordered_providers(request)
+        routing_decision = request.metadata.get("routing_decision")
+        routing_summary = (
+            routing_decision.get("reason")
+            if isinstance(routing_decision, dict)
+            else f"Prepared {len(ordered)} provider{'s' if len(ordered) != 1 else ''}."
+        )
         emit_progress(
             id="routing",
             name="Build provider route",
             kind="routing",
             status="ok",
             outcome="planned",
-            summary=f"Prepared {len(ordered)} provider{'s' if len(ordered) != 1 else ''}.",
-            attributes={"providers": [provider.name for provider in ordered]},
+            summary=routing_summary,
+            attributes={
+                "providers": [provider.name for provider in ordered],
+                "decision": routing_decision,
+            },
         )
         attempts = []
         run_ledger: list[AttemptLedgerEntry] = []
@@ -900,6 +912,11 @@ class ScrapeGateway:
             rest = [p for p in providers if p.name != preferred_provider]
             if preferred:
                 _log(f"  [request] preferred provider: {preferred_provider}")
+                request.metadata["routing_decision"] = {
+                    "kind": "request_preference",
+                    "provider": preferred_provider,
+                    "reason": f"Explicit request selected {preferred_provider}.",
+                }
                 return preferred + rest
             _log(f"  [request] preferred provider {preferred_provider!r} not found, falling back")
 
@@ -911,6 +928,11 @@ class ScrapeGateway:
             if matched:
                 rest = [provider for provider in providers if provider.name not in positions]
                 _log(f"  [recipe] route: {'/'.join(provider.name for provider in matched)}")
+                request.metadata["routing_decision"] = {
+                    "kind": "recipe",
+                    "provider": matched[0].name,
+                    "reason": f"Domain recipe selected {matched[0].name}.",
+                }
                 return matched + rest
 
         if self.strategy.provider:
@@ -918,24 +940,113 @@ class ScrapeGateway:
             rest = [p for p in providers if p.name != self.strategy.provider]
             if preferred:
                 _log(f"  [strategy] preferred provider: {self.strategy.provider}")
+                request.metadata["routing_decision"] = {
+                    "kind": "strategy",
+                    "provider": self.strategy.provider,
+                    "reason": f"Configured strategy selected {self.strategy.provider}.",
+                }
                 return preferred + rest
             _log(
                 f"  [strategy] preferred provider {self.strategy.provider!r} not found, falling back"
             )
 
-        pref = self.memory.preferred_provider(request)
-        if pref:
-            pref_name, pref_tier = pref
-            if any(provider.name == pref_name for provider in providers):
-                providers = sorted(providers, key=lambda p: 0 if p.name == pref_name else 1)
-                tier_info = f" ({pref_tier})" if pref_tier else ""
-                _log(f"  [memory] prefer {pref_name}{tier_info}")
-            if pref_tier:
-                request.metadata["start_tier"] = pref_tier
+        score_rows = self.memory.provider_cost_effectiveness(request)
+        provider_names = {provider.name for provider in providers}
+        qualified_scores = {
+            row["provider"]: row
+            for row in score_rows
+            if row["provider"] in provider_names
+            and row["attempt_count"] >= MIN_COST_EFFECTIVENESS_ATTEMPTS
+            and row["successful_attempt_count"] >= MIN_COST_EFFECTIVENESS_SUCCESSES
+            and row["cost_per_success"] is not None
+        }
+        if qualified_scores:
+            providers = sorted(
+                providers,
+                key=lambda provider: (
+                    0 if provider.name in qualified_scores else 1,
+                    qualified_scores.get(provider.name, {}).get("cost_per_success", 0),
+                    provider.cost_rank,
+                    provider.name,
+                ),
+            )
+            winner = providers[0]
+            winner_score = qualified_scores[winner.name]
+            cost_per_success = float(winner_score["cost_per_success"])
+            reason = (
+                f"Chose {winner.name} because it averages {cost_per_success:g} units per "
+                f"success here over {winner_score['attempt_count']} samples "
+                f"({winner_score['exact_attempt_count']} exact, "
+                f"{winner_score['estimated_attempt_count']} estimated)."
+            )
+            decision = {
+                "kind": "observed_cost",
+                "provider": winner.name,
+                "cost_per_success": cost_per_success,
+                "sample_count": winner_score["attempt_count"],
+                "successful_sample_count": winner_score["successful_attempt_count"],
+                "exact_sample_count": winner_score["exact_attempt_count"],
+                "estimated_sample_count": winner_score["estimated_attempt_count"],
+                "reason": reason,
+            }
+            request.metadata["routing_decision"] = decision
+            _log(f"  [cost] {reason}")
+            if winner_score["last_success_tier"]:
+                request.metadata["start_tier"] = winner_score["last_success_tier"]
+
+            exploration_candidates = [
+                provider
+                for provider in providers[1:]
+                if provider.cost_rank < winner.cost_rank
+                and self.memory.provider_due_for_cost_exploration(
+                    request,
+                    provider.name,
+                    interval_seconds=COST_EXPLORATION_INTERVAL_SECONDS,
+                )
+            ]
+            if exploration_candidates:
+                probe = min(
+                    exploration_candidates,
+                    key=lambda provider: (provider.cost_rank, provider.name),
+                )
+                providers = [probe, *[provider for provider in providers if provider is not probe]]
+                exploration_reason = (
+                    f"Exploring {probe.name} because it is cheaper by cost rank and has "
+                    f"not been tried for 24 hours; {reason}"
+                )
+                request.metadata["routing_decision"] = {
+                    "kind": "exploration",
+                    "provider": probe.name,
+                    "observed_provider": winner.name,
+                    "observed_cost_per_success": cost_per_success,
+                    "sample_count": winner_score["attempt_count"],
+                    "reason": exploration_reason,
+                }
+                _log(f"  [cost] {exploration_reason}")
         else:
-            _log("  [memory] no history")
+            reason = (
+                "Using cost-rank order because no provider has at least "
+                f"{MIN_COST_EFFECTIVENESS_ATTEMPTS} attempts and "
+                f"{MIN_COST_EFFECTIVENESS_SUCCESSES} successes for this profile."
+            )
+            request.metadata["routing_decision"] = {
+                "kind": "cost_rank",
+                "provider": providers[0].name if providers else None,
+                "reason": reason,
+            }
+            _log(f"  [cost] {reason}")
         probe_names = set(self.memory.providers_due_for_probe(request))
         if probe_names:
             providers = sorted(providers, key=lambda provider: provider.name not in probe_names)
-            _log(f"  [memory] half-open probe: {'/'.join(sorted(probe_names))}")
+            probe_name = next(
+                (provider.name for provider in providers if provider.name in probe_names),
+                sorted(probe_names)[0],
+            )
+            reason = f"Running a half-open recovery probe for {probe_name}."
+            request.metadata["routing_decision"] = {
+                "kind": "recovery_probe",
+                "provider": probe_name,
+                "reason": reason,
+            }
+            _log(f"  [memory] {reason}")
         return providers

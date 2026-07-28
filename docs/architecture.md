@@ -5,9 +5,12 @@
 ```
 1. Check cache → hit? return cached result, done.
 2. Check recent, exact-profile ledger evidence:
-   a. Move a learned winner to the front without deleting cheaper fallbacks.
-   b. Skip providers with enough recent domain failures.
-   c. Probe a skipped provider once its failure window expires.
+   a. Rank providers by total weighted spend per successful page once a provider has
+      at least five attempts and two successes.
+   b. Give exact billed costs full weight and estimated costs half weight.
+   c. Probe one cheaper provider after 24 hours without usable evidence.
+   d. Skip providers with enough recent domain failures.
+   e. Probe a skipped provider once its failure window expires.
 3. Try the resulting provider ladder:
    a. Send request
    b. Validate content (catch Cloudflare, captcha, JS-required pages)
@@ -22,6 +25,15 @@ seven-day evidence window by default. Missing or invalid credentials and local
 configuration failures are excluded from domain evidence. The older aggregate routing
 tables remain intact for compatibility but are no longer part of routing. Cache stores
 HTML + Markdown artifacts in `.scrape-gateway/artifacts/`. Both survive across sessions.
+
+The observed score is weighted total spend divided by weighted successes, so failed
+attempts count against a provider instead of disappearing from its apparent price.
+Five attempts and two successes are the minimum because one lucky success is too thin
+to replace the cold-start cost ranks. Provider-reported exact costs receive full weight;
+adapter estimates receive half weight because they are useful but less trustworthy.
+Explicit request selection, recipe order, and `strategy.provider` stay above learned
+cost ordering. Each routing decision and its sample counts are written to the progress
+event, run log, and telemetry report.
 
 ## Content validation
 
@@ -41,6 +53,7 @@ When validation fails, the router logs the block type and tries the next provide
 Every scrape writes a JSON report to `.scrape-gateway/runs/`. Each report includes:
 
 - Full attempt chain with timing
+- The routing decision, observed cost per success, and evidence counts
 - Validation evidence (matched pattern + surrounding snippet)
 - Diagnosis code and recommended next action
 - Failed response bodies (when `--debug-artifacts` is enabled)

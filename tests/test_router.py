@@ -828,17 +828,31 @@ async def test_preferred_provider_keeps_cheaper_fallback_behind_it(tmp_dir):
         "preferred",
         ScrapeRequest("https://example.com"),
         [
+            *[
+                AttemptLedgerEntry(
+                    provider="success",
+                    route="success",
+                    cost_units=1,
+                    cost_provenance="exact",
+                    success=True,
+                    latency_ms=1,
+                    status_code=200,
+                    failure_reason=None,
+                    block_type=None,
+                )
+                for _ in range(5)
+            ],
             AttemptLedgerEntry(
-                provider="success",
-                route="success",
-                cost_units=0,
-                cost_provenance="estimated",
-                success=True,
+                provider="cheap",
+                route="cheap",
+                cost_units=1,
+                cost_provenance="exact",
+                success=False,
                 latency_ms=1,
-                status_code=200,
-                failure_reason=None,
+                status_code=403,
+                failure_reason=FailureReason.HTTP_403,
                 block_type=None,
-            )
+            ),
         ],
     )
 
@@ -871,9 +885,8 @@ async def test_preferred_provider_keeps_cheaper_fallback_behind_it(tmp_dir):
     assert call_order == ["success", "cheap"]
 
 
-async def test_tier_escalation_full_flow(tmp_dir):
-    """After ScrapeDrive succeeds at 'advanced', next scrape skips cheap providers
-    and tells ScrapeDrive to start at 'advanced'."""
+async def test_tier_hint_applies_after_sufficient_cost_history(tmp_dir):
+    """After enough evidence, skip the failing cheap provider and reuse the tier."""
     mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
 
     class FakeScrapeDrive(ProviderAdapter):
@@ -919,18 +932,20 @@ async def test_tier_escalation_full_flow(tmp_dir):
         memory=mem,
     )
 
-    # First scrape: raw_http gets blocked, scrapedrive succeeds
-    r1 = await gw.scrape(ScrapeRequest("https://hard.com/page1"), use_cache=False)
-    assert r1.success
-    assert r1.provider == "scrapedrive"
-    assert cheap.call_count == 1
+    for index in range(5):
+        result = await gw.scrape(
+            ScrapeRequest(f"https://hard.com/page{index}"),
+            use_cache=False,
+        )
+        assert result.success
+        assert result.provider == "scrapedrive"
+    assert cheap.call_count == 5
 
-    # Second scrape: should skip raw_http entirely, go straight to scrapedrive with tier hint
-    r2 = await gw.scrape(ScrapeRequest("https://hard.com/page2"), use_cache=False)
-    assert r2.success
-    assert r2.provider == "scrapedrive"
-    assert cheap.call_count == 1  # NOT called again
-    assert r2.metadata.get("tier_used") == "scrapedrive:standard"  # tier was passed through
+    learned = await gw.scrape(ScrapeRequest("https://hard.com/learned"), use_cache=False)
+    assert learned.success
+    assert learned.provider == "scrapedrive"
+    assert cheap.call_count == 5
+    assert learned.metadata.get("tier_used") == "scrapedrive:standard"
 
 
 class HeaderCapture(ProviderAdapter):
