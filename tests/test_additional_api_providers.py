@@ -27,6 +27,75 @@ MARKDOWN = (
 
 
 @pytest.mark.parametrize(
+    ("provider", "scrape_request", "expected"),
+    [
+        (SpiderCloudProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (
+            SpiderCloudProvider(api_key="key"),
+            ScrapeRequest(TARGET, render_js=True),
+            2,
+        ),
+        (FirecrawlProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (
+            FirecrawlProvider(api_key="key"),
+            ScrapeRequest(TARGET, premium=True),
+            5,
+        ),
+        (ZenRowsProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (
+            ZenRowsProvider(api_key="key"),
+            ScrapeRequest(TARGET, render_js=True),
+            5,
+        ),
+        (
+            ZenRowsProvider(api_key="key"),
+            ScrapeRequest(TARGET, country="US"),
+            10,
+        ),
+        (
+            ZenRowsProvider(api_key="key"),
+            ScrapeRequest(TARGET, country="US", render_js=True),
+            25,
+        ),
+        (
+            OxylabsProvider(username="user", password="pass"),
+            ScrapeRequest(TARGET),
+            1,
+        ),
+        (
+            OxylabsProvider(username="user", password="pass"),
+            ScrapeRequest(TARGET, screenshot=True),
+            10,
+        ),
+        (
+            BrightDataProvider(api_key="key", zone="zone"),
+            ScrapeRequest(TARGET),
+            5,
+        ),
+        (
+            BrightDataProvider(api_key="key", zone="zone"),
+            ScrapeRequest(TARGET, screenshot=True),
+            10,
+        ),
+        (ScrapflyProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (
+            ScrapflyProvider(api_key="key", cost_budget=25),
+            ScrapeRequest(
+                TARGET,
+                premium=True,
+                metadata={"_remaining_cost_units": 10.5},
+            ),
+            10,
+        ),
+    ],
+)
+def test_additional_provider_cost_estimates_match_billed_request_shape(
+    provider, scrape_request, expected
+) -> None:
+    assert provider.estimated_cost_units(scrape_request) == expected
+
+
+@pytest.mark.parametrize(
     "provider,environment",
     [
         (ScrapflyProvider, ["SCRAPFLY_API_KEY"]),
@@ -89,6 +158,30 @@ async def test_scrapfly_maps_browser_country_asp_and_cost_budget() -> None:
     assert params["cost_budget"] == "25"
     assert params["wait_for_selector"] == "#products"
     assert params["rendering_wait"] == "1500"
+
+
+@respx.mock
+async def test_scrapfly_caps_internal_cost_budget_to_gateway_remainder() -> None:
+    route = respx.get("https://api.scrapfly.io/scrape").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {"content": HTML, "status_code": 200},
+                "context": {"cost": 7},
+            },
+        )
+    )
+
+    result = await ScrapflyProvider(api_key="scrapfly-key", cost_budget=25).scrape(
+        ScrapeRequest(
+            TARGET,
+            premium=True,
+            metadata={"_remaining_cost_units": 10.5},
+        )
+    )
+
+    assert result.success is True
+    assert route.calls[0].request.url.params["cost_budget"] == "10"
 
 
 @respx.mock

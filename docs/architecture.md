@@ -12,10 +12,11 @@
    d. Skip providers with enough recent domain failures.
    e. Probe a skipped provider once its failure window expires.
 3. Try the resulting provider ladder:
-   a. Send request
-   b. Validate content (catch Cloudflare, captcha, JS-required pages)
-   c. Success? Persist the attempt and provider tier in the ledger. Done.
-   d. Failure? Persist the reason and try the next provider.
+   a. Stop if the next adapter's conservative cost estimate exceeds the remaining budget.
+   b. Send request
+   c. Validate content (catch Cloudflare, captcha, JS-required pages)
+   d. Success? Persist the attempt and provider tier in the ledger. Done.
+   e. Failure? Persist the reason and try the next provider.
 4. All failed? Return last failure with diagnostics.
 ```
 
@@ -34,6 +35,13 @@ adapter estimates receive half weight because they are useful but less trustwort
 Explicit request selection, recipe order, and `strategy.provider` stay above learned
 cost ordering. Each routing decision and its sample counts are written to the progress
 event, run log, and telemetry report.
+
+When `strategy.max_cost_per_url` is set, the router compares the complete current-run
+ledger against each adapter's conservative next-call estimate. An attempt that would
+cross the ceiling never starts. ScrapeDrive repeats that check before each of its
+standard, advanced, and hyperdrive tiers, and Scrapfly's internal ASP `cost_budget` is
+clipped to the gateway remainder. A stop returns `FailureReason.BUDGET_EXCEEDED` and a
+`budget_stop` metadata object instead of pretending every provider failed.
 
 ## Content validation
 
@@ -54,6 +62,7 @@ Every scrape writes a JSON report to `.scrape-gateway/runs/`. Each report includ
 
 - Full attempt chain with timing
 - The routing decision, observed cost per success, and evidence counts
+- A distinct budget-exceeded diagnosis and stop details when the ceiling prevents work
 - Validation evidence (matched pattern + surrounding snippet)
 - Diagnosis code and recommended next action
 - Failed response bodies (when `--debug-artifacts` is enabled)

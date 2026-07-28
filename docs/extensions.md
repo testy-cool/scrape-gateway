@@ -21,12 +21,21 @@ class MyProvider(ProviderAdapter):
     capabilities = frozenset({"html"})
     install_requires = ["some-package"]  # auto-installed on first use
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 1.0  # conservative upper bound for this call
+
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         # your logic here
         ...
 ```
 
 `sgw` discovers it automatically. Run `sgw providers` to verify.
+
+Providers that bill non-zero ledger units must override `estimated_cost_units()` with a
+conservative upper bound and return the actual `cost_units` on `ScrapeResult`. The base
+implementation returns zero for free/self-hosted adapters. Internal retry or escalation
+loops must also honor `request.metadata["_remaining_cost_units"]`; otherwise the gateway
+cannot enforce `strategy.max_cost_per_url` inside one adapter call.
 
 If your provider needs a pip package, set `install_requires` — `sgw` will prompt to install it the first time it loads.
 

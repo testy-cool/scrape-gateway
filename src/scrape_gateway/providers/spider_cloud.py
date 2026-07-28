@@ -16,6 +16,9 @@ class SpiderCloudProvider(ProviderAdapter):
     capabilities = frozenset({"html", "markdown", "render_js", "premium"})
     required_configuration = (("api_key", "SPIDER_CLOUD_API_KEY"),)
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 2.0 if request.render_js or request.premium else 1.0
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -77,7 +80,7 @@ class SpiderCloudProvider(ProviderAdapter):
                 html=content,
                 markdown=content if markdown_requested else None,
                 failure_reason=failure,
-                cost_units=2 if request.render_js or request.premium else 1,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route=f"spider_cloud:{payload['request']}",
                 metadata={key: value for key, value in first.items() if key != "content"},

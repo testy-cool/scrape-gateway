@@ -52,6 +52,7 @@ providers:
 strategy:
   mode: cheapest_successful
   provider: scrapedrive       # override: always try this first
+  max_cost_per_url: 25        # optional ledger cost-unit ceiling
 
 memory:
   path: .scrape-gateway/memory.sqlite
@@ -93,6 +94,21 @@ unscrapable. Providers with known-missing configuration are skipped before an at
 The pre-ledger `domain_provider_stats` and `domain_routes` tables remain in existing
 SQLite files for compatibility and inspection, but the router neither reads nor updates
 them.
+
+## Per-URL cost ceiling
+
+`strategy.max_cost_per_url` is expressed in the same cost units stored in the attempt
+ledger. The router totals every started attempt for the current URL and checks each
+adapter's conservative cost estimate before the next call. A value of `0` permits only
+providers that report zero cost. An attempt whose estimate would make the total exceed
+the ceiling is not started; an exact fit is allowed.
+
+ScrapeDrive enforces the remaining allowance between its 1, 5, and 25-unit internal
+tiers, and Scrapfly clips its ASP `cost_budget` to the remaining allowance. If the
+ceiling stops routing, Python callers receive `FailureReason.BUDGET_EXCEEDED` plus
+`result.metadata["budget_stop"]`. The CLI prints the spent/maximum/next-attempt values,
+and the telemetry report uses diagnosis `budget_exceeded`, so a budget stop is distinct
+from `all_providers_failed` and `no_provider_available`.
 
 ## Domain recipes
 

@@ -4,6 +4,10 @@ from abc import ABC, abstractmethod
 
 from .models import ProviderCapability, ScrapeRequest, ScrapeResult
 
+REMAINING_COST_METADATA_KEY = "_remaining_cost_units"
+MAX_COST_METADATA_KEY = "_max_cost_per_url"
+SPENT_COST_METADATA_KEY = "_spent_cost_units"
+
 
 class ProviderAdapter(ABC):
     name: str
@@ -30,6 +34,16 @@ class ProviderAdapter(ABC):
         if request.screenshot and "screenshot" not in self.capabilities:
             return False
         return True
+
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        """Return a conservative upper bound for the next provider call.
+
+        Providers that leave ``ScrapeResult.cost_units`` at its zero default may inherit
+        this implementation. Paid adapters must override it so a configured gateway
+        budget can stop before spend begins.
+        """
+
+        return 0.0
 
     @abstractmethod
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:

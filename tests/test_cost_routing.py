@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from scrape_gateway.cache import ArtifactCache
+from scrape_gateway.config import StrategyConfig
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.progress import observe_progress
@@ -53,6 +54,29 @@ class TrackingProvider(ProviderAdapter):
             cost_units=self.cost_units,
             route=self.name,
         )
+
+
+class BudgetProvider(TrackingProvider):
+    def __init__(
+        self,
+        name: str,
+        cost_rank: int,
+        calls: list[str],
+        *,
+        estimated_cost_units: float,
+        success: bool,
+    ) -> None:
+        super().__init__(
+            name,
+            cost_rank,
+            calls,
+            success=success,
+            cost_units=estimated_cost_units,
+        )
+        self._estimated_cost_units = estimated_cost_units
+
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return self._estimated_cost_units
 
 
 def _entry(
@@ -271,3 +295,126 @@ async def test_observed_cost_reason_is_visible_in_log_progress_and_telemetry(
     report = json.loads(Path(result.metadata["telemetry_report"]).read_text())
     assert report["routing_decision"]["kind"] == "observed_cost"
     assert "3 units per success" in report["routing_decision"]["reason"]
+
+
+async def test_budget_stops_before_next_provider_and_reports_distinct_outcome(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[str] = []
+    gateway = ScrapeGateway(
+        providers=[
+            BudgetProvider(
+                "cheap_failure",
+                1,
+                calls,
+                estimated_cost_units=2,
+                success=False,
+            ),
+            BudgetProvider(
+                "expensive_success",
+                2,
+                calls,
+                estimated_cost_units=5,
+                success=True,
+            ),
+        ],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(max_cost_per_url=6),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+    events: list[dict] = []
+
+    with observe_progress(events.append):
+        result = await gateway.scrape(
+            ScrapeRequest("https://budget.example/products"),
+            use_cache=False,
+            use_memory=False,
+        )
+
+    assert calls == ["cheap_failure"]
+    assert result.success is False
+    assert result.provider == "budget"
+    assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
+    assert result.run_cost_units == 2
+    assert result.metadata["budget_stop"] == {
+        "max_cost_per_url": 6.0,
+        "spent_cost_units": 2.0,
+        "remaining_cost_units": 4.0,
+        "next_provider": "expensive_success",
+        "next_attempt_cost_units": 5.0,
+    }
+    assert "cost budget" in (result.error or "").lower()
+    assert "budget" in capsys.readouterr().err.lower()
+    budget_event = next(event for event in events if event["outcome"] == "budget_exceeded")
+    assert budget_event["attributes"]["next_provider"] == "expensive_success"
+    report = json.loads(Path(result.metadata["telemetry_report"]).read_text())
+    assert report["diagnosis"] == "budget_exceeded"
+    assert report["recommended_next_action"] == "raise_budget_or_choose_cheaper_provider"
+    assert report["budget_stop"] == result.metadata["budget_stop"]
+
+
+async def test_budget_allows_next_provider_when_estimate_exactly_fits(tmp_path: Path) -> None:
+    calls: list[str] = []
+    gateway = ScrapeGateway(
+        providers=[
+            BudgetProvider(
+                "cheap_failure",
+                1,
+                calls,
+                estimated_cost_units=2,
+                success=False,
+            ),
+            BudgetProvider(
+                "exact_fit",
+                2,
+                calls,
+                estimated_cost_units=5,
+                success=True,
+            ),
+        ],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(max_cost_per_url=7),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gateway.scrape(
+        ScrapeRequest("https://budget.example/exact-fit"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert calls == ["cheap_failure", "exact_fit"]
+    assert result.run_cost_units == 7
+
+
+async def test_budget_stops_when_provider_cost_estimate_is_invalid(tmp_path: Path) -> None:
+    calls: list[str] = []
+    provider = BudgetProvider(
+        "invalid_estimate",
+        1,
+        calls,
+        estimated_cost_units=1,
+        success=True,
+    )
+    provider.estimated_cost_units = lambda request: "unknown"  # type: ignore[method-assign]
+    gateway = ScrapeGateway(
+        providers=[provider],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(max_cost_per_url=10),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gateway.scrape(
+        ScrapeRequest("https://budget.example/invalid-estimate"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is False
+    assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
+    assert result.metadata["budget_stop"]["next_attempt_cost_units"] is None
+    assert calls == []

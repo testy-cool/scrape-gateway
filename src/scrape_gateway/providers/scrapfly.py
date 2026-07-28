@@ -8,7 +8,7 @@ import httpx
 
 from ..errors import classify_provider_failure
 from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
-from ..provider import ProviderAdapter
+from ..provider import REMAINING_COST_METADATA_KEY, ProviderAdapter
 
 
 def _valid_cost(value: object) -> float | None:
@@ -59,6 +59,20 @@ class ScrapflyProvider(ProviderAdapter):
         self.base_url = base_url
         self.cost_budget = cost_budget
 
+    def _effective_cost_budget(self, request: ScrapeRequest) -> int:
+        raw_remaining = request.metadata.get(REMAINING_COST_METADATA_KEY)
+        if not isinstance(raw_remaining, (int, float)) or isinstance(raw_remaining, bool):
+            return self.cost_budget
+        remaining = float(raw_remaining)
+        if not math.isfinite(remaining) or remaining < 1:
+            return 1
+        return max(1, min(self.cost_budget, math.floor(remaining)))
+
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        if request.premium:
+            return float(self._effective_cost_budget(request))
+        return 1.0
+
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if error := self.availability_error():
             return ScrapeResult(
@@ -78,7 +92,7 @@ class ScrapflyProvider(ProviderAdapter):
             params["country"] = request.country.lower()
         if request.premium:
             params["asp"] = "true"
-            params["cost_budget"] = str(self.cost_budget)
+            params["cost_budget"] = str(self._effective_cost_budget(request))
         if request.wait_selector:
             params["wait_for_selector"] = request.wait_selector
         if request.extra_wait_ms:

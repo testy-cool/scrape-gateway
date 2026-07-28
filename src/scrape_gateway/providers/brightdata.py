@@ -19,6 +19,9 @@ class BrightDataProvider(ProviderAdapter):
         ("zone", "BRIGHTDATA_WEB_UNLOCKER_ZONE"),
     )
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 10.0 if request.screenshot else 5.0
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -72,7 +75,7 @@ class BrightDataProvider(ProviderAdapter):
                 screenshot=screenshot,
                 failure_reason=FailureReason.PROVIDER_ERROR if screenshot_error else failure,
                 error=("Screenshot was requested but not returned" if screenshot_error else None),
-                cost_units=10 if request.screenshot else 5,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="brightdata:screenshot" if request.screenshot else "brightdata:unlocker",
             )

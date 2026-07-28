@@ -17,6 +17,9 @@ class FirecrawlProvider(ProviderAdapter):
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
     required_configuration = (("api_key", "FIRECRAWL_API_KEY"),)
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 5.0 if request.premium else 1.0
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -102,7 +105,7 @@ class FirecrawlProvider(ProviderAdapter):
                 screenshot=screenshot,
                 failure_reason=FailureReason.PROVIDER_ERROR if screenshot_error else failure,
                 error=("Screenshot was requested but not returned" if screenshot_error else None),
-                cost_units=5 if request.premium else 1,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="firecrawl:stealth" if request.premium else "firecrawl",
                 metadata={"firecrawl": metadata},

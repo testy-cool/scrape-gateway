@@ -58,3 +58,9 @@ exact-versus-estimated cost provenance, success, latency, HTTP status, failure
 reason, and block type. Provider adapters can return their internal
 sub-attempts; `ScrapeGateway` combines those entries across provider fallbacks
 without adding a duplicate outer charge.
+
+With `strategy.max_cost_per_url` configured, a prevented escalation returns a failed
+`ScrapeResult` with `failure_reason == FailureReason.BUDGET_EXCEEDED`. Its
+`metadata["budget_stop"]` records the ceiling, spend so far, remaining units, next
+provider, and conservative next-attempt estimate. The existing request model is
+unchanged.

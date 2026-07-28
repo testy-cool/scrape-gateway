@@ -31,7 +31,8 @@ providers:
 
 strategy:
   mode: cheapest_successful
-  # max_cost_per_url: 0.10
+  # Ledger cost-unit ceiling for one URL. Free/self-hosted adapters report 0.
+  # max_cost_per_url: 25
 
 telemetry:
   enabled: true

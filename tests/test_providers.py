@@ -23,6 +23,46 @@ GOOD_HTML = (
 TARGET_URL = "https://example.com/page"
 
 
+@pytest.mark.parametrize(
+    ("provider", "scrape_request", "expected"),
+    [
+        (RawHttpProvider(), ScrapeRequest(TARGET_URL), 0),
+        (ScrapeDoProvider(token="token"), ScrapeRequest(TARGET_URL), 1),
+        (
+            ScrapeDoProvider(token="token"),
+            ScrapeRequest(TARGET_URL, premium=True),
+            10,
+        ),
+        (
+            ScrapeDoProvider(token="token"),
+            ScrapeRequest(TARGET_URL, premium=True, render_js=True),
+            25,
+        ),
+        (ScrapingBeeProvider(api_key="key"), ScrapeRequest(TARGET_URL), 1),
+        (
+            ScrapingBeeProvider(api_key="key"),
+            ScrapeRequest(TARGET_URL, premium=True, render_js=True),
+            25,
+        ),
+        (ScraperApiProvider(api_key="key"), ScrapeRequest(TARGET_URL), 1),
+        (
+            ScraperApiProvider(api_key="key"),
+            ScrapeRequest(TARGET_URL, render_js=True),
+            10,
+        ),
+        (
+            ScraperApiProvider(api_key="key"),
+            ScrapeRequest(TARGET_URL, premium=True, render_js=True),
+            25,
+        ),
+    ],
+)
+def test_core_provider_cost_estimates_match_billed_request_shape(
+    provider, scrape_request, expected
+):
+    assert provider.estimated_cost_units(scrape_request) == expected
+
+
 # ---------- RawHttpProvider ----------
 
 
@@ -225,6 +265,83 @@ class TestScrapeDrive:
             "scrapedrive:advanced",
         ]
         assert result.attempt_ledger[-1].failure_reason == FailureReason.TIMEOUT
+
+    async def test_cost_budget_stops_before_unaffordable_internal_tier(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        attempted_tiers = []
+
+        async def fail_tier(self, request, tier):
+            attempted_tiers.append(tier)
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=403,
+                failure_reason=FailureReason.HTTP_403,
+                route=f"scrapedrive:{tier}",
+            )
+
+        monkeypatch.setattr(ScrapeDriveProvider, "_attempt", fail_tier)
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                metadata={"_remaining_cost_units": 4},
+            )
+        )
+
+        assert attempted_tiers == ["standard"]
+        assert result.success is False
+        assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
+        assert result.run_cost_units == 1
+        assert [entry.route for entry in result.attempt_ledger] == ["scrapedrive:standard"]
+        assert result.metadata["budget_stop"]["next_tier"] == "advanced"
+        assert result.metadata["budget_stop"]["next_attempt_cost_units"] == 5
+
+    async def test_cost_budget_allows_internal_tier_that_exactly_fits(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        attempted_tiers = []
+
+        async def advanced_succeeds(self, request, tier):
+            attempted_tiers.append(tier)
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=tier == "advanced",
+                status_code=200 if tier == "advanced" else 403,
+                html=GOOD_HTML if tier == "advanced" else None,
+                failure_reason=None if tier == "advanced" else FailureReason.HTTP_403,
+                route=f"scrapedrive:{tier}",
+            )
+
+        monkeypatch.setattr(ScrapeDriveProvider, "_attempt", advanced_succeeds)
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                metadata={"_remaining_cost_units": 6},
+            )
+        )
+
+        assert result.success is True
+        assert attempted_tiers == ["standard", "advanced"]
+        assert result.run_cost_units == 6
+
+    @pytest.mark.parametrize(
+        ("scrape_request", "expected"),
+        [
+            (ScrapeRequest(TARGET_URL), 1),
+            (ScrapeRequest(TARGET_URL, country="US"), 5),
+            (ScrapeRequest(TARGET_URL, premium=True), 25),
+        ],
+    )
+    def test_estimates_next_tier_cost(self, scrape_request, expected):
+        assert (
+            ScrapeDriveProvider(api_key=self.API_KEY).estimated_cost_units(scrape_request)
+            == expected
+        )
 
     @respx.mock
     async def test_escalation_success_charges_every_started_tier(self):

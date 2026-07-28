@@ -25,6 +25,9 @@ class BrowserlessProvider(ProviderAdapter):
         ("token", "BROWSERLESS_TOKEN"),
     )
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 10.0 if request.screenshot else 5.0
+
     def __init__(
         self,
         base_url: str | None = None,
@@ -113,7 +116,7 @@ class BrowserlessProvider(ProviderAdapter):
                     screenshot=screenshot_response.content if screenshot_success else None,
                     error="; ".join(errors) or None,
                     failure_reason=failure_reason,
-                    cost_units=10,
+                    cost_units=self.estimated_cost_units(request),
                     latency_ms=latency_ms,
                     route="browserless:content+screenshot",
                 )
@@ -131,7 +134,7 @@ class BrowserlessProvider(ProviderAdapter):
                 html=html if content_response.is_success else None,
                 failure_reason=failure,
                 error=None if content_response.is_success else content_response.text,
-                cost_units=5,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=latency_ms,
                 route="browserless:content",
             )

@@ -6,6 +6,7 @@ import pytest
 from scrape_gateway.config import (
     EvaluationConfig,
     GatewayConfig,
+    StrategyConfig,
     _parse_ttl,
     load_config,
     save_operator_settings,
@@ -139,6 +140,12 @@ evaluation:
 def test_invalid_evaluation_config_fails_early(kwargs, message):
     with pytest.raises(ValueError, match=message):
         EvaluationConfig(**kwargs)
+
+
+@pytest.mark.parametrize("value", [-1, float("inf"), float("nan")])
+def test_invalid_max_cost_per_url_fails_early(value):
+    with pytest.raises(ValueError, match="max_cost_per_url must be finite and non-negative"):
+        StrategyConfig(max_cost_per_url=value)
 
 
 def test_unquoted_yaml_off_disables_evaluation(tmp_path):

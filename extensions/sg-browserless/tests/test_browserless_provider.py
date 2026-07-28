@@ -39,6 +39,12 @@ class TestBrowserlessProvider:
         assert provider.cost_rank == 20
         assert provider.capabilities == frozenset({"html", "render_js", "screenshot"})
 
+    def test_cost_estimate_matches_content_and_screenshot_calls(self):
+        provider = provider_cls()(base_url=self.BASE, token=self.TOKEN)
+
+        assert provider.estimated_cost_units(ScrapeRequest(TARGET_URL)) == 5
+        assert provider.estimated_cost_units(ScrapeRequest(TARGET_URL, screenshot=True)) == 10
+
     async def test_missing_credentials(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("BROWSERLESS_URL", raising=False)
         monkeypatch.delenv("BROWSERLESS_TOKEN", raising=False)

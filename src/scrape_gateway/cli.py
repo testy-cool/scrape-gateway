@@ -241,6 +241,23 @@ def _print_result(result) -> None:
         table.add_row("reason", f"[red]{result.failure_reason.value}[/]")
     if result.error:
         table.add_row("error", f"[red]{result.error}[/]")
+    budget_stop = result.metadata.get("budget_stop")
+    if isinstance(budget_stop, dict):
+        spent = budget_stop.get("spent_cost_units")
+        maximum = budget_stop.get("max_cost_per_url")
+        next_cost = budget_stop.get("next_attempt_cost_units")
+        spent_text = f"{float(spent):g}" if isinstance(spent, (int, float)) else "unknown"
+        maximum_text = f"{float(maximum):g}" if isinstance(maximum, (int, float)) else "unknown"
+        next_cost_text = (
+            f"{float(next_cost):g}" if isinstance(next_cost, (int, float)) else "unknown"
+        )
+        table.add_row(
+            "budget",
+            (
+                f"spent {spent_text} / {maximum_text} units; "
+                f"{budget_stop.get('next_provider')} needs {next_cost_text}"
+            ),
+        )
     if result.html:
         table.add_row("chars", f"{len(result.html):,}")
     if result.markdown:
@@ -326,10 +343,10 @@ def url(
 ) -> None:
     """Scrape one URL through the gateway.
 
-    Tries providers from cheapest to most expensive until one succeeds.
+    Uses observed cost per successful page when enough exact-profile history
+    exists, otherwise starts with provider cost ranks.
     Results are cached locally so repeat scrapes are instant and free.
-    Domain memory remembers which provider worked, so next time it
-    skips straight to the winner.
+    A configured per-URL cost ceiling stops unaffordable escalation.
 
     Good for: quick one-off scrapes, testing if a site is scrapeable,
     getting raw HTML/markdown for analysis.
@@ -874,13 +891,20 @@ def run(
             if output and result.success:
                 output_contents.append(_result_content(result, output_format))
             status_style = "green" if result.success else "red"
+            result_label = (
+                "OK"
+                if result.success
+                else result.block_type
+                or (result.failure_reason.value if result.failure_reason else None)
+                or "FAIL"
+            )
             table.add_row(
                 str(i),
                 item,
                 result.provider,
                 str(result.status_code),
                 str(result.cost_units),
-                f"[{status_style}]{'OK' if result.success else result.block_type or 'FAIL'}[/]",
+                f"[{status_style}]{result_label}[/]",
             )
 
         console.print(table)

@@ -10,7 +10,12 @@ import httpx
 
 from ..errors import classify_provider_failure
 from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
-from ..provider import ProviderAdapter
+from ..provider import (
+    MAX_COST_METADATA_KEY,
+    REMAINING_COST_METADATA_KEY,
+    SPENT_COST_METADATA_KEY,
+    ProviderAdapter,
+)
 
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
 
@@ -45,6 +50,9 @@ class ScrapeDriveProvider(ProviderAdapter):
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return float(TIER_COST[_start_tier(request)])
+
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if error := self.availability_error():
             return ScrapeResult(
@@ -62,11 +70,55 @@ class ScrapeDriveProvider(ProviderAdapter):
         provider_start = time.perf_counter()
         active_tier: str | None = None
         active_started: float | None = None
+        raw_remaining = request.metadata.get(REMAINING_COST_METADATA_KEY)
+        remaining_cost = (
+            float(raw_remaining)
+            if isinstance(raw_remaining, (int, float)) and not isinstance(raw_remaining, bool)
+            else None
+        )
 
         try:
             async with asyncio.timeout(request.timeout_seconds):
                 last_result: ScrapeResult | None = None
                 for tier in tiers:
+                    tier_cost = TIER_COST[tier]
+                    if remaining_cost is not None and tier_cost > remaining_cost + 1e-9:
+                        spent_before = request.metadata.get(SPENT_COST_METADATA_KEY, 0)
+                        global_spent = float(spent_before) + sum(
+                            entry.cost_units for entry in ledger
+                        )
+                        budget_stop = {
+                            "spent_cost_units": global_spent,
+                            "remaining_cost_units": max(0.0, remaining_cost),
+                            "next_provider": self.name,
+                            "next_tier": tier,
+                            "next_attempt_cost_units": float(tier_cost),
+                        }
+                        max_cost = request.metadata.get(MAX_COST_METADATA_KEY)
+                        if isinstance(max_cost, (int, float)) and not isinstance(max_cost, bool):
+                            budget_stop["max_cost_per_url"] = float(max_cost)
+                        _log(
+                            f"    [{self.name}] cost budget stops before {tier} "
+                            f"({tier_cost} units; {remaining_cost:g} remaining)"
+                        )
+                        return ScrapeResult(
+                            url=request.url,
+                            provider=self.name,
+                            success=False,
+                            error=(
+                                f"Cost budget exhausted before ScrapeDrive {tier}; "
+                                f"{remaining_cost:g} units remain and {tier_cost:g} are required."
+                            ),
+                            failure_reason=FailureReason.BUDGET_EXCEEDED,
+                            cost_units=sum(entry.cost_units for entry in ledger),
+                            latency_ms=int((time.perf_counter() - provider_start) * 1000),
+                            route=ledger[-1].route if ledger else None,
+                            metadata={
+                                "attempted_tiers": attempted_tiers,
+                                "budget_stop": budget_stop,
+                            },
+                            attempt_ledger=list(ledger),
+                        )
                     attempted_tiers.append(tier)
                     active_tier = tier
                     active_started = time.perf_counter()
@@ -92,6 +144,8 @@ class ScrapeDriveProvider(ProviderAdapter):
                     result.attempt_ledger = list(ledger)
                     result.cost_units = result.run_cost_units
                     result.metadata["attempted_tiers"] = list(attempted_tiers)
+                    if remaining_cost is not None:
+                        remaining_cost = max(0.0, remaining_cost - tier_cost)
                     if result.success:
                         return result
                     last_result = result

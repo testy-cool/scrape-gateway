@@ -20,6 +20,9 @@ class OxylabsProvider(ProviderAdapter):
         ("password", "OXYLABS_PASSWORD"),
     )
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        return 10.0 if request.screenshot or request.render_js else 1.0
+
     def __init__(
         self,
         username: str | None = None,
@@ -83,7 +86,7 @@ class OxylabsProvider(ProviderAdapter):
                 html=html,
                 screenshot=screenshot,
                 failure_reason=failure,
-                cost_units=10 if request.screenshot or request.render_js else 1,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="oxylabs:rendered" if request.render_js or request.screenshot else "oxylabs",
                 metadata={"job_id": first.get("job_id")},

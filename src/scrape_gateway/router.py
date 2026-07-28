@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -21,7 +22,12 @@ from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
 from .models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from .paths import RUN_ID_PATTERN, safe_child
-from .provider import ProviderAdapter
+from .provider import (
+    MAX_COST_METADATA_KEY,
+    REMAINING_COST_METADATA_KEY,
+    SPENT_COST_METADATA_KEY,
+    ProviderAdapter,
+)
 from .progress import emit_progress
 from .recipes import DomainRecipeStore
 from .telemetry import TelemetryRecorder, new_run_id, safe_metadata, utc_now
@@ -604,6 +610,54 @@ class ScrapeGateway:
                     attributes={"provider": provider.name},
                 )
                 continue
+            max_cost = self.strategy.max_cost_per_url
+            if max_cost is not None:
+                spent_cost = float(sum(entry.cost_units for entry in run_ledger))
+                remaining_cost = max(0.0, max_cost - spent_cost)
+                request.metadata[MAX_COST_METADATA_KEY] = max_cost
+                request.metadata[SPENT_COST_METADATA_KEY] = spent_cost
+                request.metadata[REMAINING_COST_METADATA_KEY] = remaining_cost
+                try:
+                    next_cost = float(provider.estimated_cost_units(request))
+                except (TypeError, ValueError, OverflowError):
+                    next_cost = None
+                invalid_estimate = (
+                    next_cost is None or not math.isfinite(next_cost) or next_cost < 0
+                )
+                if invalid_estimate or next_cost > remaining_cost + 1e-9:
+                    budget_stop = {
+                        "max_cost_per_url": max_cost,
+                        "spent_cost_units": spent_cost,
+                        "remaining_cost_units": remaining_cost,
+                        "next_provider": provider.name,
+                        "next_attempt_cost_units": next_cost,
+                    }
+                    estimate_text = f"{next_cost:g}" if not invalid_estimate else "unknown"
+                    error = (
+                        f"Cost budget exhausted after {spent_cost:g} of {max_cost:g} units; "
+                        f"{provider.name} needs up to {estimate_text} units."
+                    )
+                    last_result = ScrapeResult(
+                        url=request.url,
+                        provider="budget",
+                        success=False,
+                        failure_reason=FailureReason.BUDGET_EXCEEDED,
+                        error=error,
+                        metadata={"budget_stop": budget_stop},
+                        attempt_ledger=list(run_ledger),
+                    )
+                    skipped.append(f"{provider.name}(budget)")
+                    emit_progress(
+                        id=provider_step_id,
+                        name=f"{provider.name} attempt",
+                        kind="provider",
+                        status="skipped",
+                        outcome="budget_exceeded",
+                        summary=error,
+                        attributes=budget_stop,
+                    )
+                    _log(f"  [budget] {error}")
+                    break
             start = time.perf_counter()
             emit_progress(
                 id=provider_step_id,
@@ -850,6 +904,9 @@ class ScrapeGateway:
             last_result = result
             if result.failure_reason == FailureReason.PROXY_ERROR:
                 _log("  [result] proxy configuration failed; not escalating providers")
+                break
+            if result.failure_reason == FailureReason.BUDGET_EXCEEDED:
+                _log("  [result] provider stopped before exceeding the cost budget")
                 break
 
         if skipped:

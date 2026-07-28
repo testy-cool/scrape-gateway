@@ -202,6 +202,23 @@ def diagnose_scrape(
                 )
         return Diagnosis("success", True, 1.0, "none", ["content validated and cached"])
 
+    if final.failure_reason == FailureReason.BUDGET_EXCEEDED:
+        stop = final.metadata.get("budget_stop")
+        if isinstance(stop, dict):
+            evidence.append(
+                f"spent {stop.get('spent_cost_units')} of {stop.get('max_cost_per_url')} cost units"
+            )
+            evidence.append(
+                f"next: {stop.get('next_provider')} ({stop.get('next_attempt_cost_units')} units)"
+            )
+        return Diagnosis(
+            "budget_exceeded",
+            False,
+            1.0,
+            "raise_budget_or_choose_cheaper_provider",
+            evidence or ["configured max_cost_per_url prevented another attempt"],
+        )
+
     if final.failure_reason == FailureReason.PROXY_ERROR or any(
         str(a.get("reason", "")).startswith("proxy_error") for a in attempts
     ):
@@ -796,6 +813,11 @@ class TelemetryRecorder:
             "ledger": [entry.to_dict() for entry in final.attempt_ledger],
             "run_cost_units": final.run_cost_units,
             "routing_decision": safe_metadata(request.metadata.get("routing_decision")),
+            "budget_stop": (
+                safe_metadata(final.metadata["budget_stop"])
+                if isinstance(final.metadata.get("budget_stop"), dict)
+                else None
+            ),
             "skipped": skipped,
         }
         if evaluation is not None:

@@ -16,6 +16,11 @@ class ScraperApiProvider(ProviderAdapter):
     capabilities = frozenset({"html", "country", "render_js", "premium", "screenshot"})
     required_configuration = (("api_key", "SCRAPERAPI_API_KEY"),)
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        if request.premium and request.render_js:
+            return 25.0
+        return 10.0 if request.premium or request.render_js else 1.0
+
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPERAPI_API_KEY")
 
@@ -58,13 +63,7 @@ class ScraperApiProvider(ProviderAdapter):
                 html=body,
                 screenshot=response.content if is_screenshot else None,
                 failure_reason=failure,
-                cost_units=(
-                    25
-                    if request.premium and request.render_js
-                    else 10
-                    if request.premium or request.render_js
-                    else 1
-                ),
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="scraperapi:premium" if request.premium else "scraperapi",
             )

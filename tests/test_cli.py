@@ -194,6 +194,36 @@ def test_run_batch_total_sums_each_complete_run_ledger(tmp_path):
     assert "cost 16" in result.output
 
 
+def test_run_batch_surfaces_budget_exceeded_status(tmp_path):
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("https://budget.example\n")
+
+    async def fake_scrape(request):
+        return ScrapeResult(
+            url=request.url,
+            provider="budget",
+            success=False,
+            failure_reason=FailureReason.BUDGET_EXCEEDED,
+            error="Cost budget exhausted.",
+            metadata={
+                "budget_stop": {
+                    "max_cost_per_url": 6.0,
+                    "spent_cost_units": 2.0,
+                    "remaining_cost_units": 4.0,
+                    "next_provider": "expensive",
+                    "next_attempt_cost_units": 5.0,
+                }
+            },
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["run", str(urls_file)])
+
+    assert result.exit_code == 0
+    assert "budget_exceeded" in result.output
+
+
 def _record_cli_cost_fixture(db_path) -> None:
     memory = DomainMemory(db_path)
     recorded_at = datetime.now(timezone.utc)
@@ -371,6 +401,38 @@ def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkey
     assert "fail" in rendered
     assert "human review" in rendered
     assert "retry_with_wait" in rendered
+
+
+def test_print_result_surfaces_budget_stop_details(monkeypatch):
+    output = StringIO()
+    monkeypatch.setattr(
+        "scrape_gateway.cli.console",
+        Console(file=output, force_terminal=False, color_system=None),
+    )
+    result = ScrapeResult(
+        url="https://example.com/products",
+        provider="budget",
+        success=False,
+        failure_reason=FailureReason.BUDGET_EXCEEDED,
+        error="Cost budget exhausted before expensive_provider.",
+        metadata={
+            "budget_stop": {
+                "max_cost_per_url": 6.0,
+                "spent_cost_units": 2.0,
+                "remaining_cost_units": 4.0,
+                "next_provider": "expensive_provider",
+                "next_attempt_cost_units": 5.0,
+            }
+        },
+    )
+
+    _print_result(result)
+
+    rendered = output.getvalue()
+    assert "FAILED" in rendered
+    assert "budget_exceeded" in rendered
+    assert "spent 2 / 6 units" in rendered
+    assert "expensive_provider needs 5" in rendered
 
 
 def test_evaluations_command_prints_aggregate_json(tmp_path):

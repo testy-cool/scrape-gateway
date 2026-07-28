@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,6 +40,14 @@ class StrategyConfig:
     mode: str = "cheapest_successful"
     provider: str | None = None
     max_cost_per_url: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_cost_per_url is None:
+            return
+        value = float(self.max_cost_per_url)
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("max_cost_per_url must be finite and non-negative")
+        self.max_cost_per_url = value
 
 
 @dataclass(slots=True)

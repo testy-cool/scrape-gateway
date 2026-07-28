@@ -16,6 +16,11 @@ class ScrapeDoProvider(ProviderAdapter):
     capabilities = frozenset({"html", "country", "render_js", "premium"})
     required_configuration = (("token", "SCRAPE_DO_TOKEN"),)
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        if request.premium and request.render_js:
+            return 25.0
+        return 10.0 if request.premium else 1.0
+
     def __init__(self, token: str | None = None) -> None:
         self.token = token or os.getenv("SCRAPE_DO_TOKEN")
 
@@ -49,11 +54,7 @@ class ScrapeDoProvider(ProviderAdapter):
                 status_code=response.status_code,
                 html=response.text,
                 failure_reason=failure,
-                cost_units=25
-                if request.premium and request.render_js
-                else 10
-                if request.premium
-                else 1,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="scrape_do:super" if request.premium else "scrape_do",
             )

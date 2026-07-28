@@ -23,6 +23,10 @@ class MyApiProvider(ProviderAdapter):
 
         self.api_key = api_key or os.getenv("MY_API_KEY")
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        # Conservative upper bound used by strategy.max_cost_per_url.
+        return 1.0
+
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if not self.api_key:
             return ScrapeResult(
@@ -47,6 +51,7 @@ class MyApiProvider(ProviderAdapter):
                 success=resp.is_success,
                 status_code=resp.status_code,
                 html=resp.text,
+                cost_units=1,
                 route=self.name,
             )
         except Exception as exc:

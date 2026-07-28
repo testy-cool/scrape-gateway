@@ -16,6 +16,13 @@ class ZenRowsProvider(ProviderAdapter):
     capabilities = frozenset({"html", "country", "render_js", "premium"})
     required_configuration = (("api_key", "ZENROWS_API_KEY"),)
 
+    def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        if request.render_js and (request.premium or request.country):
+            return 25.0
+        if request.premium or request.country:
+            return 10.0
+        return 5.0 if request.render_js else 1.0
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -62,13 +69,7 @@ class ZenRowsProvider(ProviderAdapter):
                 status_code=response.status_code,
                 html=response.text,
                 failure_reason=failure,
-                cost_units=25
-                if request.render_js and (request.premium or request.country)
-                else 10
-                if request.premium or request.country
-                else 5
-                if request.render_js
-                else 1,
+                cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="zenrows:premium" if request.premium or request.country else "zenrows",
             )
