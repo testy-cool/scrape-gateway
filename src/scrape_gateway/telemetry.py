@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .models import FailureReason, ScrapeRequest, ScrapeResult
+from .paths import RUN_ID_PATTERN, safe_child
 
 MAX_ERROR_CHARS = 1_000
 MAX_SNIPPET_CHARS = 600
@@ -580,11 +581,17 @@ class TelemetryRecorder:
         if enabled:
             self.root.mkdir(parents=True, exist_ok=True)
 
+    def _run_folder(self, run_id: str) -> Path:
+        try:
+            return safe_child(self.root, run_id, pattern=RUN_ID_PATTERN)
+        except ValueError as exc:
+            raise ValueError(f"Invalid run ID: {run_id!r}") from exc
+
     def write_report(self, report: dict[str, Any]) -> Path | None:
         if not self.enabled:
             return None
         run_id = report["run_id"]
-        folder = self.root / run_id
+        folder = self._run_folder(run_id)
         folder.mkdir(parents=True, exist_ok=True)
         report_path = folder / "report.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -606,7 +613,7 @@ class TelemetryRecorder:
     ) -> str | None:
         if not self.enabled or not (self.debug_artifacts or force) or not result.html:
             return None
-        folder = self.root / run_id
+        folder = self._run_folder(run_id)
         folder.mkdir(parents=True, exist_ok=True)
         safe_provider = re.sub(r"[^a-zA-Z0-9_.-]+", "_", provider)
         path = folder / f"{index:02d}-{safe_provider}.failed.html"
@@ -624,7 +631,7 @@ class TelemetryRecorder:
     ) -> str | None:
         if not self.enabled or not (self.debug_artifacts or force) or not result.screenshot:
             return None
-        folder = self.root / run_id
+        folder = self._run_folder(run_id)
         folder.mkdir(parents=True, exist_ok=True)
         safe_provider = re.sub(r"[^a-zA-Z0-9_.-]+", "_", provider)
         suffix = _screenshot_suffix(result.screenshot)
@@ -641,7 +648,7 @@ class TelemetryRecorder:
         if not self.enabled:
             return {}
 
-        folder = self.root / run_id / "evaluation"
+        folder = self._run_folder(run_id) / "evaluation"
         folder.mkdir(parents=True, exist_ok=True)
         paths: dict[str, str] = {}
 
@@ -720,7 +727,7 @@ class TelemetryRecorder:
 
         if not self.enabled:
             return {}
-        folder = self.root / run_id
+        folder = self._run_folder(run_id)
         folder.mkdir(parents=True, exist_ok=True)
         paths: dict[str, str] = {}
         if result.html is not None:

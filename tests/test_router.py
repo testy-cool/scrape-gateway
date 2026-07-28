@@ -409,6 +409,57 @@ async def test_telemetry_report_records_validation_evidence(tmp_dir):
     assert report["attempts"][0]["snippet"]
 
 
+async def test_invalid_caller_run_id_is_replaced_and_report_stays_inside_root(
+    tmp_dir, monkeypatch, capsys
+):
+    runs_root = tmp_dir / "runs"
+    monkeypatch.setattr("scrape_gateway.router.new_run_id", lambda: "generated123")
+    gw = ScrapeGateway(
+        providers=[SuccessProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=runs_root),
+    )
+
+    result = await gw.scrape(
+        ScrapeRequest("https://example.com", metadata={"run_id": "../escaped"}),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert result.metadata["run_id"] == "generated123"
+    assert (
+        Path(result.metadata["telemetry_report"]).resolve()
+        == (runs_root / "generated123" / "report.json").resolve()
+    )
+    assert not (tmp_dir / "escaped").exists()
+    assert "invalid run_id" in capsys.readouterr().err
+
+
+async def test_valid_caller_run_id_is_honored(tmp_dir):
+    runs_root = tmp_dir / "runs"
+    gw = ScrapeGateway(
+        providers=[SuccessProvider()],
+        cache=ArtifactCache(root=tmp_dir / "cache"),
+        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=runs_root),
+    )
+
+    result = await gw.scrape(
+        ScrapeRequest("https://example.com", metadata={"run_id": "caller_run-123"}),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert result.metadata["run_id"] == "caller_run-123"
+    assert (
+        Path(result.metadata["telemetry_report"]).resolve()
+        == (runs_root / "caller_run-123" / "report.json").resolve()
+    )
+
+
 async def test_debug_artifacts_save_failed_html(tmp_dir):
     gw = ScrapeGateway(
         providers=[CloudflareProvider()],

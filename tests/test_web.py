@@ -660,6 +660,17 @@ async def test_artifact_api_rejects_paths_outside_the_run_directory(tmp_path: Pa
     assert "do not expose" not in response.text
 
 
+def test_run_directory_resolution_accepts_valid_ids_and_rejects_escapes(tmp_path: Path) -> None:
+    from scrape_gateway.web import _run_dir
+
+    run_dir = tmp_path / "safe_run-123"
+    run_dir.mkdir()
+
+    assert _run_dir(tmp_path, "safe_run-123") == run_dir.resolve()
+    assert _run_dir(tmp_path, "../escaped") is None
+    assert _run_dir(tmp_path, str(run_dir.resolve())) is None
+
+
 async def test_unknown_run_returns_a_clear_not_found_message(tmp_path: Path) -> None:
     from scrape_gateway.web import create_console_app
 

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
+from scrape_gateway.evaluation import EvaluationOutcome
 from scrape_gateway.models import ScrapeResult
 from scrape_gateway.telemetry import (
     TelemetryRecorder,
@@ -162,3 +165,50 @@ def test_recorder_saves_final_visual_and_text_evidence_without_ai_evaluation(tmp
     assert (tmp_path / "runs" / "run-visual" / "final.md").read_text() == result.markdown
     assert (tmp_path / "runs" / "run-visual" / "screenshot.png").read_bytes() == result.screenshot
     assert set(artifacts) == {"final_html", "final_markdown", "screenshot"}
+
+
+@pytest.mark.parametrize(
+    "writer",
+    [
+        "report",
+        "failed_html",
+        "failed_screenshot",
+        "evaluation",
+        "result",
+    ],
+)
+def test_recorder_rejects_traversing_run_ids_before_writing_outside_root(tmp_path, writer) -> None:
+    root = tmp_path / "runs"
+    recorder = TelemetryRecorder(root=root, debug_artifacts=True)
+    run_id = f"../escaped-{writer}"
+    escaped = (root / run_id).resolve()
+    result = ScrapeResult(
+        url="https://example.com",
+        provider="browserless",
+        success=True,
+        html="<main>Captured page</main>",
+        markdown="# Captured page",
+        screenshot=b"\x89PNG\r\n\x1a\nimage",
+    )
+
+    with pytest.raises(ValueError, match="Invalid run ID"):
+        if writer == "report":
+            recorder.write_report({"run_id": run_id, "attempts": []})
+        elif writer == "failed_html":
+            recorder.write_failed_artifact(run_id, 1, "browserless", result)
+        elif writer == "failed_screenshot":
+            recorder.write_failed_screenshot_artifact(run_id, 1, "browserless", result)
+        elif writer == "evaluation":
+            recorder.write_evaluation_artifacts(
+                run_id,
+                EvaluationOutcome(
+                    status="failed",
+                    model="test-model",
+                    markdown_evidence=result.markdown or "",
+                ),
+                result,
+            )
+        else:
+            recorder.write_result_artifacts(run_id, result)
+
+    assert not escaped.exists()

@@ -23,11 +23,11 @@ from starlette.staticfiles import StaticFiles
 
 from .config import GatewayConfig, load_config
 from .models import ScrapeRequest, ScrapeResult
-from .telemetry import load_recent_reports, result_summary, summarize_evaluations
+from .paths import RUN_ID_PATTERN, safe_child
 from .progress import observe_progress
+from .telemetry import load_recent_reports, result_summary, summarize_evaluations
 
 PREVIEW_LIMIT = 250_000
-RUN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
 ARTIFACT_SUFFIXES = {".html", ".json", ".jsonl", ".md", ".png", ".jpg", ".jpeg", ".webp", ".txt"}
 ASSET_ROOT = Path(__file__).with_name("web_assets")
 
@@ -153,13 +153,9 @@ def _validated_settings(payload: Any) -> dict[str, Any]:
 
 
 def _run_dir(root: Path, run_id: str) -> Path | None:
-    if not RUN_ID_PATTERN.fullmatch(run_id):
-        return None
-    candidate = root / run_id
     try:
-        resolved = candidate.resolve()
-        resolved.relative_to(root.resolve())
-    except (OSError, ValueError):
+        resolved = safe_child(root, run_id, pattern=RUN_ID_PATTERN)
+    except ValueError:
         return None
     return resolved if resolved.is_dir() else None
 

@@ -19,6 +19,7 @@ from .cache import ArtifactCache
 from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
 from .models import FailureReason, ScrapeRequest, ScrapeResult
+from .paths import RUN_ID_PATTERN, safe_child
 from .provider import ProviderAdapter
 from .progress import emit_progress
 from .recipes import DomainRecipeStore
@@ -430,7 +431,17 @@ class ScrapeGateway:
         explicit_timeout = request.timeout_seconds if request.timeout_seconds != 45 else None
         if explicit_timeout is None:
             request.timeout_seconds = self.default_timeout_seconds
-        run_id = request.metadata.get("run_id") or new_run_id()
+        supplied_run_id = request.metadata.get("run_id")
+        if supplied_run_id is None:
+            run_id = new_run_id()
+        else:
+            try:
+                safe_child(self.telemetry.root, supplied_run_id, pattern=RUN_ID_PATTERN)
+            except ValueError:
+                _log(f"  [telemetry] invalid run_id {supplied_run_id!r}; generated a new one")
+                run_id = new_run_id()
+            else:
+                run_id = supplied_run_id
         request.metadata["run_id"] = run_id
         started_at = utc_now()
         proxy_enabled = bool(os.getenv("SCRAPE_PROXY_URL"))
