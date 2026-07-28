@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-07-28
+
+### Added
+- Every provider and adapter sub-attempt now contributes a structured run ledger with route, cost, exact-or-estimated provenance, latency, HTTP outcome, failure reason, and block type.
+- The local SQLite memory store keeps append-only attempt rows with the full request profile, making historical cost, successful-provider, failed-spend, and credits-per-success queries possible without reading per-run JSON.
+- `sgw cost` reports successful, failed, and total attempt spend by domain and provider over a configurable recent window, with Rich and JSON output.
+
+### Changed
+- `ScrapeResult.cost_units` now totals every internal sub-attempt made by that provider, including ScrapeDrive tier escalation and timeouts. `ScrapeResult.run_cost_units` totals the complete router fallback ledger while preserving the legacy single-cost fallback for callers that do not supply a ledger.
+- Batch and telemetry totals derive from the complete run ledger instead of only the final provider result.
+- Scrapfly marks provider-reported costs as exact and preserves known spend through failed API envelopes or CLOB retrievals; hardcoded adapter costs remain explicitly estimated.
+
 ## [0.17.7] - 2026-07-28
 
 ### Fixed
