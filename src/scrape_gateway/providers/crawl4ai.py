@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..headers import browser_context_headers
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
@@ -38,6 +38,7 @@ class Crawl4AIProvider(ProviderAdapter):
     name = "crawl4ai"
     cost_rank = 18
     capabilities = frozenset({"html", "markdown", "render_js", "screenshot"})
+    required_configuration = (("base_url", "CRAWL4AI_URL"),)
 
     def __init__(
         self,
@@ -48,13 +49,13 @@ class Crawl4AIProvider(ProviderAdapter):
         self.token = token or os.getenv("CRAWL4AI_TOKEN", "")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.base_url:
+        if error := self.availability_error():
             return ScrapeResult(
                 request.url,
                 self.name,
                 False,
-                error="Missing CRAWL4AI_URL",
-                failure_reason=FailureReason.PROVIDER_ERROR,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
 
         browser_params: dict[str, Any] = {"headless": True}
@@ -102,7 +103,10 @@ class Crawl4AIProvider(ProviderAdapter):
             html = item.get("html") if isinstance(item.get("html"), str) else None
             markdown = _markdown_text(item.get("markdown"))
             status_code = int(item.get("status_code") or response.status_code)
-            failure = classify_failure(status_code, html or markdown)
+            failure = classify_provider_failure(
+                response.status_code if not response.is_success else status_code,
+                html or markdown or str(data.get("detail") or data.get("error") or ""),
+            )
             provider_success = bool(item.get("success", data.get("success", False)))
             if (not response.is_success or not provider_success) and failure in {
                 None,

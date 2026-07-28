@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -15,6 +15,10 @@ class OxylabsProvider(ProviderAdapter):
     name = "oxylabs"
     cost_rank = 45
     capabilities = frozenset({"html", "country", "render_js", "premium", "screenshot"})
+    required_configuration = (
+        ("username", "OXYLABS_USERNAME"),
+        ("password", "OXYLABS_PASSWORD"),
+    )
 
     def __init__(
         self,
@@ -27,12 +31,13 @@ class OxylabsProvider(ProviderAdapter):
         self.base_url = base_url
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.username or not self.password:
+        if error := self.availability_error():
             return ScrapeResult(
                 request.url,
                 self.name,
                 False,
-                error="Missing OXYLABS_USERNAME or OXYLABS_PASSWORD",
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
         payload: dict[str, object] = {"source": "universal", "url": request.url}
         if request.screenshot:
@@ -62,7 +67,14 @@ class OxylabsProvider(ProviderAdapter):
             if request.screenshot and isinstance(content, str):
                 screenshot = base64.b64decode(content)
                 html = None
-            failure = None if screenshot else classify_failure(target_status, html)
+            failure = (
+                None
+                if screenshot
+                else classify_provider_failure(
+                    target_status,
+                    html if response.is_success else response.text,
+                )
+            )
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -15,6 +15,7 @@ class FirecrawlProvider(ProviderAdapter):
     name = "firecrawl"
     cost_rank = 26
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
+    required_configuration = (("api_key", "FIRECRAWL_API_KEY"),)
 
     def __init__(
         self,
@@ -27,8 +28,14 @@ class FirecrawlProvider(ProviderAdapter):
         ).rstrip("/")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing FIRECRAWL_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         formats: list[object] = ["html", "markdown"]
         if request.screenshot:
             formats.append({"type": "screenshot", "fullPage": True})
@@ -75,7 +82,10 @@ class FirecrawlProvider(ProviderAdapter):
                             screenshot = image_response.content
             metadata = result_data.get("metadata", {})
             target_status = int(metadata.get("statusCode") or response.status_code)
-            failure = classify_failure(target_status, html or markdown)
+            failure = classify_provider_failure(
+                target_status,
+                (html or markdown) if response.is_success else response.text,
+            )
             screenshot_error = request.screenshot and not screenshot
             return ScrapeResult(
                 url=request.url,

@@ -18,7 +18,7 @@ async def test_crawl4ai_fails_cleanly_without_service_url(monkeypatch) -> None:
     result = await Crawl4AIProvider().scrape(ScrapeRequest(TARGET))
 
     assert result.success is False
-    assert result.failure_reason is FailureReason.PROVIDER_ERROR
+    assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
     assert result.error == "Missing CRAWL4AI_URL"
 
 
@@ -131,5 +131,5 @@ async def test_crawl4ai_reports_api_level_auth_failure() -> None:
 
     assert result.success is False
     assert result.status_code == 401
-    assert result.failure_reason is FailureReason.PROVIDER_ERROR
+    assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
     assert result.error == "Invalid bearer token"

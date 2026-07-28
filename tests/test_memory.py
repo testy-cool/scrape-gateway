@@ -1,14 +1,51 @@
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from scrape_gateway.memory import DomainMemory
+from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest
+
+
+NOW = datetime(2026, 7, 28, 12, tzinfo=timezone.utc)
+
+
+def _record(
+    memory: DomainMemory,
+    run_id: str,
+    request: ScrapeRequest,
+    provider: str,
+    *,
+    success: bool,
+    route: str | None = None,
+    block_type: str | None = None,
+) -> None:
+    memory.record_attempt_ledger(
+        run_id,
+        request,
+        [
+            AttemptLedgerEntry(
+                provider=provider,
+                route=route,
+                cost_units=0,
+                cost_provenance="estimated",
+                success=success,
+                latency_ms=1,
+                status_code=200 if success else 403,
+                failure_reason=None if success else FailureReason.HTTP_403,
+                block_type=block_type,
+            )
+        ],
+        recorded_at=NOW,
+    )
 
 
 def test_remember_and_recall():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success("https://www.example.com/page", "scrapingbee", "us", True, False)
-        assert mem.preferred_provider("https://www.example.com/other") == ("scrapingbee", None)
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://www.example.com/page", country="us", render_js=True)
+        _record(mem, "success", request, "scrapingbee", success=True)
+        recall = ScrapeRequest("https://www.example.com/other", country="US", render_js=True)
+        assert mem.preferred_provider(recall) == ("scrapingbee", None)
 
 
 def test_no_memory():
@@ -54,9 +91,10 @@ def test_remember_block():
 
 def test_should_skip_after_repeated_failures():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        for _ in range(5):
-            mem.remember_failure("https://hard.com/page", "raw_http")
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://hard.com/page")
+        for index in range(5):
+            _record(mem, f"failure-{index}", request, "raw_http", success=False)
         assert mem.should_skip_provider("https://hard.com/other", "raw_http") is True
 
 
@@ -68,28 +106,38 @@ def test_should_not_skip_with_no_history():
 
 def test_should_not_skip_with_good_success_rate():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        for _ in range(10):
-            mem.remember_success("https://mixed.com/a", "raw_http", None, False, False)
-        mem.remember_failure("https://mixed.com/b", "raw_http")
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://mixed.com/a")
+        for index in range(10):
+            _record(mem, f"success-{index}", request, "raw_http", success=True)
+        _record(mem, "failure", request, "raw_http", success=False)
         assert mem.should_skip_provider("https://mixed.com/x", "raw_http") is False
 
 
 def test_prefers_provider_with_better_record():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success("https://example.com/a", "raw_http", None, False, False)
-        for _ in range(5):
-            mem.remember_success("https://example.com/b", "scrapedrive", "us", False, False)
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://example.com/a")
+        _record(mem, "raw", request, "raw_http", success=True)
+        for index in range(5):
+            _record(mem, f"scrapedrive-{index}", request, "scrapedrive", success=True)
         assert mem.preferred_provider("https://example.com") == ("scrapedrive", None)
 
 
 def test_blocks_penalized_harder():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success("https://example.com/a", "raw_http", None, False, False)
-        mem.remember_failure("https://example.com/b", "raw_http", block_type="cloudflare")
-        mem.remember_success("https://example.com/c", "scrapedrive", "us", False, False)
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://example.com/a")
+        _record(mem, "raw-success", request, "raw_http", success=True)
+        _record(
+            mem,
+            "raw-block",
+            request,
+            "raw_http",
+            success=False,
+            block_type="cloudflare",
+        )
+        _record(mem, "scrapedrive-success", request, "scrapedrive", success=True)
         # raw_http: 1 success - (0 failures + 1 block * 3) = -2
         # scrapedrive: 1 success - 0 = 1
         assert mem.preferred_provider("https://example.com") == ("scrapedrive", None)
@@ -97,18 +145,30 @@ def test_blocks_penalized_harder():
 
 def test_preferred_provider_returns_tier():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success(
-            "https://example.com/a", "scrapedrive", "us", False, True, tier="scrapedrive:advanced"
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        request = ScrapeRequest("https://example.com/a", country="us", premium=True)
+        _record(
+            mem,
+            "success",
+            request,
+            "scrapedrive",
+            success=True,
+            route="scrapedrive:advanced",
         )
-        result = mem.preferred_provider("https://example.com")
+        result = mem.preferred_provider(request)
         assert result == ("scrapedrive", "scrapedrive:advanced")
 
 
 def test_preferred_provider_returns_none_tuple_when_no_tier():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success("https://example.com/a", "raw_http", None, False, False)
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        _record(
+            mem,
+            "success",
+            ScrapeRequest("https://example.com/a"),
+            "raw_http",
+            success=True,
+        )
         result = mem.preferred_provider("https://example.com")
         assert result == ("raw_http", None)
 

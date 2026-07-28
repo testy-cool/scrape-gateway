@@ -102,9 +102,12 @@ class TestScrapeDrive:
 
     async def test_missing_api_key(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("SCRAPEDRIVE_API_KEY", raising=False)
-        result = await ScrapeDriveProvider(api_key=None).scrape(ScrapeRequest(url=TARGET_URL))
+        provider = ScrapeDriveProvider(api_key=None)
+        result = await provider.scrape(ScrapeRequest(url=TARGET_URL))
         assert result.success is False
         assert "Missing" in (result.error or "")
+        assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
+        assert provider.availability_error() == "Missing SCRAPEDRIVE_API_KEY"
 
     @respx.mock
     async def test_standard_tier(self):
@@ -378,6 +381,7 @@ class TestScrapeDo:
         result = await ScrapeDoProvider(token=None).scrape(ScrapeRequest(url=TARGET_URL))
         assert result.success is False
         assert "Missing" in (result.error or "")
+        assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
 
     @respx.mock
     async def test_success(self):
@@ -429,6 +433,20 @@ class TestScrapingBee:
         result = await ScrapingBeeProvider(api_key=None).scrape(ScrapeRequest(url=TARGET_URL))
         assert result.success is False
         assert "Missing" in (result.error or "")
+        assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
+
+    @respx.mock
+    async def test_invalid_api_key_is_provider_unavailable(self):
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(401, text="Authentication failed: invalid API key")
+        )
+
+        result = await ScrapingBeeProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.success is False
+        assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
 
     @respx.mock
     async def test_success(self):
@@ -481,6 +499,7 @@ class TestScraperApi:
         result = await ScraperApiProvider(api_key=None).scrape(ScrapeRequest(url=TARGET_URL))
         assert result.success is False
         assert "Missing" in (result.error or "")
+        assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
 
     @respx.mock
     async def test_success(self):

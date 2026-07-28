@@ -11,6 +11,11 @@ from scrape_gateway.headers import browser_context_headers
 class _CdpProvider(ProviderAdapter):
     endpoint_env: str
 
+    def availability_error(self) -> str | None:
+        if os.getenv(self.endpoint_env):
+            return None
+        return f"Missing {self.endpoint_env}"
+
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         start = time.perf_counter()
         endpoint = os.getenv(self.endpoint_env)
@@ -20,7 +25,7 @@ class _CdpProvider(ProviderAdapter):
                 self.name,
                 False,
                 error=f"{self.endpoint_env} is not configured",
-                failure_reason=FailureReason.PROVIDER_ERROR,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
                 latency_ms=0,
             )
 

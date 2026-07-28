@@ -17,6 +17,7 @@ class FailureReason(str, Enum):
     LOGIN_REQUIRED = "login_required"
     PAYWALL = "paywall"
     PROXY_ERROR = "proxy_error"
+    PROVIDER_UNAVAILABLE = "provider_unavailable"
     PROVIDER_ERROR = "provider_error"
     UNKNOWN = "unknown"
 

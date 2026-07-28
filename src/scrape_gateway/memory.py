@@ -4,17 +4,34 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .models import AttemptLedgerEntry, ScrapeRequest
+from .models import AttemptLedgerEntry, FailureReason, ScrapeRequest
+
+
+DEFAULT_EVIDENCE_WINDOW_SECONDS = 7 * 86400
+_NON_DOMAIN_FAILURE_REASONS = (
+    FailureReason.PROVIDER_UNAVAILABLE.value,
+    FailureReason.PROXY_ERROR.value,
+)
 
 
 class DomainMemory:
-    def __init__(self, db_path: str | Path = ".scrape-gateway/memory.sqlite") -> None:
+    def __init__(
+        self,
+        db_path: str | Path = ".scrape-gateway/memory.sqlite",
+        *,
+        evidence_window_seconds: int = DEFAULT_EVIDENCE_WINDOW_SECONDS,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if evidence_window_seconds <= 0:
+            raise ValueError("routing memory evidence window must be positive")
         self.db_path = Path(db_path)
+        self.evidence_window_seconds = evidence_window_seconds
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # Service-mode dependencies may construct the gateway before the ASGI worker
         # thread starts. Individual operations remain synchronous and transactional.
@@ -125,7 +142,7 @@ class DomainMemory:
         *,
         recorded_at: datetime | None = None,
     ) -> int:
-        timestamp = self._utc_timestamp(recorded_at)
+        timestamp = self._utc_timestamp(recorded_at or self._clock())
         domain = self.domain_for_url(request.url)
         rows = [
             (
@@ -177,7 +194,7 @@ class DomainMemory:
     ) -> list[dict]:
         if days < 0:
             raise ValueError("days must be non-negative")
-        window_end = as_of or datetime.now(timezone.utc)
+        window_end = as_of or self._clock()
         if window_end.tzinfo is None or window_end.utcoffset() is None:
             raise ValueError("as_of must include a timezone")
         window_end = window_end.astimezone(timezone.utc)
@@ -288,22 +305,154 @@ class DomainMemory:
             )
         self.conn.commit()
 
-    def preferred_provider(self, url: str) -> tuple[str, str | None] | None:
-        domain = self.domain_for_url(url)
+    @staticmethod
+    def _request(value: ScrapeRequest | str) -> ScrapeRequest:
+        return value if isinstance(value, ScrapeRequest) else ScrapeRequest(value)
+
+    def _evidence_bounds(self, as_of: datetime | None) -> tuple[str, str]:
+        window_end = as_of or self._clock()
+        if window_end.tzinfo is None or window_end.utcoffset() is None:
+            raise ValueError("as_of must include a timezone")
+        window_end = window_end.astimezone(timezone.utc)
+        window_start = window_end - timedelta(seconds=self.evidence_window_seconds)
+        return self._utc_timestamp(window_start), self._utc_timestamp(window_end)
+
+    def _profile_params(
+        self,
+        request: ScrapeRequest,
+        *,
+        as_of: datetime | None,
+    ) -> tuple[object, ...]:
+        window_start, window_end = self._evidence_bounds(as_of)
+        return (
+            self.domain_for_url(request.url),
+            window_start,
+            window_end,
+            request.country,
+            int(request.render_js),
+            int(request.premium),
+            int(request.mobile),
+            int(request.screenshot),
+            *_NON_DOMAIN_FAILURE_REASONS,
+        )
+
+    def preferred_provider(
+        self,
+        request: ScrapeRequest | str,
+        *,
+        as_of: datetime | None = None,
+    ) -> tuple[str, str | None] | None:
+        request = self._request(request)
         row = self.conn.execute(
             """
-            select provider, last_success_tier from domain_provider_stats
-            where domain = ? and success_count > 0
-            order by
-              success_count - (failure_count + block_count * 3) desc,
-              updated_at desc
+            with evidence as (
+              select *
+              from attempt_ledger
+              where domain = ?
+                and recorded_at >= ? and recorded_at <= ?
+                and country is ? collate nocase
+                and render_js = ?
+                and premium = ?
+                and mobile = ?
+                and screenshot = ?
+                and (
+                  success = 1
+                  or failure_reason is null
+                  or failure_reason not in (?, ?)
+                )
+            ),
+            scores as (
+              select provider,
+                     sum(
+                       case
+                         when success = 1 then 1
+                         when block_type is not null then -3
+                         else -1
+                       end
+                     ) as score,
+                     sum(success) as success_count,
+                     max(case when success = 1 then recorded_at end) as last_success_at
+              from evidence
+              group by provider
+            )
+            select scores.provider,
+                   (
+                     select route
+                     from evidence
+                     where evidence.provider = scores.provider and evidence.success = 1
+                     order by recorded_at desc, id desc
+                     limit 1
+                   ) as last_success_tier
+            from scores
+            where success_count > 0
+            order by score desc, last_success_at desc, scores.provider
             limit 1
             """,
-            (domain,),
+            self._profile_params(request, as_of=as_of),
         ).fetchone()
         if not row:
             return None
         return (row["provider"], row["last_success_tier"])
+
+    def providers_due_for_probe(
+        self,
+        request: ScrapeRequest | str,
+        *,
+        as_of: datetime | None = None,
+    ) -> list[str]:
+        request = self._request(request)
+        window_start, window_end = self._evidence_bounds(as_of)
+        rows = self.conn.execute(
+            """
+            with ranked as (
+              select provider, success, recorded_at,
+                     row_number() over (
+                       partition by provider
+                       order by recorded_at desc, id desc
+                     ) as attempt_rank
+              from attempt_ledger
+              where domain = ?
+                and recorded_at <= ?
+                and country is ? collate nocase
+                and render_js = ?
+                and premium = ?
+                and mobile = ?
+                and screenshot = ?
+                and (
+                  success = 1
+                  or failure_reason is null
+                  or failure_reason not in (?, ?)
+                )
+            ),
+            failure_tails as (
+              select provider,
+                     count(*) as evidence_count,
+                     sum(success) as success_count,
+                     max(recorded_at) as last_recorded_at
+              from ranked
+              where attempt_rank <= 5
+              group by provider
+            )
+            select provider
+            from failure_tails
+            where evidence_count = 5
+              and success_count = 0
+              and last_recorded_at < ?
+            order by last_recorded_at, provider
+            """,
+            (
+                self.domain_for_url(request.url),
+                window_end,
+                request.country,
+                int(request.render_js),
+                int(request.premium),
+                int(request.mobile),
+                int(request.screenshot),
+                *_NON_DOMAIN_FAILURE_REASONS,
+                window_start,
+            ),
+        ).fetchall()
+        return [row["provider"] for row in rows]
 
     def provider_stats(self, url: str) -> list[dict]:
         domain = self.domain_for_url(url)
@@ -319,24 +468,100 @@ class DomainMemory:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def should_skip_provider(self, url: str, provider: str) -> bool:
-        domain = self.domain_for_url(url)
+    def should_skip_provider(
+        self,
+        request: ScrapeRequest | str,
+        provider: str,
+        *,
+        as_of: datetime | None = None,
+    ) -> bool:
+        request = self._request(request)
         row = self.conn.execute(
             """
-            select success_count, failure_count, block_count
-            from domain_provider_stats
-            where domain = ? and provider = ?
+            select coalesce(sum(success), 0) as success_count,
+                   coalesce(
+                     sum(case when success = 0 and block_type is null then 1 else 0 end),
+                     0
+                   ) as failure_count,
+                   coalesce(
+                     sum(case when success = 0 and block_type is not null then 1 else 0 end),
+                     0
+                   ) as block_count
+            from attempt_ledger
+            where domain = ?
+              and recorded_at >= ? and recorded_at <= ?
+              and country is ? collate nocase
+              and render_js = ?
+              and premium = ?
+              and mobile = ?
+              and screenshot = ?
+              and (
+                success = 1
+                or failure_reason is null
+                or failure_reason not in (?, ?)
+              )
+              and provider = ?
             """,
-            (domain, provider),
+            (*self._profile_params(request, as_of=as_of), provider),
         ).fetchone()
-        if not row:
-            return False
         total_failures = row["failure_count"] + row["block_count"]
         if row["success_count"] == 0 and total_failures >= 5:
             return True
         if total_failures >= 10 and row["success_count"] / max(total_failures, 1) < 0.2:
             return True
+        if (
+            row["success_count"] == 0
+            and total_failures > 0
+            and self._failed_probe_reclosed(request, provider, as_of=as_of)
+        ):
+            return True
         return False
+
+    def _failed_probe_reclosed(
+        self,
+        request: ScrapeRequest,
+        provider: str,
+        *,
+        as_of: datetime | None,
+    ) -> bool:
+        _, window_end = self._evidence_bounds(as_of)
+        rows = self.conn.execute(
+            """
+            select recorded_at, success
+            from attempt_ledger
+            where domain = ?
+              and recorded_at <= ?
+              and country is ? collate nocase
+              and render_js = ?
+              and premium = ?
+              and mobile = ?
+              and screenshot = ?
+              and (
+                success = 1
+                or failure_reason is null
+                or failure_reason not in (?, ?)
+              )
+              and provider = ?
+            order by recorded_at desc, id desc
+            limit 6
+            """,
+            (
+                self.domain_for_url(request.url),
+                window_end,
+                request.country,
+                int(request.render_js),
+                int(request.premium),
+                int(request.mobile),
+                int(request.screenshot),
+                *_NON_DOMAIN_FAILURE_REASONS,
+                provider,
+            ),
+        ).fetchall()
+        if len(rows) != 6 or rows[0]["success"] or any(row["success"] for row in rows[1:]):
+            return False
+        latest = datetime.fromisoformat(rows[0]["recorded_at"].replace("Z", "+00:00"))
+        prior_latest = datetime.fromisoformat(rows[1]["recorded_at"].replace("Z", "+00:00"))
+        return prior_latest < latest - timedelta(seconds=self.evidence_window_seconds)
 
     # --- Extraction pattern memory ---
 

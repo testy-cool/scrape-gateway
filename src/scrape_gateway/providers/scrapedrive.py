@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -40,13 +40,20 @@ class ScrapeDriveProvider(ProviderAdapter):
     name = "scrapedrive"
     cost_rank = 25
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
+    required_configuration = (("api_key", "SCRAPEDRIVE_API_KEY"),)
 
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing SCRAPEDRIVE_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
 
         start = _start_tier(request)
         tiers = TIER_ORDER[TIER_ORDER.index(start) :]
@@ -205,7 +212,10 @@ class ScrapeDriveProvider(ProviderAdapter):
                             f"{screenshot_response.status_code} ({screenshot_content_type or 'unknown type'})"
                         )
 
-            failure = classify_failure(response.status_code, html)
+            failure = classify_provider_failure(
+                response.status_code,
+                html if response.is_success else response.text,
+            )
             if request.screenshot and not screenshot and failure is None:
                 failure = FailureReason.PROVIDER_ERROR
             return ScrapeResult(

@@ -47,6 +47,7 @@ async def test_paid_api_providers_fail_cleanly_without_credentials(
 
     assert result.success is False
     assert "Missing" in (result.error or "")
+    assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
 
 
 @respx.mock

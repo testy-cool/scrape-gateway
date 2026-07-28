@@ -546,7 +546,23 @@ async def test_remembers_successful_provider(tmp_dir):
 
 async def test_preferred_provider_tried_first(tmp_dir):
     mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
-    mem.remember_success("https://example.com", "success", None, False, False, tier="success")
+    mem.record_attempt_ledger(
+        "preferred",
+        ScrapeRequest("https://example.com"),
+        [
+            AttemptLedgerEntry(
+                provider="success",
+                route="success",
+                cost_units=0,
+                cost_provenance="estimated",
+                success=True,
+                latency_ms=1,
+                status_code=200,
+                failure_reason=None,
+                block_type=None,
+            )
+        ],
+    )
 
     call_order = []
 
@@ -806,9 +822,25 @@ class CheapProvider(ProviderAdapter):
         )
 
 
-async def test_skips_providers_cheaper_than_preferred(tmp_dir):
+async def test_preferred_provider_keeps_cheaper_fallback_behind_it(tmp_dir):
     mem = DomainMemory(db_path=tmp_dir / "mem.sqlite")
-    mem.remember_success("https://example.com", "success", None, False, False, tier="success")
+    mem.record_attempt_ledger(
+        "preferred",
+        ScrapeRequest("https://example.com"),
+        [
+            AttemptLedgerEntry(
+                provider="success",
+                route="success",
+                cost_units=0,
+                cost_provenance="estimated",
+                success=True,
+                latency_ms=1,
+                status_code=200,
+                failure_reason=None,
+                block_type=None,
+            )
+        ],
+    )
 
     call_order = []
 
@@ -820,7 +852,13 @@ async def test_skips_providers_cheaper_than_preferred(tmp_dir):
     class TrackingSuccess(SuccessProvider):
         async def scrape(self, request):
             call_order.append(self.name)
-            return await super().scrape(request)
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=500,
+                failure_reason=FailureReason.HTTP_5XX,
+            )
 
     gw = ScrapeGateway(
         providers=[TrackingCheap(), TrackingSuccess()],
@@ -829,8 +867,8 @@ async def test_skips_providers_cheaper_than_preferred(tmp_dir):
     )
     result = await gw.scrape(ScrapeRequest("https://example.com/page"), use_cache=False)
     assert result.success
-    assert result.provider == "success"
-    assert "cheap" not in call_order
+    assert result.provider == "cheap"
+    assert call_order == ["success", "cheap"]
 
 
 async def test_tier_escalation_full_flow(tmp_dir):

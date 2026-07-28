@@ -53,6 +53,10 @@ strategy:
   mode: cheapest_successful
   provider: scrapedrive       # override: always try this first
 
+memory:
+  path: .scrape-gateway/memory.sqlite
+  evidence_window: 7d
+
 telemetry:
   enabled: true
   root: .scrape-gateway/runs
@@ -65,6 +69,23 @@ evaluation:
   include_screenshot: true
   cache_root: .scrape-gateway/evaluations
 ```
+
+## Routing memory
+
+Routing decisions use recent rows from the attempt ledger for the exact combination of
+domain, country, JavaScript rendering, premium mode, mobile mode, and screenshot mode.
+Evidence does not fall back across profiles. The default `evidence_window` is seven days;
+after a skipped provider's failures age out, the router places one half-open recovery
+probe ahead of the current learned winner. A failed probe closes the provider for another
+window, while a successful probe restores it immediately.
+
+Missing or invalid provider credentials and local provider configuration failures are
+recorded as provider availability failures, not evidence that the target domain is
+unscrapable. Providers with known-missing configuration are skipped before an attempt.
+
+The pre-ledger `domain_provider_stats` and `domain_routes` tables remain in existing
+SQLite files for compatibility and inspection, but the router neither reads nor updates
+them.
 
 ## Domain recipes
 

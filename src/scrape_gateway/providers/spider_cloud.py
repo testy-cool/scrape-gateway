@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -14,6 +14,7 @@ class SpiderCloudProvider(ProviderAdapter):
     name = "spider_cloud"
     cost_rank = 24
     capabilities = frozenset({"html", "markdown", "render_js", "premium"})
+    required_configuration = (("api_key", "SPIDER_CLOUD_API_KEY"),)
 
     def __init__(
         self,
@@ -24,8 +25,14 @@ class SpiderCloudProvider(ProviderAdapter):
         self.base_url = base_url.rstrip("/")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing SPIDER_CLOUD_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         markdown_requested = request.output_format == "markdown"
         payload: dict[str, object] = {
             "url": request.url,
@@ -58,7 +65,10 @@ class SpiderCloudProvider(ProviderAdapter):
             target_status = int(
                 first.get("status") or first.get("status_code") or response.status_code
             )
-            failure = classify_failure(target_status, content)
+            failure = classify_provider_failure(
+                target_status,
+                content if response.is_success else response.text,
+            )
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -14,13 +14,20 @@ class ScrapeDoProvider(ProviderAdapter):
     name = "scrape_do"
     cost_rank = 30
     capabilities = frozenset({"html", "country", "render_js", "premium"})
+    required_configuration = (("token", "SCRAPE_DO_TOKEN"),)
 
     def __init__(self, token: str | None = None) -> None:
         self.token = token or os.getenv("SCRAPE_DO_TOKEN")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.token:
-            return ScrapeResult(request.url, self.name, False, error="Missing SCRAPE_DO_TOKEN")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         params: dict[str, str] = {"token": self.token, "url": request.url}
         if request.country:
             params["geoCode"] = request.country.lower()
@@ -34,7 +41,7 @@ class ScrapeDoProvider(ProviderAdapter):
                 timeout=request.timeout_seconds, follow_redirects=True
             ) as client:
                 response = await client.get("https://api.scrape.do/", params=params)
-            failure = classify_failure(response.status_code, response.text)
+            failure = classify_provider_failure(response.status_code, response.text)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

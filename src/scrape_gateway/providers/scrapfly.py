@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -47,6 +47,7 @@ class ScrapflyProvider(ProviderAdapter):
     name = "scrapfly"
     cost_rank = 32
     capabilities = frozenset({"html", "country", "render_js", "premium"})
+    required_configuration = (("api_key", "SCRAPFLY_API_KEY"),)
 
     def __init__(
         self,
@@ -59,8 +60,14 @@ class ScrapflyProvider(ProviderAdapter):
         self.cost_budget = cost_budget
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing SCRAPFLY_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         params: dict[str, str] = {
             "key": self.api_key,
             "url": request.url,
@@ -120,7 +127,10 @@ class ScrapflyProvider(ProviderAdapter):
                         status_code = large_response.status_code
                     large_response.raise_for_status()
                     html = large_response.text
-            failure = classify_failure(status_code, html)
+            failure = classify_provider_failure(
+                status_code,
+                html if response.is_success else response.text,
+            )
             success = response.is_success and failure is None
             latency_ms = int((time.perf_counter() - start) * 1000)
             return ScrapeResult(
@@ -154,7 +164,8 @@ class ScrapflyProvider(ProviderAdapter):
             elif isinstance(exc, httpx.HTTPStatusError):
                 status_code = exc.response.status_code
                 failure_reason = (
-                    classify_failure(status_code, exc.response.text) or FailureReason.PROVIDER_ERROR
+                    classify_provider_failure(status_code, exc.response.text)
+                    or FailureReason.PROVIDER_ERROR
                 )
             else:
                 failure_reason = FailureReason.PROVIDER_ERROR

@@ -183,3 +183,19 @@ def test_string_provider_shorthand():
         cfg = load_config(p)
     assert cfg.providers[0].name == "raw_http"
     assert cfg.providers[1].name == "scrapedrive"
+
+
+def test_routing_memory_evidence_window_is_configurable(tmp_path):
+    config_path = tmp_path / "scrape-gateway.yml"
+    config_path.write_text(
+        """
+memory:
+  path: custom-memory.sqlite
+  evidence_window: 3d
+"""
+    )
+
+    config = load_config(config_path)
+
+    assert config.memory_path == "custom-memory.sqlite"
+    assert config.memory.evidence_window_seconds == 3 * 86400

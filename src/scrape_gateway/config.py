@@ -76,6 +76,15 @@ class RequestConfig:
 
 
 @dataclass(slots=True)
+class MemoryConfig:
+    evidence_window_seconds: int = 7 * 86400
+
+    def __post_init__(self) -> None:
+        if self.evidence_window_seconds <= 0:
+            raise ValueError("memory evidence_window must be positive")
+
+
+@dataclass(slots=True)
 class GatewayConfig:
     providers: list[ProviderConfig] = field(default_factory=list)
     cache: CacheConfig = field(default_factory=CacheConfig)
@@ -83,6 +92,7 @@ class GatewayConfig:
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     request: RequestConfig = field(default_factory=RequestConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
     memory_path: str = ".scrape-gateway/memory.sqlite"
     recipes_root: str = "recipes"
 
@@ -253,6 +263,11 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         )
     )
 
+    memory_raw = raw.get("memory", {})
+    memory = MemoryConfig(
+        evidence_window_seconds=_parse_ttl(memory_raw.get("evidence_window", 7 * 86400))
+    )
+
     recipes_root = Path(raw.get("recipes_root", "recipes"))
     if not recipes_root.is_absolute():
         recipes_root = config_path.parent / recipes_root
@@ -264,6 +279,10 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         telemetry=telemetry,
         evaluation=evaluation,
         request=request,
-        memory_path=raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
+        memory=memory,
+        memory_path=memory_raw.get(
+            "path",
+            raw.get("memory_path", ".scrape-gateway/memory.sqlite"),
+        ),
         recipes_root=str(recipes_root),
     )

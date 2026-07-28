@@ -303,7 +303,10 @@ class ScrapeGateway:
         return cls(
             providers=_providers_from_config(config),
             cache=ArtifactCache(root=config.cache.root, ttl_seconds=config.cache.ttl_seconds),
-            memory=DomainMemory(db_path=config.memory_path),
+            memory=DomainMemory(
+                db_path=config.memory_path,
+                evidence_window_seconds=config.memory.evidence_window_seconds,
+            ),
             strategy=config.strategy,
             telemetry=TelemetryRecorder(
                 root=config.telemetry.root,
@@ -564,7 +567,20 @@ class ScrapeGateway:
                     },
                 )
                 continue
-            if use_memory and self.memory.should_skip_provider(request.url, provider.name):
+            availability_error = provider.availability_error()
+            if availability_error:
+                skipped.append(f"{provider.name}(unavailable)")
+                emit_progress(
+                    id=provider_step_id,
+                    name=f"{provider.name} attempt",
+                    kind="provider",
+                    status="skipped",
+                    outcome="provider_unavailable",
+                    summary=availability_error,
+                    attributes={"provider": provider.name},
+                )
+                continue
+            if use_memory and self.memory.should_skip_provider(request, provider.name):
                 skipped.append(f"{provider.name}(bad history)")
                 emit_progress(
                     id=provider_step_id,
@@ -674,9 +690,6 @@ class ScrapeGateway:
                         )
                         run_ledger.extend(provider_ledger)
                         result.attempt_ledger = list(run_ledger)
-                        self.memory.remember_failure(
-                            request.url, provider.name, validation.block_type
-                        )
                         attempt["result"] = "validation_failed"
                         attempt["block_type"] = validation.block_type
                         attempt["validation_detail"] = validation.detail
@@ -727,14 +740,6 @@ class ScrapeGateway:
                     elapsed_ms=elapsed_ms,
                 )
                 self.cache.save(result, render_js=request.render_js)
-                self.memory.remember_success(
-                    request.url,
-                    provider.name,
-                    request.country,
-                    request.render_js,
-                    request.premium,
-                    tier=result.route,
-                )
                 if result.html:
                     hreflang = _check_hreflang(result.html, request.url, request.country)
                     if hreflang:
@@ -830,7 +835,6 @@ class ScrapeGateway:
                 attempt["screenshot_artifact_path"] = screenshot_artifact_path
             attempts.append(attempt)
             _log(f"  [{provider.name}] {result.status_code or 'ERR'} {elapsed:.1f}s → ✗ {reason}")
-            self.memory.remember_failure(request.url, provider.name)
             last_result = result
             if result.failure_reason == FailureReason.PROXY_ERROR:
                 _log("  [result] proxy configuration failed; not escalating providers")
@@ -919,19 +923,19 @@ class ScrapeGateway:
                 f"  [strategy] preferred provider {self.strategy.provider!r} not found, falling back"
             )
 
-        pref = self.memory.preferred_provider(request.url)
+        pref = self.memory.preferred_provider(request)
         if pref:
             pref_name, pref_tier = pref
-            pref_cost = next((p.cost_rank for p in providers if p.name == pref_name), None)
-            if pref_cost is not None:
-                skipped_names = [p.name for p in providers if p.cost_rank < pref_cost]
-                providers = [p for p in providers if p.cost_rank >= pref_cost]
+            if any(provider.name == pref_name for provider in providers):
                 providers = sorted(providers, key=lambda p: 0 if p.name == pref_name else 1)
                 tier_info = f" ({pref_tier})" if pref_tier else ""
-                skip_info = f", skip {'/'.join(skipped_names)}" if skipped_names else ""
-                _log(f"  [memory] prefer {pref_name}{tier_info}{skip_info}")
+                _log(f"  [memory] prefer {pref_name}{tier_info}")
             if pref_tier:
                 request.metadata["start_tier"] = pref_tier
         else:
             _log("  [memory] no history")
+        probe_names = set(self.memory.providers_due_for_probe(request))
+        if probe_names:
+            providers = sorted(providers, key=lambda provider: provider.name not in probe_names)
+            _log(f"  [memory] half-open probe: {'/'.join(sorted(probe_names))}")
         return providers

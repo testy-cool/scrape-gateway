@@ -4,16 +4,24 @@
 
 ```
 1. Check cache → hit? return cached result, done.
-2. Check domain memory → know a provider that worked before? try it first.
-3. Try providers cheapest-first:
+2. Check recent, exact-profile ledger evidence:
+   a. Move a learned winner to the front without deleting cheaper fallbacks.
+   b. Skip providers with enough recent domain failures.
+   c. Probe a skipped provider once its failure window expires.
+3. Try the resulting provider ladder:
    a. Send request
    b. Validate content (catch Cloudflare, captcha, JS-required pages)
-   c. Success? Remember provider + tier in domain memory. Done.
-   d. Failure? Log it, try next provider.
+   c. Success? Persist the attempt and provider tier in the ledger. Done.
+   d. Failure? Persist the reason and try the next provider.
 4. All failed? Return last failure with diagnostics.
 ```
 
-Domain memory persists in `.scrape-gateway/memory.sqlite`. Cache stores HTML + Markdown artifacts in `.scrape-gateway/artifacts/`. Both survive across sessions.
+Domain memory persists in `.scrape-gateway/memory.sqlite`. Routing matches domain,
+country, `render_js`, premium, mobile, and screenshot exactly and uses a configurable
+seven-day evidence window by default. Missing or invalid credentials and local
+configuration failures are excluded from domain evidence. The older aggregate routing
+tables remain intact for compatibility but are no longer part of routing. Cache stores
+HTML + Markdown artifacts in `.scrape-gateway/artifacts/`. Both survive across sessions.
 
 ## Content validation
 

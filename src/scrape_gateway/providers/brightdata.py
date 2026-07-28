@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -14,6 +14,10 @@ class BrightDataProvider(ProviderAdapter):
     name = "brightdata"
     cost_rank = 50
     capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
+    required_configuration = (
+        ("api_key", "BRIGHTDATA_API_KEY"),
+        ("zone", "BRIGHTDATA_WEB_UNLOCKER_ZONE"),
+    )
 
     def __init__(
         self,
@@ -26,12 +30,13 @@ class BrightDataProvider(ProviderAdapter):
         self.base_url = base_url
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key or not self.zone:
+        if error := self.availability_error():
             return ScrapeResult(
                 request.url,
                 self.name,
                 False,
-                error="Missing BRIGHTDATA_API_KEY or BRIGHTDATA_WEB_UNLOCKER_ZONE",
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
         payload = {"zone": self.zone, "url": request.url, "format": "raw"}
         if request.screenshot:
@@ -49,7 +54,14 @@ class BrightDataProvider(ProviderAdapter):
             is_image = response.headers.get("content-type", "").startswith("image/")
             screenshot = response.content if request.screenshot and is_image else None
             html = None if request.screenshot else response.text
-            failure = None if screenshot else classify_failure(response.status_code, html)
+            failure = (
+                None
+                if screenshot
+                else classify_provider_failure(
+                    response.status_code,
+                    html if response.is_success else response.text,
+                )
+            )
             screenshot_error = request.screenshot and not screenshot
             return ScrapeResult(
                 url=request.url,

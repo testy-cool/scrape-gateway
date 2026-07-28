@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -14,13 +14,20 @@ class ScraperApiProvider(ProviderAdapter):
     name = "scraperapi"
     cost_rank = 40
     capabilities = frozenset({"html", "country", "render_js", "premium", "screenshot"})
+    required_configuration = (("api_key", "SCRAPERAPI_API_KEY"),)
 
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPERAPI_API_KEY")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing SCRAPERAPI_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         params: dict[str, str] = {"api_key": self.api_key, "url": request.url}
         if request.country:
             params["country_code"] = request.country.lower()
@@ -40,7 +47,9 @@ class ScraperApiProvider(ProviderAdapter):
                 "content-type", ""
             ).startswith("image/")
             body = None if is_screenshot else response.text
-            failure = None if is_screenshot else classify_failure(response.status_code, body)
+            failure = (
+                None if is_screenshot else classify_provider_failure(response.status_code, body)
+            )
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

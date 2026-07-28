@@ -12,6 +12,14 @@ _BLOCK_FAILURE_REASONS = {
     "generic_error": FailureReason.PROVIDER_ERROR,
 }
 
+_PROVIDER_AUTH_FAILURE_MARKERS = (
+    "authentication failed",
+    "invalid api key",
+    "invalid bearer token",
+    "invalid credentials",
+    "invalid token",
+)
+
 
 def classify_failure(status_code: int | None, body: str | None = None) -> FailureReason | None:
     if status_code == 407:
@@ -28,6 +36,18 @@ def classify_failure(status_code: int | None, body: str | None = None) -> Failur
     if block_match:
         return _BLOCK_FAILURE_REASONS.get(block_match[0], FailureReason.UNKNOWN)
     return None
+
+
+def classify_provider_failure(
+    status_code: int | None,
+    body: str | None = None,
+) -> FailureReason | None:
+    normalized_body = (body or "").lower()
+    if status_code == 401 or any(
+        marker in normalized_body for marker in _PROVIDER_AUTH_FAILURE_MARKERS
+    ):
+        return FailureReason.PROVIDER_UNAVAILABLE
+    return classify_failure(status_code, body)
 
 
 def classify_exception(exc: Exception) -> FailureReason:

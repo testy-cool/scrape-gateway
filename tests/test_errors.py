@@ -1,4 +1,4 @@
-from scrape_gateway.errors import classify_exception, classify_failure
+from scrape_gateway.errors import classify_exception, classify_failure, classify_provider_failure
 from scrape_gateway.models import FailureReason
 
 
@@ -63,3 +63,18 @@ def test_proxy_exception():
         == FailureReason.PROXY_ERROR
     )
     assert classify_exception(Exception("ProxyAuthRequired")) == FailureReason.PROXY_ERROR
+
+
+def test_provider_authentication_failures_are_not_domain_failures():
+    assert classify_provider_failure(401, "Invalid API key") == FailureReason.PROVIDER_UNAVAILABLE
+    assert (
+        classify_provider_failure(403, "Authentication failed: invalid token")
+        == FailureReason.PROVIDER_UNAVAILABLE
+    )
+    assert (
+        classify_provider_failure(
+            403,
+            "<html><body>Target site access denied with enough content.</body></html>",
+        )
+        == FailureReason.HTTP_403
+    )

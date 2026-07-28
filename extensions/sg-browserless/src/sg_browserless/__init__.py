@@ -7,7 +7,7 @@ import time
 import httpx
 
 from scrape_gateway import FailureReason, ProviderAdapter, ScrapeRequest, ScrapeResult
-from scrape_gateway.errors import classify_failure
+from scrape_gateway.errors import classify_provider_failure
 
 
 def _wait_until(request: ScrapeRequest) -> str:
@@ -20,6 +20,10 @@ class BrowserlessProvider(ProviderAdapter):
     name = "browserless"
     cost_rank = 20
     capabilities = frozenset({"html", "render_js", "screenshot"})
+    required_configuration = (
+        ("base_url", "BROWSERLESS_URL"),
+        ("token", "BROWSERLESS_TOKEN"),
+    )
 
     def __init__(
         self,
@@ -31,13 +35,13 @@ class BrowserlessProvider(ProviderAdapter):
         self.token = token or api_key or os.getenv("BROWSERLESS_TOKEN", "")
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.base_url or not self.token:
+        if error := self.availability_error():
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
                 success=False,
-                error="Missing BROWSERLESS_URL or BROWSERLESS_TOKEN",
-                failure_reason=FailureReason.PROVIDER_ERROR,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
 
         timeout_ms = int(request.timeout_seconds * 1000) + request.extra_wait_ms
@@ -81,7 +85,10 @@ class BrowserlessProvider(ProviderAdapter):
             latency_ms = int((time.perf_counter() - start) * 1000)
             if request.screenshot:
                 html = content_response.text if content_response.is_success else ""
-                content_failure = classify_failure(content_response.status_code, html)
+                content_failure = classify_provider_failure(
+                    content_response.status_code,
+                    content_response.text,
+                )
                 screenshot_success = screenshot_response.is_success
                 success = (
                     content_response.is_success and content_failure is None and screenshot_success
@@ -112,7 +119,10 @@ class BrowserlessProvider(ProviderAdapter):
                 )
 
             html = content_response.text if content_response.is_success else ""
-            failure = classify_failure(content_response.status_code, html)
+            failure = classify_provider_failure(
+                content_response.status_code,
+                content_response.text,
+            )
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

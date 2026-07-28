@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from ..errors import classify_failure
+from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
 from ..provider import ProviderAdapter
 
@@ -14,6 +14,7 @@ class ZenRowsProvider(ProviderAdapter):
     name = "zenrows"
     cost_rank = 34
     capabilities = frozenset({"html", "country", "render_js", "premium"})
+    required_configuration = (("api_key", "ZENROWS_API_KEY"),)
 
     def __init__(
         self,
@@ -24,8 +25,14 @@ class ZenRowsProvider(ProviderAdapter):
         self.base_url = base_url
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        if not self.api_key:
-            return ScrapeResult(request.url, self.name, False, error="Missing ZENROWS_API_KEY")
+        if error := self.availability_error():
+            return ScrapeResult(
+                request.url,
+                self.name,
+                False,
+                error=error,
+                failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
+            )
         params: dict[str, str] = {
             "apikey": self.api_key,
             "url": request.url,
@@ -47,7 +54,7 @@ class ZenRowsProvider(ProviderAdapter):
                 timeout=request.timeout_seconds, follow_redirects=True
             ) as client:
                 response = await client.get(self.base_url, params=params)
-            failure = classify_failure(response.status_code, response.text)
+            failure = classify_provider_failure(response.status_code, response.text)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
