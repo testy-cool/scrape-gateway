@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-07-28
+
+### Added
+- Routing memory now has a configurable evidence window, defaulting to seven days, and sends expired failure streaks through a half-open recovery probe before the current learned winner.
+- Provider adapters expose configuration availability, and missing or invalid credentials use a distinct `provider_unavailable` failure reason.
+
+### Changed
+- Provider preference and skip decisions derive from recent attempt-ledger rows for the exact domain, country, JavaScript, premium, mobile, and screenshot profile instead of monotonic domain counters.
+- A learned winner moves to the front of the provider ladder without removing cheaper fallbacks.
+- Known-unavailable providers are skipped before an attempt, and provider availability or proxy configuration failures do not count as domain routing evidence.
+- Legacy `domain_provider_stats` and `domain_routes` data remains intact for compatibility and inspection, but the router no longer reads or updates those aggregate tables.
+
 ## [0.18.0] - 2026-07-28
 
 ### Added
