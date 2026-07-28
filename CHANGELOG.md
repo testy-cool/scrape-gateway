@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.6] - 2026-07-28
+
+### Fixed
+- Block detection uses one shared signature source and length-gates ambiguous JavaScript, Akamai, login, consent, and generic-error phrases, preventing content-rich pages from being discarded while preserving high-precision challenge detection.
+
 ## [0.17.5] - 2026-07-28
 
 ### Fixed
