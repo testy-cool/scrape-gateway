@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from .models import FailureReason
+from .validators import find_block_signature
+
+
+_BLOCK_FAILURE_REASONS = {
+    "cloudflare": FailureReason.CLOUDFLARE,
+    "captcha": FailureReason.CAPTCHA,
+    "js_shell": FailureReason.JS_REQUIRED,
+    "login_wall": FailureReason.LOGIN_REQUIRED,
+    "generic_error": FailureReason.PROVIDER_ERROR,
+}
 
 
 def classify_failure(status_code: int | None, body: str | None = None) -> FailureReason | None:
-    text = (body or "").lower()[:50_000]
     if status_code == 407:
         return FailureReason.PROXY_ERROR
     if status_code == 403:
@@ -15,14 +24,9 @@ def classify_failure(status_code: int | None, body: str | None = None) -> Failur
         return FailureReason.HTTP_5XX
     if not body or len(body.strip()) < 80:
         return FailureReason.EMPTY_CONTENT
-    if "captcha" in text or "g-recaptcha" in text or "hcaptcha" in text:
-        return FailureReason.CAPTCHA
-    if "cloudflare" in text or "cf-chl" in text or "checking your browser" in text:
-        return FailureReason.CLOUDFLARE
-    if "enable javascript" in text or "requires javascript" in text:
-        return FailureReason.JS_REQUIRED
-    if "sign in" in text and "password" in text and len(text) < 8000:
-        return FailureReason.LOGIN_REQUIRED
+    block_match = find_block_signature(body)
+    if block_match:
+        return _BLOCK_FAILURE_REASONS.get(block_match[0], FailureReason.UNKNOWN)
     return None
 
 

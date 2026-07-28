@@ -36,6 +36,7 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
     ],
     "login_wall": [
         "sign in to continue",
+        "sign in with your password",
         "log in to continue",
         "login required",
         "authentication required",
@@ -49,8 +50,16 @@ BLOCK_SIGNATURES: dict[str, list[str]] = {
     ],
 }
 
-CONSENT_WALL_MAX_CONTENT_CHARS = 8_192
-GENERIC_ERROR_MAX_CONTENT_CHARS = 8_192
+BLOCK_SIGNATURE_MAX_CONTENT_CHARS = 8_192
+SIZE_GATED_BLOCK_SIGNATURES = frozenset(
+    {
+        "akamai",
+        "consent_wall",
+        "generic_error",
+        "js_shell",
+        "login_wall",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -73,6 +82,20 @@ def _snippet_around(text: str, pattern: str, limit: int = 600) -> str | None:
     end = min(len(text), idx + len(pattern) + radius)
     snippet = re.sub(r"\s+", " ", text[start:end]).strip()
     return snippet[:limit]
+
+
+def find_block_signature(html: str | None) -> tuple[str, str] | None:
+    text = (html or "").lower()[:100_000]
+    for sig_type, patterns in BLOCK_SIGNATURES.items():
+        if (
+            sig_type in SIZE_GATED_BLOCK_SIGNATURES
+            and len(text) >= BLOCK_SIGNATURE_MAX_CONTENT_CHARS
+        ):
+            continue
+        for pattern in patterns:
+            if pattern in text:
+                return sig_type, pattern
+    return None
 
 
 def validate_content(
@@ -101,25 +124,21 @@ def validate_content(
         )
 
     checks_run.append("block_signatures")
-    for sig_type, patterns in BLOCK_SIGNATURES.items():
-        if sig_type == "consent_wall" and len(text) >= CONSENT_WALL_MAX_CONTENT_CHARS:
-            continue
-        if sig_type == "generic_error" and len(text) >= GENERIC_ERROR_MAX_CONTENT_CHARS:
-            continue
-        for pattern in patterns:
-            if pattern in text:
-                checks_failed.append("block_signatures")
-                block_type = sig_type
-                detail = f"Matched {sig_type} signature: '{pattern}'"
-                return ValidationResult(
-                    passed=False,
-                    checks_run=checks_run,
-                    checks_failed=checks_failed,
-                    block_type=block_type,
-                    detail=detail,
-                    matched_pattern=pattern,
-                    snippet=_snippet_around(text, pattern),
-                )
+    block_match = find_block_signature(text)
+    if block_match:
+        sig_type, pattern = block_match
+        checks_failed.append("block_signatures")
+        block_type = sig_type
+        detail = f"Matched {sig_type} signature: '{pattern}'"
+        return ValidationResult(
+            passed=False,
+            checks_run=checks_run,
+            checks_failed=checks_failed,
+            block_type=block_type,
+            detail=detail,
+            matched_pattern=pattern,
+            snippet=_snippet_around(text, pattern),
+        )
 
     if must_not_contain:
         checks_run.append("must_not_contain")

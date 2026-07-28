@@ -1,0 +1,54 @@
+[
+  {
+    "id": "hacker-news-cloudflare-email-decode",
+    "file": "hacker_news_cloudflare_email_decode.html",
+    "content_chars": 35493,
+    "validator_passed": true,
+    "block_type": null
+  },
+  {
+    "id": "long-noscript-enable-javascript",
+    "file": "long_noscript_enable_javascript.html",
+    "content_chars": 12000,
+    "validator_passed": true,
+    "block_type": null
+  },
+  {
+    "id": "long-captcha-prose",
+    "file": "long_captcha_prose.html",
+    "content_chars": 12000,
+    "validator_passed": true,
+    "block_type": null
+  },
+  {
+    "id": "long-akamai-reference-prose",
+    "file": "long_akamai_reference_prose.html",
+    "content_chars": 12000,
+    "validator_passed": true,
+    "block_type": null
+  },
+  {
+    "id": "cloudflare-interstitial",
+    "file": "cloudflare_interstitial.html",
+    "validator_passed": false,
+    "block_type": "cloudflare"
+  },
+  {
+    "id": "cloudflare-turnstile",
+    "file": "cloudflare_turnstile.html",
+    "validator_passed": false,
+    "block_type": "cloudflare"
+  },
+  {
+    "id": "recaptcha-wall",
+    "file": "recaptcha_wall.html",
+    "validator_passed": false,
+    "block_type": "captcha"
+  },
+  {
+    "id": "akamai-access-denied",
+    "file": "akamai_access_denied.html",
+    "validator_passed": false,
+    "block_type": "akamai"
+  }
+]
