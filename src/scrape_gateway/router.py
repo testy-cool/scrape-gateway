@@ -773,6 +773,7 @@ class ScrapeGateway:
                 report_path = self._write_report_with_progress(report, result)
                 if report_path:
                     result.metadata["telemetry_report"] = str(report_path)
+                self.memory.record_attempt_ledger(run_id, request, result.attempt_ledger)
                 _log_event(
                     "scrape_done",
                     url=request.url,
@@ -869,6 +870,7 @@ class ScrapeGateway:
         report_path = self._write_report_with_progress(report, final)
         if report_path:
             final.metadata["telemetry_report"] = str(report_path)
+        self.memory.record_attempt_ledger(run_id, request, final.attempt_ledger)
         _log_event(
             "scrape_done",
             url=request.url,

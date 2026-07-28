@@ -4,8 +4,12 @@ import hashlib
 import json
 import re
 import sqlite3
+from collections.abc import Iterable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+
+from .models import AttemptLedgerEntry, ScrapeRequest
 
 
 class DomainMemory:
@@ -45,6 +49,38 @@ class DomainMemory:
             );
             create index if not exists idx_page_history_url on page_history(url);
 
+            create table if not exists attempt_ledger (
+              id integer primary key autoincrement,
+              run_id text not null check (length(run_id) > 0),
+              attempt_index integer not null check (attempt_index > 0),
+              recorded_at text not null,
+              domain text not null check (length(domain) > 0),
+              url text not null check (length(url) > 0),
+              country text,
+              render_js integer not null check (render_js in (0, 1)),
+              premium integer not null check (premium in (0, 1)),
+              mobile integer not null check (mobile in (0, 1)),
+              screenshot integer not null check (screenshot in (0, 1)),
+              provider text not null check (length(provider) > 0),
+              route text,
+              cost_units real not null check (cost_units >= 0),
+              cost_provenance text not null check (cost_provenance in ('exact', 'estimated')),
+              success integer not null check (success in (0, 1)),
+              status_code integer check (status_code between 100 and 599),
+              failure_reason text,
+              block_type text,
+              latency_ms integer check (latency_ms >= 0),
+              unique (run_id, attempt_index)
+            );
+            create index if not exists idx_attempt_ledger_domain_recorded_provider
+              on attempt_ledger(domain, recorded_at, provider);
+            create index if not exists idx_attempt_ledger_success_recorded
+              on attempt_ledger(success, recorded_at);
+            create index if not exists idx_attempt_ledger_profile_provider
+              on attempt_ledger(
+                domain, country, render_js, premium, mobile, screenshot, provider
+              );
+
             create table if not exists extraction_patterns (
               domain text primary key,
               selector text not null,
@@ -69,6 +105,118 @@ class DomainMemory:
     @staticmethod
     def domain_for_url(url: str) -> str:
         return urlparse(url).netloc.lower().removeprefix("www.")
+
+    @staticmethod
+    def _utc_timestamp(value: datetime | None = None) -> str:
+        timestamp = value or datetime.now(timezone.utc)
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("recorded timestamps must include a timezone")
+        return (
+            timestamp.astimezone(timezone.utc)
+            .isoformat(timespec="microseconds")
+            .replace("+00:00", "Z")
+        )
+
+    def record_attempt_ledger(
+        self,
+        run_id: str,
+        request: ScrapeRequest,
+        entries: Iterable[AttemptLedgerEntry],
+        *,
+        recorded_at: datetime | None = None,
+    ) -> int:
+        timestamp = self._utc_timestamp(recorded_at)
+        domain = self.domain_for_url(request.url)
+        rows = [
+            (
+                run_id,
+                attempt_index,
+                timestamp,
+                domain,
+                request.url,
+                request.country,
+                int(request.render_js),
+                int(request.premium),
+                int(request.mobile),
+                int(request.screenshot),
+                entry.provider,
+                entry.route,
+                float(entry.cost_units),
+                entry.cost_provenance,
+                int(entry.success),
+                entry.status_code,
+                entry.failure_reason.value if entry.failure_reason else None,
+                entry.block_type,
+                entry.latency_ms,
+            )
+            for attempt_index, entry in enumerate(entries, start=1)
+        ]
+        if not rows:
+            return 0
+        with self.conn:
+            self.conn.executemany(
+                """
+                insert into attempt_ledger(
+                  run_id, attempt_index, recorded_at, domain, url, country,
+                  render_js, premium, mobile, screenshot, provider, route,
+                  cost_units, cost_provenance, success, status_code,
+                  failure_reason, block_type, latency_ms
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def attempt_cost_summary(
+        self,
+        *,
+        days: int = 30,
+        domain: str | None = None,
+        as_of: datetime | None = None,
+    ) -> list[dict]:
+        if days < 0:
+            raise ValueError("days must be non-negative")
+        window_end = as_of or datetime.now(timezone.utc)
+        if window_end.tzinfo is None or window_end.utcoffset() is None:
+            raise ValueError("as_of must include a timezone")
+        window_end = window_end.astimezone(timezone.utc)
+        window_start = window_end - timedelta(days=days)
+        params: list[object] = [
+            self._utc_timestamp(window_start),
+            self._utc_timestamp(window_end),
+        ]
+        domain_clause = ""
+        if domain:
+            normalized_domain = (
+                self.domain_for_url(domain)
+                if "://" in domain
+                else domain.lower().removeprefix("www.")
+            )
+            domain_clause = "and domain = ?"
+            params.append(normalized_domain)
+        rows = self.conn.execute(
+            f"""
+            select domain, provider,
+                   count(*) as attempt_count,
+                   sum(success) as successful_attempt_count,
+                   sum(case when success = 0 then 1 else 0 end) as failed_attempt_count,
+                   coalesce(
+                     sum(case when success = 1 then cost_units end), 0.0
+                   ) as successful_attempt_cost_units,
+                   coalesce(
+                     sum(case when success = 0 then cost_units end), 0.0
+                   ) as failed_attempt_cost_units,
+                   sum(cost_units) as total_cost_units
+            from attempt_ledger
+            where recorded_at >= ? and recorded_at <= ?
+              {domain_clause}
+            group by domain, provider
+            order by domain, provider
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def remember_success(
         self,

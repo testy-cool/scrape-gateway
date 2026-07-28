@@ -79,11 +79,11 @@ async def test_routes_to_first_success(tmp_dir):
     assert result.provider == "success"
 
 
-async def test_router_combines_provider_fallback_ledgers_without_double_counting(tmp_dir):
+async def test_router_persists_combined_fallback_ledger_with_run_and_request_profile(tmp_path):
     class EstimatedFailure(ProviderAdapter):
         name = "estimated_failure"
         cost_rank = 1
-        capabilities = frozenset({"html"})
+        capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
 
         async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
             return ScrapeResult(
@@ -100,7 +100,7 @@ async def test_router_combines_provider_fallback_ledgers_without_double_counting
     class RetryingSuccess(ProviderAdapter):
         name = "retrying_success"
         cost_rank = 2
-        capabilities = frozenset({"html"})
+        capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
 
         async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
             return ScrapeResult(
@@ -141,15 +141,24 @@ async def test_router_combines_provider_fallback_ledgers_without_double_counting
                 ],
             )
 
+    memory = DomainMemory(db_path=tmp_path / "mem.sqlite")
     gw = ScrapeGateway(
         providers=[EstimatedFailure(), RetryingSuccess()],
-        cache=ArtifactCache(root=tmp_dir / "cache"),
-        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
-        telemetry=TelemetryRecorder(root=tmp_dir / "runs"),
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=memory,
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
     )
 
     result = await gw.scrape(
-        ScrapeRequest("https://example.com"),
+        ScrapeRequest(
+            "https://www.example.com/products/7?ref=ledger",
+            country="RO",
+            render_js=True,
+            premium=True,
+            mobile=True,
+            screenshot=True,
+            metadata={"run_id": "fallback_run_123"},
+        ),
         use_cache=False,
         use_memory=False,
     )
@@ -171,9 +180,80 @@ async def test_router_combines_provider_fallback_ledgers_without_double_counting
     assert len(report["attempts"]) == 2
     assert report["run_cost_units"] == 8
     assert [entry["cost_units"] for entry in report["ledger"]] == [2, 1, 5]
+    rows = memory.conn.execute(
+        """
+        select run_id, attempt_index, domain, url, country, render_js, premium,
+               mobile, screenshot, provider, route, cost_units, cost_provenance,
+               success, status_code, failure_reason, block_type, latency_ms
+        from attempt_ledger
+        order by attempt_index
+        """
+    ).fetchall()
+    assert [dict(row) for row in rows] == [
+        {
+            "run_id": "fallback_run_123",
+            "attempt_index": 1,
+            "domain": "example.com",
+            "url": "https://www.example.com/products/7?ref=ledger",
+            "country": "RO",
+            "render_js": 1,
+            "premium": 1,
+            "mobile": 1,
+            "screenshot": 1,
+            "provider": "estimated_failure",
+            "route": "estimated_failure",
+            "cost_units": 2.0,
+            "cost_provenance": "estimated",
+            "success": 0,
+            "status_code": 403,
+            "failure_reason": "http_403",
+            "block_type": None,
+            "latency_ms": 10,
+        },
+        {
+            "run_id": "fallback_run_123",
+            "attempt_index": 2,
+            "domain": "example.com",
+            "url": "https://www.example.com/products/7?ref=ledger",
+            "country": "RO",
+            "render_js": 1,
+            "premium": 1,
+            "mobile": 1,
+            "screenshot": 1,
+            "provider": "retrying_success",
+            "route": "retrying_success:standard",
+            "cost_units": 1.0,
+            "cost_provenance": "estimated",
+            "success": 0,
+            "status_code": 403,
+            "failure_reason": "http_403",
+            "block_type": None,
+            "latency_ms": 10,
+        },
+        {
+            "run_id": "fallback_run_123",
+            "attempt_index": 3,
+            "domain": "example.com",
+            "url": "https://www.example.com/products/7?ref=ledger",
+            "country": "RO",
+            "render_js": 1,
+            "premium": 1,
+            "mobile": 1,
+            "screenshot": 1,
+            "provider": "retrying_success",
+            "route": "retrying_success:advanced",
+            "cost_units": 5.0,
+            "cost_provenance": "exact",
+            "success": 1,
+            "status_code": 200,
+            "failure_reason": None,
+            "block_type": None,
+            "latency_ms": 20,
+        },
+    ]
 
 
-async def test_validation_rejection_marks_only_usable_final_sub_attempt_failed(tmp_dir):
+async def test_validation_rejection_persists_all_failed_sub_attempts(tmp_path):
     class InternallyRetriedBlock(ProviderAdapter):
         name = "internally_retried_block"
         capabilities = frozenset({"html"})
@@ -216,10 +296,11 @@ async def test_validation_rejection_marks_only_usable_final_sub_attempt_failed(t
                 ],
             )
 
+    memory = DomainMemory(db_path=tmp_path / "mem.sqlite")
     result = await ScrapeGateway(
         providers=[InternallyRetriedBlock()],
-        cache=ArtifactCache(root=tmp_dir / "cache"),
-        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=memory,
     ).scrape(
         ScrapeRequest("https://example.com"),
         use_cache=False,
@@ -234,6 +315,27 @@ async def test_validation_rejection_marks_only_usable_final_sub_attempt_failed(t
     assert result.attempt_ledger[1].success is False
     assert result.attempt_ledger[1].failure_reason is None
     assert result.attempt_ledger[1].block_type == "cloudflare"
+    persisted = memory.conn.execute(
+        """
+        select attempt_index, success, failure_reason, block_type
+        from attempt_ledger
+        order by attempt_index
+        """
+    ).fetchall()
+    assert [dict(row) for row in persisted] == [
+        {
+            "attempt_index": 1,
+            "success": 0,
+            "failure_reason": "http_403",
+            "block_type": None,
+        },
+        {
+            "attempt_index": 2,
+            "success": 0,
+            "failure_reason": None,
+            "block_type": "cloudflare",
+        },
+    ]
 
 
 async def test_reports_provider_validation_evaluation_and_persistence_progress(tmp_dir):
@@ -393,14 +495,16 @@ async def test_cache_hit(tmp_dir):
             html="<html>cached</html>",
         )
     )
+    memory = DomainMemory(db_path=tmp_dir / "mem.sqlite")
     gw = ScrapeGateway(
         providers=[FailProvider()],
         cache=cache,
-        memory=DomainMemory(db_path=tmp_dir / "mem.sqlite"),
+        memory=memory,
     )
     result = await gw.scrape(ScrapeRequest("https://cached.com"))
     assert result.success
     assert result.provider == "cache"
+    assert memory.conn.execute("select count(*) from attempt_ledger").fetchone()[0] == 0
 
 
 async def test_cache_hit_restores_requested_screenshot(tmp_dir):
