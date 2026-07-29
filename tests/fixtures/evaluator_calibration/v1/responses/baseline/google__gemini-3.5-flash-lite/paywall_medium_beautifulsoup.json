@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "paywall_medium_beautifulsoup",
+  "classification": "paywall",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:22.576846+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 returned successfully without bot block or captcha."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The captured page is a member-only story and cuts off the main tutorial/code content after the introduction, marked with dashed divider lines."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown text is successfully extracted from the initial part of the page."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was supplied."
+      }
+    },
+    "page_type": "paywall_article",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "paywall",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The article is labeled 'Member-only story' and cuts off mid-page after introductory text."
+      },
+      {
+        "code": "truncated_content",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Main body code and explanations are missing due to the paywall limitation."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Use an authenticated session or subscription proxy capable of bypassing Medium's member paywall."
+    ],
+    "critique": "The request asks to capture a complete member-only article including all code and explanations. Although the HTTP response is 200 and the page loads, Medium restricts full content access for unauthenticated requests, resulting in a truncated view that misses the core article body, code, and explanations."
+  },
+  "generation_id": "gen-1785287420-8Kz3iC9C4NDgOmvOY5Iw",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 4578,
+    "completion_tokens": 442,
+    "total_tokens": 5020,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0024784,
+      "upstream_inference_prompt_cost": 0.0013734,
+      "upstream_inference_completions_cost": 0.001105
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 1918,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287420-8Kz3iC9C4NDgOmvOY5Iw",
+    "object": "chat.completion",
+    "created": 1785287420,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19d4ZjZjDF8Kv2f4KBOnve8G+rJP2yFg0DLKQ/Ho70xUwjWQfRiz6YYqMHD1l4=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

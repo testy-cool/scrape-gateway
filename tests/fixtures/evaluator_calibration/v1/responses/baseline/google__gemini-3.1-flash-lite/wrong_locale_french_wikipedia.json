@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "wrong_locale_french_wikipedia",
+  "classification": "wrong_locale",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:50:09.661572+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "The provider returned a captcha challenge (hcaptcha) instead of the requested article content."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The captured content is in French, whereas the caller requested the article in Romanian."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "The content is blocked by a captcha, preventing reliable extraction of the main article text."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided."
+      }
+    },
+    "page_type": "captcha_challenge",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "captcha",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Matched captcha signature: 'hcaptcha'"
+      },
+      {
+        "code": "wrong_locale",
+        "severity": "medium",
+        "source": "markdown",
+        "evidence": "The page content is in French (fr.wikipedia.org) instead of the requested Romanian language."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Use a residential proxy provider to bypass anti-bot measures.",
+      "Configure the request to target the Romanian version of the Wikipedia article (ro.wikipedia.org) instead of the French version."
+    ],
+    "critique": "The scrape failed because the target site served a captcha challenge, which is a common anti-scraping measure. Additionally, the caller's goal of obtaining the article in Romanian cannot be satisfied by the current URL, which points to the French Wikipedia. The request should be updated to target the Romanian Wikipedia domain (ro.wikipedia.org) and the provider should be rotated to one capable of handling bot challenges."
+  },
+  "generation_id": "gen-1785261006-y53l2G77PRdnCBNf84sA",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 11429,
+    "completion_tokens": 475,
+    "total_tokens": 11904,
+    "cost": 0.00356975,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00356975,
+      "upstream_inference_prompt_cost": 0.00285725,
+      "upstream_inference_completions_cost": 0.0007125
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3889,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261006-y53l2G77PRdnCBNf84sA",
+    "object": "chat.completion",
+    "created": 1785261006,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+oUNGwjw2q9UzYvT0ECktME0qtNgHjvdoVCVLJEuiejc0jbvashpI3+KO4tAQ=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "captcha",
+    "validation_detail": "Matched captcha signature: 'hcaptcha'",
+    "classified_failure": "captcha"
+  }
+}

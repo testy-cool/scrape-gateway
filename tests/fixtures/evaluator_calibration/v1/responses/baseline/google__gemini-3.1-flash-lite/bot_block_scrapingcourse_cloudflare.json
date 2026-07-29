@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "bot_block_scrapingcourse_cloudflare",
+  "classification": "bot_block",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:57.399554+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "HTTP 403 status code and Cloudflare challenge signature detected."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The page is blocked by a Cloudflare interstitial, preventing access to the destination content."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Only the Cloudflare challenge text is present; no target content is available."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot provided."
+      }
+    },
+    "page_type": "Cloudflare challenge page",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "bot_block",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "HTTP 403 status and 'Enable JavaScript and cookies to continue' message."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Switch to a browser-based rendering provider to handle JavaScript-based challenges."
+    ],
+    "critique": "The request used a raw HTTP provider which cannot execute the JavaScript required to solve the Cloudflare challenge. The evidence confirms a 403 block with a clear challenge message, making the page unusable for the stated goal."
+  },
+  "generation_id": "gen-1785260994-DvHLno7B3B5AVmCSgMQS",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2191,
+    "completion_tokens": 362,
+    "total_tokens": 2553,
+    "cost": 0.00109075,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00109075,
+      "upstream_inference_prompt_cost": 0.00054775,
+      "upstream_inference_completions_cost": 0.000543
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2824,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260994-DvHLno7B3B5AVmCSgMQS",
+    "object": "chat.completion",
+    "created": 1785260994,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19AKIm/0G6mdXVAJram+XHbTiz0LMotM3hyV8HPZr5apX9zpYlGIAvhwiOzT3s=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "cloudflare",
+    "validation_detail": "Matched cloudflare signature: 'enable javascript and cookies to continue'",
+    "classified_failure": "http_403"
+  }
+}

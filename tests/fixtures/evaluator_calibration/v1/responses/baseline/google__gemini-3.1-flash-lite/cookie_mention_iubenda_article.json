@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "cookie_mention_iubenda_article",
+  "classification": "content_cookie_mention",
+  "split": "train",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:28.431447+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "The page returned a 200 OK status and the content is fully accessible."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The captured content contains the full article explaining cookie preferences, including definitions and methods for changing them."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "The main content is clearly structured in Markdown and easily extractable."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided."
+      }
+    },
+    "page_type": "Blog article",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The scrape successfully retrieved the requested article. The content is complete, readable, and directly addresses the user's goal of understanding cookie preferences."
+  },
+  "generation_id": "gen-1785260965-mptMKPY3sZ5lW1sEKxIH",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 6325,
+    "completion_tokens": 265,
+    "total_tokens": 6590,
+    "cost": 0.00197875,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00197875,
+      "upstream_inference_prompt_cost": 0.00158125,
+      "upstream_inference_completions_cost": 0.0003975
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2870,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260965-mptMKPY3sZ5lW1sEKxIH",
+    "object": "chat.completion",
+    "created": 1785260965,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a182IfNIxVPfCK+SHebaCqCQ7GRMgAFXgFQT7A0qdtfTvdEcz3vj/akl5kK8X/A=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

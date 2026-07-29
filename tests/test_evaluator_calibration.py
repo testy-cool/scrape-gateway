@@ -137,6 +137,23 @@ def test_metrics_report_binary_structured_review_cost_and_latency() -> None:
     assert {item["id"] for item in metrics["disagreements"]} == {"fn", "fp"}
 
 
+def test_metrics_use_byok_upstream_inference_cost() -> None:
+    from scrape_gateway.calibration import compute_metrics
+
+    response = _response("byok", "pass", cost=0)
+    response["usage"].update(
+        {
+            "is_byok": True,
+            "cost_details": {"upstream_inference_cost": 0.0041216},
+        }
+    )
+
+    metrics = compute_metrics([_case("byok", "pass")], {"byok": response})
+
+    assert metrics["cost"]["total"] == pytest.approx(0.0041216)
+    assert metrics["cost"]["per_judgment"] == pytest.approx(0.0041216)
+
+
 def test_deterministic_comparison_identifies_winner_and_category_recommendation() -> None:
     from scrape_gateway.calibration import compare_deterministic
 

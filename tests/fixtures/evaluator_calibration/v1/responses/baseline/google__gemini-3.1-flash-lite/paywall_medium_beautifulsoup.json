@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "paywall_medium_beautifulsoup",
+  "classification": "paywall",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:50:03.738717+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "The page loaded successfully with a 200 status code."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The article is marked as a 'Member-only story' and the content is truncated after the introduction, missing the core technical explanations and code examples."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "The available text is clearly formatted and extractable."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot provided."
+      }
+    },
+    "page_type": "Medium member-only article",
+    "root_cause": "incomplete_content",
+    "issues": [
+      {
+        "code": "paywall",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The article is identified as a 'Member-only story' and the content is truncated."
+      }
+    ],
+    "recommended_action": "manual_review",
+    "improvement_opportunities": [
+      "The content is behind a Medium paywall; consider if the goal can be met via alternative sources or if authentication is required.",
+      "Verify if the target site allows access to member-only content via specific headers or cookies."
+    ],
+    "critique": "The scrape successfully accessed the page, but the content is incomplete because it is a 'Member-only story' on Medium. The provided markdown ends abruptly after the introduction, failing to capture the requested code and full explanation. Since this is a paywall/membership restriction, the current scraping approach cannot retrieve the full article."
+  },
+  "generation_id": "gen-1785261000-x2pipCILnptX1pMfywQ0",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 4578,
+    "completion_tokens": 421,
+    "total_tokens": 4999,
+    "cost": 0.001776,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001776,
+      "upstream_inference_prompt_cost": 0.0011445,
+      "upstream_inference_completions_cost": 0.0006315
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3562,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261000-x2pipCILnptX1pMfywQ0",
+    "object": "chat.completion",
+    "created": 1785261000,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19nsz81gFbMYeRS7C9fBNpj7q3JQBKSCciK81vFuLhjv/Rt8ku8hW+J33/Zu6E=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

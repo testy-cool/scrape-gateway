@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "login_wall_figma_files",
+  "classification": "login_wall",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:22.924782+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP 200 returned with content length 232953 characters"
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Markdown only contains 'Login | Figma' and no authenticated file list or project names"
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Extracted markdown is only 13 characters, indicating an unrendered SPA login shell or authentication requirement"
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured"
+      }
+    },
+    "page_type": "Login Page / SPA Shell",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "login_wall",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Markdown only displays 'Login | Figma' instead of the requested file list"
+      },
+      {
+        "code": "rendering_incomplete",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Evaluated markdown is only 13 characters for a complex JS-heavy web app"
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Enable JavaScript rendering to execute client-side routing and check for existing session state",
+      "Provide session cookies or authentication tokens to bypass the login wall for protected routes"
+    ],
+    "critique": "The requested URL requires authentication and is a single-page application (SPA). Using raw_http without JavaScript rendering or session cookies yielded only a minimal login title ('Login | Figma') instead of the authenticated file list. JavaScript rendering needs to be enabled to evaluate whether a valid session can access the content."
+  },
+  "generation_id": "gen-1785287419-nRrCWd8AOfZcxYTv0UnF",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2144,
+    "completion_tokens": 465,
+    "total_tokens": 2609,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0018057,
+      "upstream_inference_prompt_cost": 0.0006432,
+      "upstream_inference_completions_cost": 0.0011625
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3587,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287419-nRrCWd8AOfZcxYTv0UnF",
+    "object": "chat.completion",
+    "created": 1785287419,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a18Q5z5MkvxYR43MwBCMLQSDKE9hAyl7ySZddXrDzO+oS51AofPRvj9PtKQf4hc=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

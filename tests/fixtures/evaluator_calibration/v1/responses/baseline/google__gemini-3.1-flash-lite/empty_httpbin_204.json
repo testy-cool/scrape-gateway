@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "empty_httpbin_204",
+  "classification": "empty_response",
+  "split": "train",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:32.453387+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "HTTP status 204 indicates No Content."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The response body is empty, failing the goal of capturing main content."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "No content available to extract."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot provided."
+      }
+    },
+    "page_type": "empty_response",
+    "root_cause": "incomplete_content",
+    "issues": [
+      {
+        "code": "blank_page",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "HTTP 204 No Content returned."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Verify if the target URL is expected to return content or if a different endpoint is required."
+    ],
+    "critique": "The requested URL https://httpbin.org/status/204 explicitly returns an HTTP 204 No Content status code. As a result, there is no body content to scrape, making it impossible to satisfy the caller's goal of capturing main content."
+  },
+  "generation_id": "gen-1785260969-3Rj11mLpEWXN8w4Rld6I",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2170,
+    "completion_tokens": 351,
+    "total_tokens": 2521,
+    "cost": 0.001069,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001069,
+      "upstream_inference_prompt_cost": 0.0005425,
+      "upstream_inference_completions_cost": 0.0005265
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3169,
+  "input_modalities": [],
+  "response_metadata": {
+    "id": "gen-1785260969-3Rj11mLpEWXN8w4Rld6I",
+    "object": "chat.completion",
+    "created": 1785260969,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/GZBEKu8tfQ5utaI0v0DUizdQs55fP3oESkG1X4u//yyYMzejeNPVO/BPCbVA=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "empty_content",
+    "validation_detail": "Content too short: 0 < 80",
+    "classified_failure": "empty_content"
+  }
+}

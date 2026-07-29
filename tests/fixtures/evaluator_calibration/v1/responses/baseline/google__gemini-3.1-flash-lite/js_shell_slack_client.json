@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "js_shell_slack_client",
+  "classification": "js_shell",
+  "split": "train",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:29.765631+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "The page displays a 'Please change browsers to use Slack' error message, indicating the request was blocked due to the environment."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The captured content is a generic Slack marketing/error page, not the requested workspace channel list or messages."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "The required workspace data is entirely absent from the response."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided."
+      }
+    },
+    "page_type": "Browser incompatibility error page",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "bot_block",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The page explicitly states 'We are no longer supporting this browser' and redirects to marketing links."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Use a browser-based provider that supports modern JavaScript and user-agent spoofing to bypass browser compatibility checks.",
+      "Implement session management to handle authentication for the Slack workspace."
+    ],
+    "critique": "The request to access a private Slack workspace via raw HTTP failed because the server detected an unsupported environment and returned a generic error page instead of the application content. The goal of capturing workspace data cannot be achieved without a fully rendered, authenticated browser session."
+  },
+  "generation_id": "gen-1785260966-VKFLMqxouHfsA2uxT072",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2806,
+    "completion_tokens": 402,
+    "total_tokens": 3208,
+    "cost": 0.0013045,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0013045,
+      "upstream_inference_prompt_cost": 0.0007015,
+      "upstream_inference_completions_cost": 0.000603
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3144,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260966-VKFLMqxouHfsA2uxT072",
+    "object": "chat.completion",
+    "created": 1785260966,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+P7I4NhERQwbuME6xpdpb0YCQ3O3HXLracjnm7OiGGOI6ZDJw1n2LbWdjXJu0=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

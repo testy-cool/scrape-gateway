@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "js_shell_quotes_javascript",
+  "classification": "js_shell",
+  "split": "train",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:31.417545+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP 200 status code returned."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The page content is missing all quotes, authors, and tags; only navigation and footer elements are present."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "The main content area is empty because the page requires JavaScript rendering to populate the quotes."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot provided."
+      }
+    },
+    "page_type": "JavaScript-rendered content page",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "missing_main_content",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The markdown output contains only the header, login link, and footer; no quote data is present."
+      },
+      {
+        "code": "loading_state",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "The requested URL is a JavaScript-dependent page, but the provider used raw_http without rendering."
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Switch to a rendering provider to execute the JavaScript required to load the quotes."
+    ],
+    "critique": "The target URL (quotes.toscrape.com/js/) is specifically designed to test JavaScript rendering. The raw_http provider returned the base HTML shell but failed to execute the scripts necessary to fetch and display the quotes, authors, and tags. Consequently, the goal of capturing the content cannot be met with the current evidence."
+  },
+  "generation_id": "gen-1785260968-H3rJrZtJb9u8vKKNRJi0",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2216,
+    "completion_tokens": 452,
+    "total_tokens": 2668,
+    "cost": 0.001232,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001232,
+      "upstream_inference_prompt_cost": 0.000554,
+      "upstream_inference_completions_cost": 0.000678
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2983,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260968-H3rJrZtJb9u8vKKNRJi0",
+    "object": "chat.completion",
+    "created": 1785260968,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/Ou6Ikb+gbFG/xIzhtV/l700BL4eU3UQjWPwPxglkgj40YyPClWNITJ2imLxE=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

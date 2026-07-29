@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "cookie_mention_iubenda_article",
+  "classification": "content_cookie_mention",
+  "split": "train",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:51:29.169648+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 with complete HTML and markdown successfully captured."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The markdown clearly contains the article explaining cookie preferences, definition, categories, and methods to change them."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Content is fully extracted into readable Markdown text of 12,211 characters."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was supplied for this evaluation."
+      }
+    },
+    "page_type": "Blog Article",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The requested URL was successfully accessed returning HTTP 200. The markdown captures the full blog article detailing cookie preferences, how to change them, and related help links. All diagnostic checks pass cleanly."
+  },
+  "generation_id": "gen-1785261085-Qi9PI4YHfZTkrKpSvTuh",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 6325,
+    "completion_tokens": 283,
+    "total_tokens": 6608,
+    "cost": 0.002605,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.002605,
+      "upstream_inference_prompt_cost": 0.0018975,
+      "upstream_inference_completions_cost": 0.0007075
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3481,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261085-Qi9PI4YHfZTkrKpSvTuh",
+    "object": "chat.completion",
+    "created": 1785261085,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a18EI/BC0UlpwZd8T1R/KNnmO11KCPcDwuoKBxM2Q6NbXZAJ2kgj08m71io8Nz0=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

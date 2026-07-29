@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "js_shell_x_home",
+  "classification": "js_shell",
+  "split": "train",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:51:30.055317+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "JavaScript is not available notice blocking access to the page."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Home timeline posts and authors are missing due to disabled JavaScript fallback."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Extracted content consists only of boilerplate error messages regarding disabled JavaScript."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured."
+      }
+    },
+    "page_type": "error_page",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "blank_page",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "We’ve detected that JavaScript is disabled in this browser."
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Enable JavaScript rendering for Single Page Applications like x.com."
+    ],
+    "critique": "The raw HTTP request captured a static fallback page stating that JavaScript is disabled. This completely prevents access to the dynamic home timeline required by the caller's goal. Rendering JavaScript is necessary to load the actual application content."
+  },
+  "generation_id": "gen-1785261087-jZzm9EaR5bYvtoGtsVlR",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2428,
+    "completion_tokens": 346,
+    "total_tokens": 2774,
+    "cost": 0.0015934,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0015934,
+      "upstream_inference_prompt_cost": 0.0007284,
+      "upstream_inference_completions_cost": 0.000865
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3050,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261087-jZzm9EaR5bYvtoGtsVlR",
+    "object": "chat.completion",
+    "created": 1785261087,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a18Wh1G1upo1iymSPF+sPtb7rIEOkyR+7UDCuEHlni1wuZguijeKedtfB5IAFTU=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

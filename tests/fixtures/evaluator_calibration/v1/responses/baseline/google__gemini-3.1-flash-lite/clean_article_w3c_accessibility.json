@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "clean_article_w3c_accessibility",
+  "classification": "clean_article",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:48.138601+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "The HTTP status code is 200 and the content returned is a complete HTML document representing the requested W3C page."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The captured content contains the full text of the 'Introduction to Web Accessibility' article, including all sections, summaries, and links."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "The Markdown representation is clean, well-structured, and contains all the meaningful text content required to satisfy the user's goal."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided for this evaluation."
+      }
+    },
+    "page_type": "Informational article",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The scrape successfully retrieved the target page. The content is complete, readable, and directly addresses the user's goal of capturing the W3C introduction to web accessibility. No issues were identified."
+  },
+  "generation_id": "gen-1785260985-VKzLX7us2zPtEoW08WGa",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 7444,
+    "completion_tokens": 308,
+    "total_tokens": 7752,
+    "cost": 0.002323,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.002323,
+      "upstream_inference_prompt_cost": 0.001861,
+      "upstream_inference_completions_cost": 0.000462
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 4157,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260985-VKzLX7us2zPtEoW08WGa",
+    "object": "chat.completion",
+    "created": 1785260985,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19bmXteEJL6V6B3aM07SzAW4gWNceMA23KWOLPoThaTDM0QXn6IorYQJn/cbps=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

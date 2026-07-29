@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "bot_block_nowsecure",
+  "classification": "bot_block",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:17.904212+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "Cloudflare turnstile challenge blocking direct access with HTTP 200 response containing only minimal challenge text."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Markdown contains only 91 characters of boilerplate branding and does not capture the destination site's main content."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Main content is obstructed by a bot protection wall, preventing extraction of the target page content."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured for this evaluation."
+      }
+    },
+    "page_type": "bot_block_page",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "bot_block",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Matched cloudflare signature: 'turnstile'"
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Switch from raw_http to a provider capable of handling JavaScript rendering and bot challenges."
+    ],
+    "critique": "The scrape attempt was blocked by Cloudflare (turnstile signature matched), resulting in a page containing only boilerplate text and no meaningful content. The goal of capturing the destination site's main content beyond the browser check was not met. A provider capable of solving or bypassing bot challenges should be used."
+  },
+  "generation_id": "gen-1785287415-zXIBiEnHCknBFanOmePR",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2192,
+    "completion_tokens": 391,
+    "total_tokens": 2583,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0016351,
+      "upstream_inference_prompt_cost": 0.0006576,
+      "upstream_inference_completions_cost": 0.0009775
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2072,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287415-zXIBiEnHCknBFanOmePR",
+    "object": "chat.completion",
+    "created": 1785287415,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/WWFASWDO4IoLSd0f/yu+P22UBo1CSOaHLoG0d9NFQpOQvpS5rxtrE+DNkDgA=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "cloudflare",
+    "validation_detail": "Matched cloudflare signature: 'turnstile'",
+    "classified_failure": "cloudflare"
+  }
+}

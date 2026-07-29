@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "paywall_medium_craigslist",
+  "classification": "paywall",
+  "split": "train",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:51:29.182439+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 returned successfully without hard blocks."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The captured article text cuts off after the introduction (\"I then checked the type and length of…\") and fails to capture the complete member-only tutorial and code examples."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown was successfully generated and parsed from the raw HTML."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured for this run."
+      }
+    },
+    "page_type": "member_paywalled_article",
+    "root_cause": "incomplete_content",
+    "issues": [
+      {
+        "code": "paywall",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The article is marked as a member-only story and the text truncates abruptly after the initial paragraphs."
+      },
+      {
+        "code": "truncated_content",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The main content stops prematurely, omitting the tutorial sections and code examples requested by the caller."
+      }
+    ],
+    "recommended_action": "refine_caller_goal",
+    "improvement_opportunities": [
+      "Acknowledge that Medium member-only content is not fully accessible without authentication."
+    ],
+    "critique": "The requested URL is a Medium article flagged as a member-only story. Although the request succeeded with an HTTP 200 via curl_cffi, the extracted content is heavily truncated because the full text is restricted to authenticated members. Consequently, the scraped data fails to capture the complete tutorial and code examples required by the caller."
+  },
+  "generation_id": "gen-1785261086-YgwBxErFHI98ajFn7VZ9",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 4468,
+    "completion_tokens": 465,
+    "total_tokens": 4933,
+    "cost": 0.0025029,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0025029,
+      "upstream_inference_prompt_cost": 0.0013404,
+      "upstream_inference_completions_cost": 0.0011625
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2493,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261086-YgwBxErFHI98ajFn7VZ9",
+    "object": "chat.completion",
+    "created": 1785261086,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a18lrsH/zwYfjDq56WXjtwLwlKZlLB3Xn0A2rEAvqVgnkVUnwcwIokB8OWkXCaM=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

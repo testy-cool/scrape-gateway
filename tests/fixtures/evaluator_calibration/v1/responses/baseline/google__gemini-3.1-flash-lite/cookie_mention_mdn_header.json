@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "cookie_mention_mdn_header",
+  "classification": "content_cookie_mention",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:49:54.236506+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "The page returned a 200 status code and the content matches the requested MDN documentation for the HTTP Cookie header."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The captured content includes the definition, syntax, directives, and examples for the HTTP Cookie header, which fully satisfies the caller's goal."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "The main content is clearly structured in Markdown, making it easy to extract the relevant technical information."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided."
+      }
+    },
+    "page_type": "technical_documentation",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The scrape successfully retrieved the requested MDN documentation page. The content is complete, well-structured, and directly addresses the user's goal of capturing the reference for the HTTP Cookie header."
+  },
+  "generation_id": "gen-1785260990-nTV07JTEF9dmRdb2AKe6",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 12906,
+    "completion_tokens": 298,
+    "total_tokens": 13204,
+    "cost": 0.0036735,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0036735,
+      "upstream_inference_prompt_cost": 0.0032265,
+      "upstream_inference_completions_cost": 0.000447
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3656,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260990-nTV07JTEF9dmRdb2AKe6",
+    "object": "chat.completion",
+    "created": 1785260990,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+uVoEr7jAiO9NSdaD6YsXDv7Fb/gT4FfgIzKZ0Wze8l0TlWRCUbxv7kXUoS6Q=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

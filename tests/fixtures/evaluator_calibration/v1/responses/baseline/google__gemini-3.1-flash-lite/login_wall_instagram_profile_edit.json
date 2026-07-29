@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "login_wall_instagram_profile_edit",
+  "classification": "login_wall",
+  "split": "dev",
+  "model": "google/gemini-3.1-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:50:02.383114+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "The HTTP status is 200 and the content returned is a large HTML document from Instagram."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The content returned is a generic Instagram landing page/login page, not the authenticated profile edit form."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "The page content is dominated by boilerplate and login-related scripts, lacking the specific profile edit form fields requested."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was provided."
+      }
+    },
+    "page_type": "Instagram Login/Landing Page",
+    "root_cause": "wrong_target",
+    "issues": [
+      {
+        "code": "wrong_page",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "The content is a generic Instagram page, not the requested /accounts/edit/ form."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "The provider failed to maintain an authenticated session, resulting in a redirect or landing page.",
+      "Ensure the scraping provider supports persistent session cookies for authenticated Instagram access."
+    ],
+    "critique": "The scrape successfully reached the URL, but the content returned is a generic Instagram landing page rather than the authenticated profile edit form. This indicates that the session was not authenticated or the request was redirected. Since the goal requires an authenticated state, the current evidence is unusable."
+  },
+  "generation_id": "gen-1785260997-cmNRBrKmf2RYFFeCU1zR",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 17755,
+    "completion_tokens": 408,
+    "total_tokens": 18163,
+    "cost": 0.00505075,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00505075,
+      "upstream_inference_prompt_cost": 0.00443875,
+      "upstream_inference_completions_cost": 0.000612
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 5049,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785260997-cmNRBrKmf2RYFFeCU1zR",
+    "object": "chat.completion",
+    "created": 1785260997,
+    "model": "google/gemini-3.1-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+WaqMuXAkCzbdzBWzTazyoSe5NU+WaKWwATHfCFHjvCCRGLQOm5qbR4abqtv0=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

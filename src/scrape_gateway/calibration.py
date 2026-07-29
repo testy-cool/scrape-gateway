@@ -134,6 +134,11 @@ def _prediction(record: dict[str, Any]) -> dict[str, Any]:
 def _record_cost(record: dict[str, Any]) -> float:
     usage = record.get("usage") or {}
     cost = usage.get("cost")
+    if isinstance(cost, (int, float)) and cost:
+        return float(cost)
+    upstream_cost = (usage.get("cost_details") or {}).get("upstream_inference_cost")
+    if isinstance(upstream_cost, (int, float)):
+        return float(upstream_cost)
     if isinstance(cost, (int, float)):
         return float(cost)
     generation = (record.get("response_metadata") or {}).get("generation") or {}
