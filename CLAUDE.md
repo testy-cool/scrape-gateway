@@ -40,7 +40,10 @@ Run before every commit:
 - `src/scrape_gateway/providers/` — all provider implementations (discovered via entry points)
 - `src/scrape_gateway/discovery.py` — provider discovery (entry points + local extensions)
 - `tests/` — pytest suite (136+ unit tests, live tests per paid provider)
-- `docs/SKILL.md` — Claude Code skill (keep in sync with `~/.claude/skills/scrape-gateway/SKILL.md`)
+- `docs/SKILL.md` — the agent skill. Copy it to `~/.agents/skills/scrape-gateway/SKILL.md`
+  after any change that alters commands, flags, or config: Claude, Codex, and pi all
+  symlink that one file, so a stale copy misinforms every agent at once. It drifted four
+  releases behind before anyone noticed.
 - `examples/` — extension example
 - `registry.yml` — curated extension registry
 
