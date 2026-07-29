@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
 import sqlite3
 from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta, timezone
@@ -98,6 +99,11 @@ class DomainMemory:
                 domain, country, render_js, premium, mobile, screenshot, provider
               );
 
+            create table if not exists gateway_metadata (
+              key text primary key,
+              value text not null
+            );
+
             create table if not exists extraction_patterns (
               domain text primary key,
               selector text not null,
@@ -118,6 +124,22 @@ class DomainMemory:
             );
             """
         )
+
+    def source_instance_id(self) -> str:
+        """Return the stable random identity for events exported from this database."""
+
+        with self.conn:
+            self.conn.execute(
+                "insert or ignore into gateway_metadata(key, value) values ('instance_id', ?)",
+                (secrets.token_hex(16),),
+            )
+        row = self.conn.execute(
+            "select value from gateway_metadata where key = 'instance_id'"
+        ).fetchone()
+        value = str(row["value"]) if row else ""
+        if not re.fullmatch(r"[0-9a-f]{32}", value):
+            raise ValueError("gateway instance_id must be 32 lowercase hexadecimal characters")
+        return value
 
     @staticmethod
     def domain_for_url(url: str) -> str:

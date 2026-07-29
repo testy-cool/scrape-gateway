@@ -90,6 +90,7 @@ being committed.
 | `sgw meta <url>` | Extract social, JSON-LD, and document metadata as JSON |
 | `sgw history <url>` | Show scrape timeline and page changes |
 | `sgw cost` | Summarize successful and failed attempt spend by domain/provider |
+| `sgw scrapingevals` | Stage a privacy-safe, cursor-based passive evidence feed |
 | `sgw telemetry` | Inspect reports or aggregate routing metrics with `--summary` |
 | `sgw evaluations` | Aggregate AI quality audits and review recurring failures |
 | `sgw providers` | List all available providers |
@@ -201,6 +202,7 @@ More: [docs/python-api.md](docs/python-api.md)
 - [Commands](docs/commands.md) — full reference with examples
 - [Architecture](docs/architecture.md) — how the router, cache, and memory work
 - [Configuration](docs/configuration.md) — YAML config and `.env` setup
+- [ScrapingEvals feed](docs/scrapingevals-feed.md) — passive evidence contract and publication roadmap
 - [Domain recipes](recipes/README.md) — per-site routing, validation, and cache rules
 - [HTTP service](docs/http-service.md) — FastAPI endpoints, auth, and curl examples
 - [Extensions](docs/extensions.md) — writing custom providers

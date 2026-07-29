@@ -167,6 +167,25 @@ sgw cost --domain example.com
 sgw cost --days 90 --format json
 ```
 
+## `sgw scrapingevals` — Stage passive evidence
+
+Exports ordinary provider-attempt history plus privacy-safe telemetry summaries into
+the versioned `scrapingevals.sgw-observations/v1` contract. The feed is a private,
+review-required staging artifact, not a comparable benchmark or direct publish action.
+
+```bash
+sgw scrapingevals --out runner/data/sgw-inbox/v1/backfill.json --days 0
+sgw scrapingevals --out next.json --after-ledger-id 1200 --limit 1000 --days 0
+sgw scrapingevals --out reviewed.json --days 30 --include-url-paths
+```
+
+The command removes URL credentials, queries, fragments, headers, metadata, content,
+evaluator prose, and local paths. Paths are removed unless explicitly retained, and
+private/special-use targets are excluded. Resume from `cursor.through_ledger_id` only
+after the receiver validates and stores the batch. See
+[SGW to ScrapingEvals passive evidence](scrapingevals-feed.md) for field ownership,
+consumer rules, and the publication roadmap.
+
 ## `sgw meta` — Extract page metadata
 
 Extracts OpenGraph and Twitter Card tags, JSON-LD blocks, canonical and icon URLs,

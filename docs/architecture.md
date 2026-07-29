@@ -99,6 +99,7 @@ src/scrape_gateway/
   discovery.py    — Extension discovery (built-in providers, command/provider entry points, local dirs)
   provider.py     — ProviderAdapter base class
   memory.py       — Domain memory (SQLite) + extraction pattern cache
+  scrapingevals.py — Privacy-safe passive evidence feed and cursor contract
   cache.py        — HTML/Markdown artifact cache
   config.py       — YAML config + .env loader
   models.py       — ScrapeRequest, ScrapeResult, FailureReason
@@ -110,3 +111,15 @@ registry.yml      — Official extension registry
 tests/            — 190+ unit tests
 examples/         — Sample recipes and extension template
 ```
+
+## Passive ScrapingEvals feed
+
+The same append-only attempt ledger used for cost-aware routing can be exported without
+running another scrape. `sgw scrapingevals` combines ledger rows with an allowlisted
+subset of run telemetry, strips content and sensitive context, hashes available
+artifacts, and emits stable source/event IDs plus a high-watermark cursor.
+
+The resulting `scrapingevals.sgw-observations/v1` document is always marked as a
+review-required operational observation. ScrapingEvals owns validation, idempotent
+import, acknowledgement, and human promotion; SGW never turns opportunistic traffic
+into public benchmark claims. See [the feed contract](scrapingevals-feed.md).

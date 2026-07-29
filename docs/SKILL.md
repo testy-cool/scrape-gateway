@@ -157,6 +157,22 @@ one-way door — credential failures are excluded, blocks older than 120 days de
 skips are isolated per request profile, so a single bad afternoon does not permanently
 retire a provider.
 
+### sgw scrapingevals — Stage passive evidence
+
+Normal provider attempts already land in the append-only SQLite ledger. Export a
+privacy-safe, review-required batch for ScrapingEvals without running another scrape:
+
+```bash
+sgw scrapingevals --out backfill.json --days 0
+sgw scrapingevals --out next.json --days 0 --after-ledger-id 1200 --limit 1000
+```
+
+The v1 feed has persistent source identity, stable event IDs, and a high-watermark
+cursor. It excludes private targets; removes credentials, query strings, fragments,
+headers, metadata, content, evaluator prose, and local paths; and omits URL paths by
+default. It is an operational-observation inbox, not a comparable benchmark or
+automatic publication.
+
 ### sgw evaluations — Review AI scrape-quality audits
 
 Enable the optional OpenRouter evaluator in `scrape-gateway.yml`:

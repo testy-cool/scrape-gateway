@@ -59,6 +59,7 @@ Commands:
   recipe    Replay a saved scrape+extract workflow from a YAML file
   history   See how a page changed across scrapes
   cost      Summarize recorded spend by domain and provider
+  scrapingevals  Export a privacy-safe passive evidence feed
   evaluations  Aggregate AI quality audits and review recurring failures
   calibrate-evaluator  Measure the AI audit against human labels
   selftest  Verify the tool works against safe public URLs""",
@@ -928,6 +929,75 @@ def cost(
     console.print(Panel(metrics, title=title))
     _print_cost_group("Spend by Domain", "Domain", report["by_domain"])
     _print_cost_group("Spend by Provider", "Provider", report["by_provider"])
+
+
+@app.command()
+def scrapingevals(
+    output: Path = typer.Option(
+        ...,
+        "--out",
+        "-o",
+        help="Write the versioned ScrapingEvals observation feed to this JSON file",
+    ),
+    days: int = typer.Option(
+        30,
+        "--days",
+        "-n",
+        min=0,
+        help="Include this many recent days; 0 exports all ledger history after the cursor",
+    ),
+    after_ledger_id: int = typer.Option(
+        0,
+        "--after-ledger-id",
+        min=0,
+        help="Resume after this acknowledged ledger row",
+    ),
+    limit: int = typer.Option(
+        1_000,
+        "--limit",
+        min=1,
+        max=100_000,
+        help="Maximum raw ledger rows in this batch",
+    ),
+    include_url_paths: bool = typer.Option(
+        False,
+        "--include-url-paths",
+        help="Keep reviewed public URL paths; credentials, query strings, and fragments stay removed",
+    ),
+) -> None:
+    """Stage passive SGW evidence for human review in ScrapingEvals."""
+    from .config import load_config
+    from .memory import DomainMemory
+    from .scrapingevals import build_scrapingevals_feed, write_scrapingevals_feed
+
+    _validate_output_path(output)
+    config = load_config()
+    memory = DomainMemory(db_path=config.memory_path)
+    feed = build_scrapingevals_feed(
+        memory,
+        config.telemetry.root,
+        days=days,
+        after_ledger_id=after_ledger_id,
+        limit=limit,
+        include_url_paths=include_url_paths,
+    )
+    try:
+        write_scrapingevals_feed(feed, output)
+    except OSError as exc:
+        console.print(f"[red]Could not write ScrapingEvals feed:[/] {exc}")
+        raise typer.Exit(1) from exc
+
+    summary = feed["summary"]
+    console.print(
+        f"[green]Exported {summary['attempts']} passive attempts across "
+        f"{summary['runs']} runs to {output}.[/]"
+    )
+    if summary["excluded_private_attempts"]:
+        console.print(
+            f"[yellow]Excluded {summary['excluded_private_attempts']} attempts "
+            "for private or local targets.[/]"
+        )
+    console.print("[dim]This is a review-required operational feed, not a comparable benchmark.[/]")
 
 
 @app.command()
