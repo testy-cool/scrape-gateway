@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-07-29
+
+### Added
+- A versioned 60-case, zero-scrape-cost calibration corpus and `sgw calibrate-evaluator` command record live judgments once, then replay verdict, structured-label, human-review, cost, latency, and deterministic-comparison metrics offline without an API key.
+- Committed baseline and held-out response evidence makes the selected evaluator's train/dev comparison, one-shot 24-case test result, and per-category free-check recommendation reproducible in CI.
+
+### Changed
+- The opt-in audit evaluator defaults to `google/gemini-3.5-flash-lite`, selected before holdout from train/dev evidence. Its `scrape-usability-v2` prompt is labeled `calibrated_v1_holdout_2026_07_29` only for that exact model/prompt pair; overrides remain uncalibrated.
+- Audit status remains advisory: the selected model reached 100% TPR, 91.7% TNR, and 96.0% F1 on holdout, but `needs_human_review` missed the sole verdict error and must not be treated as a reliable escape hatch.
+- Calibration reports count BYOK upstream inference cost when OpenRouter's billed cost is zero, avoiding false zero-cost model comparisons.
+
 ## [0.20.0] - 2026-07-28
 
 ### Added
