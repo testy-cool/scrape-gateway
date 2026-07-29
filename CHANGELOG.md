@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-07-30
+
+### Fixed
+- The bundled agent skill (`docs/SKILL.md`) documented the tool as of v0.17.4 and omitted `sgw cost`, enforced `max_cost_per_url` budgets, domain-memory decay, selective evaluation, and the optional `--screenshot` destination. Its description now also matches on cost questions.
+
 ## [0.22.0] - 2026-07-29
 
 ### Added
