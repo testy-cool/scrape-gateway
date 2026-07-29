@@ -140,9 +140,28 @@ provider cost rank. See
 
 ## AI evaluation
 
-Evaluation is off by default. Set `mode: audit` and configure `OPENROUTER_API_KEY`
-to evaluate every scrape through OpenRouter. Local `llm` CLI users can also keep the
-key in the `openrouter` key store; the gateway checks that store after the environment.
+Evaluation is off by default. Configure `OPENROUTER_API_KEY` and choose one of:
+
+- `mode: audit` to evaluate every final scrape through OpenRouter.
+- `mode: selective` to call OpenRouter only when the deterministic result falls
+  inside the measured `selective-v1` ambiguity gate.
+
+Local `llm` CLI users can also keep the key in the `openrouter` key store; the
+gateway checks that store after the environment. Selective mode is opt-in and
+does not change the default.
+
+The selective gate calls the model for deterministic passes with HTML under
+8,192 characters, Markdown under 1,500 characters, a script-to-visible-text
+ratio of at least 20, or a password input. A deterministic block is audited only
+when it is a 2xx/3xx response with a matched block type, at least 8,192 Markdown
+characters, and a script-to-visible-text ratio below 5. Otherwise the free
+verdict is kept. On the committed 60-case corpus this made 21 calls instead of
+60, reached 60/60 correct verdicts, and kept good-page recall at 100%. See
+[`evaluator-calibration-v1.md`](evaluator-calibration-v1.md) for the derivation,
+cost table, and limitations.
+
+The gate's category samples are small. Recalibrate after changing validators,
+the evaluator prompt, or the model; do not treat these thresholds as timeless.
 
 `include_screenshot` means “attach screenshot evidence when the selected provider
 returned it.” Request that evidence with `sgw url ... --screenshot`, the MCP tool's
@@ -157,10 +176,11 @@ sgw url https://example.com/products \
   --screenshot
 ```
 
-Audit mode is non-blocking: evaluator errors are recorded, but never change the
-primary scrape's success. Identical evidence reuses the content-addressed evaluation
-cache, avoiding another LLM call. A run enters the review queue when evaluation fails,
-the verdict is `fail`, or `needs_human_review` is true.
+Audit and selective modes are non-blocking: evaluator errors and selective
+verdicts are recorded, but never change the primary scrape's success. Identical
+evidence reuses the content-addressed evaluation cache, avoiding another LLM
+call. A run enters the review queue when evaluation fails, the verdict is
+`fail`, or `needs_human_review` is true.
 
 The judge applies these rules:
 

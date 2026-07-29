@@ -589,6 +589,12 @@ def test_calibrate_evaluator_command_replays_recorded_responses(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["mode"] == "offline"
     assert payload["metrics"]["verdict"]["tpr"] == 1.0
+    assert payload["selective_gate"]["version"] == "selective-v1"
+    assert [row["policy"] for row in payload["policy_comparison"]] == [
+        "off",
+        "audit",
+        "selective",
+    ]
     assert payload["response_dir"] == str(response_dir)
 
 

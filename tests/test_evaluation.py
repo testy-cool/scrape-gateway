@@ -728,6 +728,79 @@ async def test_gateway_audit_evaluation_is_saved_without_changing_success(tmp_pa
     assert Path(report["evaluation"]["artifacts"]["final_html"]).exists()
 
 
+async def test_gateway_selective_mode_skips_clear_page_and_audits_ambiguous_page(
+    tmp_path: Path,
+) -> None:
+    from scrape_gateway.cache import ArtifactCache
+    from scrape_gateway.evaluation import EvaluationOutcome
+    from scrape_gateway.memory import DomainMemory
+    from scrape_gateway.router import ScrapeGateway
+    from scrape_gateway.telemetry import TelemetryRecorder
+
+    class SelectiveProvider(ProviderAdapter):
+        name = "selective"
+        capabilities = frozenset({"html"})
+
+        async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+            if request.url.endswith("/clear"):
+                html = "<html><main>" + ("Useful article content. " * 600) + "</main></html>"
+            else:
+                html = "<html><main>" + ("Partial. " * 100) + "</main></html>"
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=True,
+                status_code=200,
+                html=html,
+                route="selective",
+            )
+
+    class FakeEvaluator:
+        config = EvaluationConfig(mode="selective")
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def evaluate(self, **kwargs) -> EvaluationOutcome:
+            self.calls += 1
+            return EvaluationOutcome(
+                status="completed",
+                model=self.config.model,
+                judgment=GOOD_JUDGMENT,
+                markdown_evidence=kwargs["result"].markdown or "",
+            )
+
+    evaluator = FakeEvaluator()
+    gateway = ScrapeGateway(
+        providers=[SelectiveProvider()],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "memory.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+        evaluator=evaluator,
+    )
+
+    clear = await gateway.scrape(
+        ScrapeRequest("https://example.com/clear"),
+        use_cache=False,
+        use_memory=False,
+    )
+    ambiguous = await gateway.scrape(
+        ScrapeRequest("https://example.com/ambiguous"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert evaluator.calls == 1
+    assert clear.success is True
+    assert clear.metadata["evaluation"] == {
+        "status": "skipped",
+        "mode": "selective",
+        "reason": "deterministic_pass",
+    }
+    assert ambiguous.success is True
+    assert ambiguous.metadata["evaluation"]["verdict"] == "pass"
+
+
 async def test_audit_mode_preserves_failed_attempt_html_for_improvement_analysis(
     tmp_path: Path,
 ) -> None:

@@ -17,6 +17,10 @@ from markdownify import markdownify as md
 from .config import EvaluationConfig
 from .errors import classify_failure
 from .evaluation import PROMPT_VERSION, SYSTEM_PROMPT, OpenRouterEvaluator
+from .evaluation_policy import (
+    selective_evaluation_decision,
+    selective_gate_description,
+)
 from .models import ScrapeRequest, ScrapeResult
 from .validators import validate_content
 
@@ -389,6 +393,60 @@ def _deterministic_verdicts(
     return verdicts
 
 
+def compare_evaluation_policies(
+    *,
+    corpus_root: Path,
+    cases: list[dict[str, Any]],
+    responses: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    outcomes = {
+        "off": {"correct": 0, "calls": 0, "cost": 0.0, "good_correct": 0},
+        "audit": {"correct": 0, "calls": 0, "cost": 0.0, "good_correct": 0},
+        "selective": {"correct": 0, "calls": 0, "cost": 0.0, "good_correct": 0},
+    }
+    call_reasons: dict[str, int] = defaultdict(int)
+    good_pages = sum(case["human_verdict"] == "pass" for case in cases)
+
+    for case in cases:
+        _request, result, _attempts, deterministic = _case_evidence(corpus_root, case)
+        free_verdict = deterministic["verdict"]
+        ai_verdict = _prediction(responses[case["id"]])["verdict"]
+        cost = _record_cost(responses[case["id"]])
+        decision = selective_evaluation_decision(result)
+        selective_verdict = ai_verdict if decision.call_model else free_verdict
+        if decision.call_model:
+            call_reasons[decision.reason] += 1
+
+        for policy, verdict, called in (
+            ("off", free_verdict, False),
+            ("audit", ai_verdict, True),
+            ("selective", selective_verdict, decision.call_model),
+        ):
+            outcomes[policy]["correct"] += verdict == case["human_verdict"]
+            outcomes[policy]["calls"] += called
+            outcomes[policy]["cost"] += cost if called else 0.0
+            if case["human_verdict"] == "pass":
+                outcomes[policy]["good_correct"] += verdict == "pass"
+
+    count = len(cases)
+    rows = []
+    for policy in ("off", "audit", "selective"):
+        values = outcomes[policy]
+        calls = int(values["calls"])
+        rows.append(
+            {
+                "policy": policy,
+                "correct_verdicts": int(values["correct"]),
+                "case_count": count,
+                "model_calls": calls,
+                "model_calls_saved_pct": round((count - calls) / count * 100, 1),
+                "cost": round(float(values["cost"]), 10),
+                "good_page_recall": _ratio(int(values["good_correct"]), good_pages),
+            }
+        )
+    return rows, dict(sorted(call_reasons.items()))
+
+
 def build_report(
     *,
     corpus_root: str | Path,
@@ -407,6 +465,13 @@ def build_report(
         prompt_version=prompt_version,
     )
     deterministic = _deterministic_verdicts(corpus_path, cases)
+    policy_comparison, call_reasons = compare_evaluation_policies(
+        corpus_root=corpus_path,
+        cases=cases,
+        responses=responses,
+    )
+    gate = selective_gate_description()
+    gate["measured_model_call_reasons"] = call_reasons
     return {
         "mode": "offline",
         "corpus_version": corpus_path.name,
@@ -416,6 +481,8 @@ def build_report(
         "case_count": len(cases),
         "metrics": compute_metrics(cases, responses),
         "deterministic_comparison": compare_deterministic(cases, responses, deterministic),
+        "selective_gate": gate,
+        "policy_comparison": policy_comparison,
     }
 
 
@@ -457,30 +524,31 @@ def _case_evidence(
     validation = validate_content(content)
     failure = classify_failure(case["status_code"], content)
     success = 200 <= int(case["status_code"]) < 400 and failure is None and validation.passed
+    source_url = case.get("source_url") or f"https://calibration.invalid/{case['id']}"
     request = ScrapeRequest(
-        case["source_url"],
+        source_url,
         country=case.get("country"),
-        metadata={"evaluation_goal": case["evaluation_goal"]},
+        metadata={"evaluation_goal": case.get("evaluation_goal", "Assess page usability.")},
     )
     result = ScrapeResult(
-        url=case["source_url"],
-        provider=case["capture_provider"],
+        url=source_url,
+        provider=case.get("capture_provider", "calibration"),
         success=success,
         status_code=case["status_code"],
         html=content,
         markdown=md(content),
         failure_reason=failure,
         cost_units=0,
-        route=case["capture_provider"],
+        route=case.get("capture_provider", "calibration"),
         content_validated=validation.passed,
         block_type=validation.block_type,
         validation_detail=validation.detail,
     )
     attempt = {
-        "provider": case["capture_provider"],
+        "provider": case.get("capture_provider", "calibration"),
         "status": case["status_code"],
         "elapsed_ms": 0,
-        "route": case["capture_provider"],
+        "route": case.get("capture_provider", "calibration"),
         "cost": 0,
         "result": "success" if success else "failed",
         "chars": len(content),

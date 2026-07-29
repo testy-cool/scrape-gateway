@@ -425,6 +425,45 @@
       ]
     }
   },
+  "selective_policy": {
+    "version": "selective-v1",
+    "policy_comparison": [
+      {
+        "policy": "off",
+        "correct_verdicts": 43,
+        "case_count": 60,
+        "model_calls": 0,
+        "model_calls_saved_pct": 100.0,
+        "cost": 0.0,
+        "good_page_recall": 0.8666666666666667
+      },
+      {
+        "policy": "audit",
+        "correct_verdicts": 59,
+        "case_count": 60,
+        "model_calls": 60,
+        "model_calls_saved_pct": 0.0,
+        "cost": 0.1483468,
+        "good_page_recall": 1.0
+      },
+      {
+        "policy": "selective",
+        "correct_verdicts": 60,
+        "case_count": 60,
+        "model_calls": 21,
+        "model_calls_saved_pct": 65.0,
+        "cost": 0.0588059,
+        "good_page_recall": 1.0
+      }
+    ],
+    "measured_model_call_reasons": {
+      "content_rich_block": 7,
+      "password_form": 1,
+      "script_dominated": 6,
+      "thin_html": 4,
+      "thin_markdown": 3
+    }
+  },
   "spend": {
     "recorded_judgments": 96,
     "all_models_total": 0.22088905,

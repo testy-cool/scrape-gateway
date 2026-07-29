@@ -67,8 +67,8 @@ class EvaluationConfig:
     timeout_seconds: float = 60
 
     def __post_init__(self) -> None:
-        if self.mode not in {"off", "audit"}:
-            raise ValueError("evaluation mode must be 'off' or 'audit'")
+        if self.mode not in {"off", "audit", "selective"}:
+            raise ValueError("evaluation mode must be 'off', 'audit', or 'selective'")
         if self.max_markdown_chars <= 0:
             raise ValueError("evaluation max_markdown_chars must be positive")
         if self.timeout_seconds <= 0:

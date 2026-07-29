@@ -352,6 +352,43 @@ class ScrapeGateway:
                 attributes={"screenshot_bytes": len(result.screenshot or b"")},
             )
             return None
+        evaluation_mode = getattr(getattr(self.evaluator, "config", None), "mode", "audit")
+        if evaluation_mode == "selective":
+            from .evaluation_policy import (
+                SELECTIVE_GATE_VERSION,
+                selective_evaluation_decision,
+            )
+
+            decision = selective_evaluation_decision(result)
+            if not decision.call_model:
+                result.metadata["evaluation"] = {
+                    "status": "skipped",
+                    "mode": "selective",
+                    "reason": decision.reason,
+                }
+                emit_progress(
+                    id="evaluation",
+                    name="AI evaluation",
+                    kind="evaluation",
+                    status="skipped",
+                    outcome="deterministic_confident",
+                    summary=(
+                        "Selective evaluation kept the deterministic verdict and skipped "
+                        "the model call."
+                    ),
+                    attributes={
+                        "gate_version": SELECTIVE_GATE_VERSION,
+                        "reason": decision.reason,
+                        **decision.signals,
+                    },
+                )
+                return {
+                    "status": "skipped",
+                    "mode": "selective",
+                    "reason": decision.reason,
+                    "gate_version": SELECTIVE_GATE_VERSION,
+                    "signals": decision.signals,
+                }
         evaluation_start = time.perf_counter()
         emit_progress(
             id="evaluation",

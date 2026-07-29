@@ -635,6 +635,30 @@ def calibrate_evaluator(
             title=f"{report['mode']} calibration · {selected_model}",
         )
     )
+    gate = report["selective_gate"]
+    console.print(
+        Panel(
+            "\n".join(f"• {rule}" for rule in gate["rules"]),
+            title=f"Selective gate · {gate['version']}",
+        )
+    )
+    policies = Table(title="Evaluation policy comparison")
+    policies.add_column("Policy")
+    policies.add_column("Correct", justify="right")
+    policies.add_column("Model calls", justify="right")
+    policies.add_column("Calls saved", justify="right")
+    policies.add_column("Cost", justify="right")
+    policies.add_column("Good-page recall", justify="right")
+    for row in report["policy_comparison"]:
+        policies.add_row(
+            row["policy"],
+            f"{row['correct_verdicts']}/{row['case_count']}",
+            str(row["model_calls"]),
+            f"{row['model_calls_saved_pct']:.1f}%",
+            f"${row['cost']:.6f}",
+            f"{row['good_page_recall']:.1%}",
+        )
+    console.print(policies)
     console.print(f"[dim]Recorded responses: {response_dir}[/]")
 
 

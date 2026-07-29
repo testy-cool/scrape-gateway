@@ -100,6 +100,55 @@ paywalls, and materially truncated content. The category samples are small, so
 recalibrate after changing validators, prompt, or model rather than treating
 these rates as timeless.
 
+## Selective policy
+
+`evaluation.mode: selective` turns that recommendation into a runtime gate. It
+does not use the corpus's human category labels. It uses only signals available
+on a returned result:
+
+- the deterministic pass/fail verdict, status code, and matched block type;
+- HTML and Markdown lengths;
+- the ratio of characters inside `<script>` elements to visible text; and
+- whether the HTML contains a password input.
+
+The `selective-v1` predicate is:
+
+1. For a deterministic pass, call the model when the HTML is under 8,192
+   characters, the Markdown is under 1,500 characters, scripts contain at least
+   20 times as many characters as visible text, or a password input is present.
+2. For a deterministic fail, call the model only when the response has a 2xx or
+   3xx status, a block type matched, the Markdown has at least 8,192 characters,
+   and the script-to-visible-text ratio is below 5.
+3. Otherwise keep the deterministic verdict and skip the model call.
+
+The first rule catches every measured JavaScript shell, login wall, paywall, and
+truncated response. The second isolates the content-rich false-positive shape:
+large legitimate documents in which `hcaptcha` or `turnstile` appears as article
+or documentation text. It conservatively also audits the three wrong-locale
+pages because their runtime block evidence has the same shape. Thin and
+script-dominated challenge pages stay with the deterministic verdict, including
+the CAPTCHA case that was the model's sole error. One legitimate cookie article
+also crosses the script-ratio threshold and is audited; this extra call protects
+good-page recall.
+
+Replaying the recorded responses produced:
+
+| Policy | Correct verdicts | Model calls | Recorded cost | Good-page recall |
+|---|---:|---:|---:|---:|
+| `off` (free checks only) | 43/60 | 0 | $0 | 86.7% |
+| `audit` (always call) | 59/60 | 60 | $0.148347 | 100% |
+| `selective` (`selective-v1`) | 60/60 | 21 | $0.058806 | 100% |
+
+Selective mode saved 39 of 60 model calls (65.0%) and $0.089541 of the
+recorded model cost (60.4%) without losing verdict accuracy. It improved on
+always-audit accuracy by retaining the deterministic CAPTCHA verdict on the
+model's one false pass.
+
+This gate is measured on small category samples from this exact 60-case corpus.
+Recalibrate it after changing validators, the evaluator prompt, or the model.
+The thresholds are a versioned policy boundary, not timeless page-quality
+constants.
+
 ## Human-review escape hatch
 
 The escape hatch is unreliable and must not be depended on. The 3.1 candidate

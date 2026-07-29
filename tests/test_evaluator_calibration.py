@@ -288,6 +288,36 @@ def test_committed_calibration_result_replays_offline() -> None:
     assert committed["full_corpus"]["root_cause"] == full["metrics"]["root_cause"]
     assert committed["full_corpus"]["issue_codes"] == full["metrics"]["issue_codes"]
     assert committed["full_corpus"]["deterministic_comparison"] == full["deterministic_comparison"]
+    assert full["selective_gate"]["version"] == "selective-v1"
+    assert full["policy_comparison"] == [
+        {
+            "policy": "off",
+            "correct_verdicts": 43,
+            "case_count": 60,
+            "model_calls": 0,
+            "model_calls_saved_pct": 100.0,
+            "cost": 0.0,
+            "good_page_recall": 26 / 30,
+        },
+        {
+            "policy": "audit",
+            "correct_verdicts": 59,
+            "case_count": 60,
+            "model_calls": 60,
+            "model_calls_saved_pct": 0.0,
+            "cost": 0.1483468,
+            "good_page_recall": 1.0,
+        },
+        {
+            "policy": "selective",
+            "correct_verdicts": 60,
+            "case_count": 60,
+            "model_calls": 21,
+            "model_calls_saved_pct": 65.0,
+            "cost": 0.0588059,
+            "good_page_recall": 1.0,
+        },
+    ]
 
 
 def test_offline_report_rejects_missing_or_mismatched_responses(tmp_path: Path) -> None:

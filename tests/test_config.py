@@ -96,6 +96,10 @@ evaluation:
     assert cfg.evaluation.include_screenshot is True
 
 
+def test_selective_evaluation_mode_is_valid() -> None:
+    assert EvaluationConfig(mode="selective").mode == "selective"
+
+
 def test_operator_settings_override_provider_and_timeout_defaults(tmp_path):
     config_path = tmp_path / "scrape-gateway.yml"
     config_path.write_text(
@@ -134,7 +138,7 @@ evaluation:
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"mode": "gate"}, "mode must be 'off' or 'audit'"),
+        ({"mode": "gate"}, "mode must be 'off', 'audit', or 'selective'"),
         ({"max_markdown_chars": 0}, "max_markdown_chars must be positive"),
     ],
 )
