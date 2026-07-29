@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1] - 2026-07-29
+
+### Fixed
+- Calibration cost totals and per-judgment values use stable decimal precision, so the committed offline result contract replays identically on every supported Python version.
+
 ## [0.21.0] - 2026-07-29
 
 ### Added
