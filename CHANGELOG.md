@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-07-29
+
+### Added
+- Opt-in `evaluation.mode: selective` applies the measured `selective-v1` runtime gate before an AI audit. Offline replay reaches 60/60 correct verdicts with 21 model calls instead of 60, saving 65% of calls while keeping good-page recall at 100%.
+- `sgw calibrate-evaluator` reports the exact runtime predicate plus `off`, `audit`, and `selective` verdict, call, cost, and good-page-recall comparisons from committed responses.
+
+### Changed
+- `sgw url --screenshot [PATH]` accepts an optional output file and shows the saved screenshot path in the success result.
+- `sgw run --screenshot [DIR]` accepts an optional existing directory and writes one input-ordered, URL-slugged image per captured result; bare batch requests list their telemetry artifact paths.
+
+### Fixed
+- Screenshot requests no longer silently capture nothing or lose an image when telemetry is disabled: the CLI either writes the explicit destination or reports clearly that no file was saved.
+
 ## [0.21.1] - 2026-07-29
 
 ### Fixed
