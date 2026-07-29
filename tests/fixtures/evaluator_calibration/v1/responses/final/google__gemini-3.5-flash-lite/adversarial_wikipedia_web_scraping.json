@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "adversarial_wikipedia_web_scraping",
+  "classification": "content_adversarial_terms",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:14:55.756983+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status is 200 with 62834 markdown characters successfully returned."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The markdown clearly contains the full Wikipedia article on Web scraping matching the caller's goal."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Extracted markdown is clean and structured with normal Wikipedia article content."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured for this evaluation."
+      }
+    },
+    "page_type": "encyclopedia article",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "Despite a deterministic validation note mentioning a captcha signature match in metadata, the provider successfully returned 62,834 characters of rich, well-formed Markdown containing the complete text of the Wikipedia article requested by the caller. The content fully satisfies the extraction goal, meaning access was not blocked in practice."
+  },
+  "generation_id": "gen-1785287693-5fksw4UFox9zb2vhlYFr",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 10501,
+    "completion_tokens": 304,
+    "total_tokens": 10805,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0039103,
+      "upstream_inference_prompt_cost": 0.0031503,
+      "upstream_inference_completions_cost": 0.00076
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 1929,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287693-5fksw4UFox9zb2vhlYFr",
+    "object": "chat.completion",
+    "created": 1785287693,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a18ffn5o9E/D1DCVNa2idboFdaPmBU5UGnI42nKP1ZmsgsT+ClSzvyv0EP27Kio=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "captcha",
+    "validation_detail": "Matched captcha signature: 'hcaptcha'",
+    "classified_failure": "captcha"
+  }
+}

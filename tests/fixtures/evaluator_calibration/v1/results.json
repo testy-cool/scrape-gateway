@@ -1,0 +1,436 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-07-29",
+  "corpus_version": "v1",
+  "prompt_version": "scrape-usability-v2",
+  "selected_model": "google/gemini-3.5-flash-lite",
+  "run_name": "final",
+  "selection_rule": [
+    "Require at least 90% TPR and 90% TNR on combined train and dev evidence.",
+    "Prefer the highest minimum of TPR and TNR, then F1, root-cause accuracy, and exact issue-code accuracy.",
+    "Use cost and latency only as tie-breakers after judgment quality.",
+    "Run the held-out test split exactly once and do not tune or switch models afterward."
+  ],
+  "train_dev_candidates": [
+    {
+      "model": "google/gemini-3.1-flash-lite",
+      "case_count": 36,
+      "tpr": 0.8888888888888888,
+      "tnr": 1.0,
+      "f1": 0.9411764705882353,
+      "root_cause_accuracy": 0.7222222222222222,
+      "issue_code_exact_accuracy": 0.7222222222222222,
+      "cost_total": 0.07254225,
+      "cost_per_judgment": 0.0020150625,
+      "latency_p50_ms": 3344,
+      "latency_p95_ms": 6272.5
+    },
+    {
+      "model": "google/gemini-3.5-flash-lite",
+      "case_count": 36,
+      "tpr": 1.0,
+      "tnr": 1.0,
+      "f1": 1.0,
+      "root_cause_accuracy": 0.9444444444444444,
+      "issue_code_exact_accuracy": 0.7777777777777778,
+      "cost_total": 0.0939027,
+      "cost_per_judgment": 0.0026084083333333336,
+      "latency_p50_ms": 3063.5,
+      "latency_p95_ms": 3955.75
+    }
+  ],
+  "holdout": {
+    "case_count": 24,
+    "verdict": {
+      "confusion_matrix": {
+        "true_fail_predicted_fail": 11,
+        "true_fail_predicted_pass": 1,
+        "true_pass_predicted_fail": 0,
+        "true_pass_predicted_pass": 12
+      },
+      "accuracy": 0.9583333333333334,
+      "tpr": 1.0,
+      "tnr": 0.9166666666666666,
+      "precision": 0.9230769230769231,
+      "recall": 1.0,
+      "f1": 0.9600000000000001,
+      "bootstrap_95_ci": {
+        "tpr": [
+          1.0,
+          1.0
+        ],
+        "tnr": [
+          0.7272727272727273,
+          1.0
+        ]
+      }
+    },
+    "root_cause": {
+      "correct": 20,
+      "accuracy": 0.8333333333333334
+    },
+    "issue_codes": {
+      "exact_matches": 21,
+      "exact_match_accuracy": 0.875
+    },
+    "human_review": {
+      "count": 0,
+      "rate": 0.0,
+      "model_errors": 1,
+      "errors_flagged": 0,
+      "error_recall": 0.0,
+      "review_precision": null
+    },
+    "cost": {
+      "total": 0.0544441,
+      "per_judgment": 0.0022685041666666668
+    },
+    "latency_ms": {
+      "p50": 2913,
+      "p95": 4003.1499999999996
+    }
+  },
+  "full_corpus": {
+    "case_count": 60,
+    "verdict": {
+      "confusion_matrix": {
+        "true_fail_predicted_fail": 29,
+        "true_fail_predicted_pass": 1,
+        "true_pass_predicted_fail": 0,
+        "true_pass_predicted_pass": 30
+      },
+      "accuracy": 0.9833333333333333,
+      "tpr": 1.0,
+      "tnr": 0.9666666666666667,
+      "precision": 0.967741935483871,
+      "recall": 1.0,
+      "f1": 0.9836065573770492,
+      "bootstrap_95_ci": {
+        "tpr": [
+          1.0,
+          1.0
+        ],
+        "tnr": [
+          0.896551724137931,
+          1.0
+        ]
+      }
+    },
+    "root_cause": {
+      "correct": 54,
+      "accuracy": 0.9
+    },
+    "issue_codes": {
+      "exact_matches": 49,
+      "exact_match_accuracy": 0.8166666666666667
+    },
+    "human_review": {
+      "count": 0,
+      "rate": 0.0,
+      "model_errors": 1,
+      "errors_flagged": 0,
+      "error_recall": 0.0,
+      "review_precision": null
+    },
+    "cost": {
+      "total": 0.1483468,
+      "per_judgment": 0.002472446666666667
+    },
+    "latency_ms": {
+      "p50": 3021,
+      "p95": 4041.5499999999997
+    },
+    "deterministic_comparison": {
+      "summary": {
+        "agreements": 42,
+        "disagreements": 18,
+        "ai_wins": 17,
+        "deterministic_wins": 1,
+        "both_correct": 42,
+        "both_wrong": 0
+      },
+      "disagreements": [
+        {
+          "id": "cookie_mention_wikipedia",
+          "classification": "content_cookie_mention",
+          "human_verdict": "pass",
+          "deterministic_verdict": "fail",
+          "ai_verdict": "pass",
+          "winner": "ai"
+        },
+        {
+          "id": "adversarial_wikipedia_web_scraping",
+          "classification": "content_adversarial_terms",
+          "human_verdict": "pass",
+          "deterministic_verdict": "fail",
+          "ai_verdict": "pass",
+          "winner": "ai"
+        },
+        {
+          "id": "adversarial_wikipedia_captcha_article",
+          "classification": "content_adversarial_terms",
+          "human_verdict": "pass",
+          "deterministic_verdict": "fail",
+          "ai_verdict": "pass",
+          "winner": "ai"
+        },
+        {
+          "id": "adversarial_cloudflare_turnstile_docs",
+          "classification": "content_adversarial_terms",
+          "human_verdict": "pass",
+          "deterministic_verdict": "fail",
+          "ai_verdict": "pass",
+          "winner": "ai"
+        },
+        {
+          "id": "captcha_2captcha_recaptcha_demo",
+          "classification": "captcha_wall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "fail",
+          "ai_verdict": "pass",
+          "winner": "deterministic"
+        },
+        {
+          "id": "login_wall_github_settings",
+          "classification": "login_wall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "login_wall_linkedin_network",
+          "classification": "login_wall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "login_wall_instagram_profile_edit",
+          "classification": "login_wall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "login_wall_figma_files",
+          "classification": "login_wall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "paywall_medium_craigslist",
+          "classification": "paywall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "paywall_medium_beautifulsoup",
+          "classification": "paywall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "paywall_medium_chrome_devtools",
+          "classification": "paywall",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "js_shell_x_home",
+          "classification": "js_shell",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "js_shell_slack_client",
+          "classification": "js_shell",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "js_shell_quotes_javascript",
+          "classification": "js_shell",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "truncated_books_travel",
+          "classification": "truncated",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "truncated_github_actions",
+          "classification": "truncated",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        },
+        {
+          "id": "truncated_hacker_news",
+          "classification": "truncated",
+          "human_verdict": "fail",
+          "deterministic_verdict": "pass",
+          "ai_verdict": "fail",
+          "winner": "ai"
+        }
+      ],
+      "by_classification": [
+        {
+          "classification": "bot_block",
+          "count": 4,
+          "ai_correct": 4,
+          "deterministic_correct": 4,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "captcha_wall",
+          "count": 4,
+          "ai_correct": 3,
+          "deterministic_correct": 4,
+          "ai_accuracy": 0.75,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "clean_article",
+          "count": 6,
+          "ai_correct": 6,
+          "deterministic_correct": 6,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "clean_listing",
+          "count": 6,
+          "ai_correct": 6,
+          "deterministic_correct": 6,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "clean_product",
+          "count": 6,
+          "ai_correct": 6,
+          "deterministic_correct": 6,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "content_adversarial_terms",
+          "count": 6,
+          "ai_correct": 6,
+          "deterministic_correct": 3,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.5,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "content_cookie_mention",
+          "count": 6,
+          "ai_correct": 6,
+          "deterministic_correct": 5,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.8333333333333334,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "cookie_wall",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 3,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "empty_response",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 3,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        },
+        {
+          "classification": "js_shell",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 0,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.0,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "login_wall",
+          "count": 4,
+          "ai_correct": 4,
+          "deterministic_correct": 0,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.0,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "paywall",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 0,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.0,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "truncated",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 0,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 0.0,
+          "recommendation": "model_call"
+        },
+        {
+          "classification": "wrong_locale",
+          "count": 3,
+          "ai_correct": 3,
+          "deterministic_correct": 3,
+          "ai_accuracy": 1.0,
+          "deterministic_accuracy": 1.0,
+          "recommendation": "free_checks"
+        }
+      ]
+    }
+  },
+  "spend": {
+    "recorded_judgments": 96,
+    "all_models_total": 0.22088905,
+    "selected_model_total": 0.1483468,
+    "finish_session_new_calls": 50,
+    "finish_session_new_call_cost": 0.1264174
+  },
+  "human_review_conclusion": "Unreliable: the selected model set needs_human_review on 0 of 1 held-out verdict errors, and the older candidate set it on 0 of 2 train/dev verdict errors."
+}

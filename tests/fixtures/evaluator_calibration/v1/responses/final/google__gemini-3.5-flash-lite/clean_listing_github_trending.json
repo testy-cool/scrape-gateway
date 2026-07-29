@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "clean_listing_github_trending",
+  "classification": "clean_listing",
+  "split": "train",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-28T17:51:27.100465+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP 200 returned with valid page content from GitHub trending."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The markdown contains trending page elements, list items, and language filters matching the caller goal."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Extracted 61k characters of markdown containing the repository listing structure."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot evidence was captured or required for raw_http."
+      }
+    },
+    "page_type": "Repository listing and trending directory page",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The raw HTTP provider successfully retrieved GitHub's trending page with a 200 OK status and substantial markdown content containing repository information, satisfying the user's goal directly without encountering blocks or render issues."
+  },
+  "generation_id": "gen-1785261083-AKv8hSAuiBROJj4yR7AW",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 11393,
+    "completion_tokens": 287,
+    "total_tokens": 11680,
+    "cost": 0.0041354,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0041354,
+      "upstream_inference_prompt_cost": 0.0034179,
+      "upstream_inference_completions_cost": 0.0007175
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3723,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785261083-AKv8hSAuiBROJj4yR7AW",
+    "object": "chat.completion",
+    "created": 1785261083,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/shoF4ud2sKFzknO2q6IhLUZp4lDYD4ueUyDcd22PcYJQdduW9xnqqQLbD+0Q=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

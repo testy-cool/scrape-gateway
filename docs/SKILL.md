@@ -139,7 +139,7 @@ Enable the optional OpenRouter evaluator in `scrape-gateway.yml`:
 ```yaml
 evaluation:
   mode: audit
-  model: google/gemini-3.1-flash-lite
+  model: google/gemini-3.5-flash-lite
   include_screenshot: true
 ```
 
@@ -158,9 +158,13 @@ BYOK upstream cost, and provider metadata under
 scrape success. Identical evidence and provider context reuse a content-addressed
 evaluation cache.
 
-The binary judge is `uncalibrated_audit`: use its categorical checks, structured
-issue/root-cause counts, and review queue to find recurring improvements, but do not
-automatically change prompts, validators, or routing from its verdicts.
+The default `google/gemini-3.5-flash-lite` and `scrape-usability-v2` combination is
+`calibrated_v1_holdout_2026_07_29`. Its one-shot 24-case holdout reached 100% TPR,
+91.7% TNR, and 96.0% F1, but its human-review flag missed the only verdict error.
+Use its categorical checks, structured issue/root-cause counts, and review queue to
+find recurring improvements, but do not automatically change prompts, validators, or
+routing from its verdicts. Other model or prompt combinations remain
+`uncalibrated_audit`.
 
 ## Remote MCP Ops
 

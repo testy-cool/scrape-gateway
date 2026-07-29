@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "truncated_github_actions",
+  "classification": "truncated",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:06.280341+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP 200 status code returned."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Markdown only contains 'Quickstart for GitHub Actions - GitHub Docs' with no actual quickstart guide or workflow examples."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Extracted markdown is only 43 characters long while the raw HTML has 1800 characters, indicating the raw_http route failed to extract the main content properly."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot supplied."
+      }
+    },
+    "page_type": "documentation",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "missing_main_content",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Markdown contains only the page title with no guide content."
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Use a browser-based rendering provider since the documentation page requires JavaScript to load its main content properly."
+    ],
+    "critique": "The raw_http provider successfully fetched the document with an HTTP 200 status, but the extracted markdown only contains the title (43 characters) while the HTML size indicates more content exists. This is typical of documentation sites that load content dynamically via JavaScript. The scrape fails because the caller's goal of capturing the complete quickstart guide and workflow example cannot be satisfied with the current extracted content."
+  },
+  "generation_id": "gen-1785287704-8sh5vemJXTZ7U07tU0jy",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2160,
+    "completion_tokens": 421,
+    "total_tokens": 2581,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017005,
+      "upstream_inference_prompt_cost": 0.000648,
+      "upstream_inference_completions_cost": 0.0010525
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 1878,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287704-8sh5vemJXTZ7U07tU0jy",
+    "object": "chat.completion",
+    "created": 1785287704,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19K/oeez5JU1Vuoi/mQPPeDPX8SPo7z+4VtFFyvk4TYHyINGCTqPzy9JdMxhxI=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

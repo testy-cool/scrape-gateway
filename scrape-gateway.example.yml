@@ -43,7 +43,7 @@ telemetry:
 # Set OPENROUTER_API_KEY in .env before changing mode to audit.
 evaluation:
   mode: "off"
-  model: google/gemini-3.1-flash-lite
+  model: google/gemini-3.5-flash-lite
   max_markdown_chars: 30000
   include_screenshot: true
   cache_root: .scrape-gateway/evaluations

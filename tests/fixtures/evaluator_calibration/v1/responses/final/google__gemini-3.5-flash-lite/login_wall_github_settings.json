@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "login_wall_github_settings",
+  "classification": "login_wall",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:03.635277+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "Redirected or presented with the sign-in page instead of the authenticated settings profile."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The page returned is the login/sign-in page, missing the profile settings form and values."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown text is successfully extracted, but contains the wrong content."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot supplied."
+      }
+    },
+    "page_type": "login_page",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "login_wall",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Sign in to GitHub · GitHub page with Username or email address and Password fields."
+      }
+    ],
+    "recommended_action": "manual_review",
+    "improvement_opportunities": [
+      "Provide authenticated session cookies or credentials to access protected settings pages."
+    ],
+    "critique": "The requested URL is a protected settings page, but the unauthenticated raw HTTP scrape resulted in a login wall. The caller's goal of capturing the authenticated profile settings cannot be met."
+  },
+  "generation_id": "gen-1785287700-fUr9oeGu5Wd0UOg0AGwR",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2418,
+    "completion_tokens": 353,
+    "total_tokens": 2771,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0016079,
+      "upstream_inference_prompt_cost": 0.0007254,
+      "upstream_inference_completions_cost": 0.0008825
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3420,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287700-fUr9oeGu5Wd0UOg0AGwR",
+    "object": "chat.completion",
+    "created": 1785287700,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+fkC4ULX+v08XWlpyWx5NAC6m3ZPhUgzh+oSY4iNGnjVYVX1P5mU/IiwXSLSw=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

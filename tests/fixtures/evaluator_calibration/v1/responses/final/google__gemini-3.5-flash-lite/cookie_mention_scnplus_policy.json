@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "cookie_mention_scnplus_policy",
+  "classification": "content_cookie_mention",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:14:55.192453+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 returned successfully with full page content."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "The captured markdown explicitly details the site's cookie policy, definitions, and categories of cookies used."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Clean and well-structured markdown extracted successfully with 5882 characters."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured or required for this raw HTTP scrape."
+      }
+    },
+    "page_type": "Cookie Policy Legal Page",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The requested URL is a static legal page detailing the cookie policy and cookie categories. The raw HTTP provider successfully retrieved the full content with zero blocks or errors, and the markdown cleanly satisfies the caller's stated goal without needing JS rendering."
+  },
+  "generation_id": "gen-1785287692-AshQkrxqrH1yHXh5ZDRL",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 3550,
+    "completion_tokens": 293,
+    "total_tokens": 3843,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017975,
+      "upstream_inference_prompt_cost": 0.001065,
+      "upstream_inference_completions_cost": 0.0007325
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3064,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287692-AshQkrxqrH1yHXh5ZDRL",
+    "object": "chat.completion",
+    "created": 1785287692,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/ZXe+XJXm+f8op7daJAzKNNmcWIhqhcwMYQ+d+swQp2LGp1MHIQ2KjKw1He9A=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

@@ -60,7 +60,7 @@ class TelemetryConfig:
 @dataclass(slots=True)
 class EvaluationConfig:
     mode: str = "off"
-    model: str = "google/gemini-3.1-flash-lite"
+    model: str = "google/gemini-3.5-flash-lite"
     max_markdown_chars: int = 30_000
     include_screenshot: bool = True
     cache_root: str = ".scrape-gateway/evaluations"
@@ -255,7 +255,7 @@ def load_config(path: Path | str | None = None) -> GatewayConfig:
         evaluation_mode = "off"
     evaluation = EvaluationConfig(
         mode=evaluation_mode,
-        model=evaluation_raw.get("model", "google/gemini-3.1-flash-lite"),
+        model=evaluation_raw.get("model", "google/gemini-3.5-flash-lite"),
         max_markdown_chars=evaluation_raw.get("max_markdown_chars", 30_000),
         include_screenshot=evaluation_raw.get("include_screenshot", True),
         cache_root=evaluation_raw.get("cache_root", ".scrape-gateway/evaluations"),

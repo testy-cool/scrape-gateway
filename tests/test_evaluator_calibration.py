@@ -256,6 +256,40 @@ def test_offline_report_replays_recorded_responses(tmp_path: Path) -> None:
     assert report["deterministic_comparison"]["summary"]["both_correct"] == 1
 
 
+def test_committed_calibration_result_replays_offline() -> None:
+    from scrape_gateway.calibration import build_report
+
+    corpus_root = Path(__file__).parent / "fixtures" / "evaluator_calibration" / "v1"
+    committed = json.loads((corpus_root / "results.json").read_text())
+    model = committed["selected_model"]
+    response_dir = corpus_root / "responses" / committed["run_name"] / model.replace("/", "__")
+
+    holdout = build_report(
+        corpus_root=corpus_root,
+        response_dir=response_dir,
+        split="test",
+        model=model,
+    )
+    full = build_report(
+        corpus_root=corpus_root,
+        response_dir=response_dir,
+        split="all",
+        model=model,
+    )
+
+    assert committed["holdout"]["case_count"] == holdout["case_count"]
+    assert committed["holdout"]["verdict"] == holdout["metrics"]["verdict"]
+    assert committed["holdout"]["root_cause"] == holdout["metrics"]["root_cause"]
+    assert committed["holdout"]["issue_codes"] == holdout["metrics"]["issue_codes"]
+    assert committed["holdout"]["human_review"] == holdout["metrics"]["human_review"]
+    assert committed["holdout"]["cost"] == holdout["metrics"]["cost"]
+    assert committed["holdout"]["latency_ms"] == holdout["metrics"]["latency_ms"]
+    assert committed["full_corpus"]["verdict"] == full["metrics"]["verdict"]
+    assert committed["full_corpus"]["root_cause"] == full["metrics"]["root_cause"]
+    assert committed["full_corpus"]["issue_codes"] == full["metrics"]["issue_codes"]
+    assert committed["full_corpus"]["deterministic_comparison"] == full["deterministic_comparison"]
+
+
 def test_offline_report_rejects_missing_or_mismatched_responses(tmp_path: Path) -> None:
     from scrape_gateway.calibration import CalibrationError, build_report
 

@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "clean_article_mdn_http",
+  "classification": "clean_article",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:14:50.804105+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 with complete HTML and Markdown content successfully returned."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "Captured markdown contains the complete MDN overview of HTTP guide matching the caller goal."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown was successfully extracted with 60565 characters of clean text content."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was supplied."
+      }
+    },
+    "page_type": "technical documentation",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The scrape successfully retrieved the target documentation page from MDN with a 200 OK status, providing comprehensive markdown content that directly satisfies the caller's goal of capturing the overview of HTTP."
+  },
+  "generation_id": "gen-1785287688-V5bKiPS2ZsUwXzgaqDIz",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 10714,
+    "completion_tokens": 275,
+    "total_tokens": 10989,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0039017,
+      "upstream_inference_prompt_cost": 0.0032142,
+      "upstream_inference_completions_cost": 0.0006875
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2839,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287688-V5bKiPS2ZsUwXzgaqDIz",
+    "object": "chat.completion",
+    "created": 1785287688,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+Yi6ZXkPQhxDub3AD5f1GE17yNX6sv2CVjSuSjGhMJAdec9hfoQrPBzv5/Nsc=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

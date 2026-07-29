@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "wrong_locale_french_wikipedia",
+  "classification": "wrong_locale",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:25.956983+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "Deterministic validation detected captcha signature 'hcaptcha'."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The caller goal is to capture the article in Romanian, but the fetched page is in French (fr.wikipedia.org)."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown was successfully extracted, though it is the wrong language and blocked by captcha on some interactions."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured."
+      }
+    },
+    "page_type": "captcha_error_page",
+    "root_cause": "locale_mismatch",
+    "issues": [
+      {
+        "code": "captcha",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Matched captcha signature: 'hcaptcha'"
+      },
+      {
+        "code": "wrong_locale",
+        "severity": "high",
+        "source": "metadata",
+        "evidence": "Requested French Wikipedia URL for a Romanian audience goal requiring Romanian."
+      }
+    ],
+    "recommended_action": "refine_caller_goal",
+    "improvement_opportunities": [
+      "Target the Romanian Wikipedia URL instead of the French Wikipedia URL to satisfy the Romanian audience goal."
+    ],
+    "critique": "The requested scrape targeted the French Wikipedia page for 'Web scraping', whereas the caller's goal explicitly requested the article in Romanian for a Romanian audience. Furthermore, deterministic validation detected a captcha block. Therefore, the result fails both on locale mismatch and access/blocking criteria."
+  },
+  "generation_id": "gen-1785287422-P89PwkiitmymXXl2Ar9l",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 11429,
+    "completion_tokens": 427,
+    "total_tokens": 11856,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0044962,
+      "upstream_inference_prompt_cost": 0.0034287,
+      "upstream_inference_completions_cost": 0.0010675
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3571,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287422-P89PwkiitmymXXl2Ar9l",
+    "object": "chat.completion",
+    "created": 1785287422,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/pbcMDWaKfP9RlUR1FLJGpBeS8xV3HaBatEYynvp4RBHJQ4FGpdE7d5EecEJY=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "captcha",
+    "validation_detail": "Matched captcha signature: 'hcaptcha'",
+    "classified_failure": "captcha"
+  }
+}

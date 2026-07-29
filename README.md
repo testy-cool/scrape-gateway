@@ -145,13 +145,13 @@ and can route to either self-hosted service when configured.
 ## AI scrape-quality audits
 
 Enable the optional audit evaluator to have OpenRouter's
-`google/gemini-3.1-flash-lite` judge the deterministic signals and saved Markdown,
+`google/gemini-3.5-flash-lite` judge the deterministic signals and saved Markdown,
 plus a screenshot when one was requested and captured:
 
 ```yaml
 evaluation:
   mode: audit
-  model: google/gemini-3.1-flash-lite
+  model: google/gemini-3.5-flash-lite
   include_screenshot: true
 ```
 
@@ -167,9 +167,12 @@ Each run keeps the evaluator request, strict JSON response, final HTML and Markd
 screenshot when available, hashes, token/cost data, and OpenRouter generation metadata
 under `.scrape-gateway/runs/<run-id>/evaluation/`. The judge returns a binary usability
 verdict plus categorical access, goal-coverage, extractability, and visual-state checks.
-Audit failures never turn a successful scrape into a failed scrape. The judge is explicitly
-uncalibrated and audit-only; `sgw evaluations` builds a review queue but does not modify
-prompts, validators, or routing.
+Audit failures never turn a successful scrape into a failed scrape. The default model and
+`scrape-usability-v2` prompt are calibrated against the versioned 60-case corpus, with a
+one-shot 24-case holdout result of 100% TPR, 91.7% TNR, and 96.0% F1. The audit remains
+advisory because its human-review flag missed the one holdout error. See
+[`docs/evaluator-calibration-v1.md`](docs/evaluator-calibration-v1.md) for the full result
+and the free-check-versus-model recommendation.
 
 ## Extend it
 

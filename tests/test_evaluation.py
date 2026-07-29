@@ -75,7 +75,7 @@ async def test_openrouter_evaluator_sends_strict_schema_and_image(tmp_path: Path
             200,
             json={
                 "id": "gen-test-123",
-                "model": "google/gemini-3.1-flash-lite",
+                "model": "google/gemini-3.5-flash-lite",
                 "provider": "Google",
                 "choices": [
                     {
@@ -160,7 +160,7 @@ async def test_openrouter_evaluator_sends_strict_schema_and_image(tmp_path: Path
 
     payload = json.loads(completion.calls[0].request.content)
     assert completion.calls[0].request.headers["X-OpenRouter-Title"] == "scrape-gateway"
-    assert payload["model"] == "google/gemini-3.1-flash-lite"
+    assert payload["model"] == "google/gemini-3.5-flash-lite"
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
     schema = payload["response_format"]["json_schema"]["schema"]
@@ -559,6 +559,31 @@ def test_telemetry_persists_complete_evaluation_bundle(tmp_path: Path) -> None:
     assert metadata["usage"]["cost"] == 0.00048
     assert metadata["content_hashes"]["markdown"]
     assert metadata["content_hashes"]["screenshot"]
+
+
+def test_calibration_status_only_applies_to_measured_model_and_prompt() -> None:
+    from scrape_gateway.evaluation import EvaluationOutcome
+
+    calibrated = EvaluationOutcome(
+        status="completed",
+        model="google/gemini-3.5-flash-lite",
+        judgment=GOOD_JUDGMENT,
+    )
+    older_model = EvaluationOutcome(
+        status="completed",
+        model="google/gemini-3.1-flash-lite",
+        judgment=GOOD_JUDGMENT,
+    )
+    changed_prompt = EvaluationOutcome(
+        status="completed",
+        model="google/gemini-3.5-flash-lite",
+        prompt_version="scrape-usability-v3",
+        judgment=GOOD_JUDGMENT,
+    )
+
+    assert calibrated.summary()["calibration_status"] == "calibrated_v1_holdout_2026_07_29"
+    assert older_model.summary()["calibration_status"] == "uncalibrated_audit"
+    assert changed_prompt.summary()["calibration_status"] == "uncalibrated_audit"
 
 
 def test_telemetry_redacts_unknown_base64_screenshot_from_request_json(tmp_path: Path) -> None:

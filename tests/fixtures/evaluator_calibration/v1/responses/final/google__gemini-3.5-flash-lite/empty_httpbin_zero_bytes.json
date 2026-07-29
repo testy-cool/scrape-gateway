@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "empty_httpbin_zero_bytes",
+  "classification": "empty_response",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:08.420839+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 was successfully returned from the target URL."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The response body is completely empty (0 bytes), failing the goal to capture a non-empty response body."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Markdown and HTML character counts are zero, providing no extractable content."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot evidence was captured."
+      }
+    },
+    "page_type": "empty page",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "blank_page",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Content too short: 0 < 80 and markdown_chars: 0"
+      }
+    ],
+    "recommended_action": "refine_caller_goal",
+    "improvement_opportunities": [
+      "Verify whether the requested URL https://httpbin.org/bytes/0 is expected to return zero bytes."
+    ],
+    "critique": "The scrape request returned an HTTP 200 status, but the content returned was entirely empty (0 bytes), which fails the caller's explicit goal to capture a non-empty response body. Since the URL explicitly targets zero bytes (/bytes/0), the target itself contains no content."
+  },
+  "generation_id": "gen-1785287705-08wAAJhlXkMzU2CQdzMv",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2166,
+    "completion_tokens": 392,
+    "total_tokens": 2558,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0016298,
+      "upstream_inference_prompt_cost": 0.0006498,
+      "upstream_inference_completions_cost": 0.00098
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3037,
+  "input_modalities": [],
+  "response_metadata": {
+    "id": "gen-1785287705-08wAAJhlXkMzU2CQdzMv",
+    "object": "chat.completion",
+    "created": 1785287705,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a189Cp6ZWuD5fXnIEMZjoG7FM5dGAn0ICYdYoq4x31REJGdKSC6m+sEJG3YaUKM=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "empty_content",
+    "validation_detail": "Content too short: 0 < 80",
+    "classified_failure": "empty_content"
+  }
+}

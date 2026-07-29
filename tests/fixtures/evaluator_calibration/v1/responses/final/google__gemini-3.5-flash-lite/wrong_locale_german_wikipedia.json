@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "wrong_locale_german_wikipedia",
+  "classification": "wrong_locale",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:08.138571+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status is 200 and markdown content was successfully fetched."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The caller goal specifies capturing the article in Romanian for a Romanian audience, but the fetched article is in German (de.wikipedia.org)."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Extracted over 40,000 characters of Markdown content cleanly."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was supplied."
+      }
+    },
+    "page_type": "Wikipedia Article (German)",
+    "root_cause": "locale_mismatch",
+    "issues": [
+      {
+        "code": "wrong_locale",
+        "severity": "high",
+        "source": "metadata",
+        "evidence": "Requested URL is in German (de.wikipedia.org) while the caller goal asks for the article in Romanian."
+      }
+    ],
+    "recommended_action": "refine_caller_goal",
+    "improvement_opportunities": [
+      "Target the Romanian Wikipedia domain (ro.wikipedia.org) to satisfy the language requirement."
+    ],
+    "critique": "The scrape successfully retrieved the requested URL in German, but the caller specifically requested the article in Romanian. Therefore, it fails the goal coverage check due to a locale mismatch."
+  },
+  "generation_id": "gen-1785287704-8WP2WAUp6bTIAhfgYkb9",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 10941,
+    "completion_tokens": 378,
+    "total_tokens": 11319,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0042273,
+      "upstream_inference_prompt_cost": 0.0032823,
+      "upstream_inference_completions_cost": 0.000945
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 3455,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287704-8WP2WAUp6bTIAhfgYkb9",
+    "object": "chat.completion",
+    "created": 1785287704,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19ID/PgPHCBGG02VpMN5kEHRmd3rI7fzkZpDfjtAlYIjGyHz8f1EnV8Jf7b5HA=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "captcha",
+    "validation_detail": "Matched captcha signature: 'hcaptcha'",
+    "classified_failure": "captcha"
+  }
+}

@@ -43,6 +43,7 @@ def test_load_default_when_no_file():
     assert isinstance(cfg, GatewayConfig)
     assert cfg.providers == []
     assert cfg.cache.ttl_seconds == 86400
+    assert cfg.evaluation.model == "google/gemini-3.5-flash-lite"
 
 
 def test_load_yaml():

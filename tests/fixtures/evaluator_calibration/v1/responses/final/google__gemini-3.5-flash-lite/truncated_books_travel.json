@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "truncated_books_travel",
+  "classification": "truncated",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:06.626815+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 returned successfully."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Markdown only contains page title, missing all travel books, prices, and links."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Markdown character count is extremely low (39 chars), lacking main content structure."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured."
+      }
+    },
+    "page_type": "category page",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "missing_main_content",
+        "severity": "high",
+        "source": "markdown",
+        "evidence": "Markdown output is nearly empty (39 characters), containing only title text."
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Enable JavaScript rendering to correctly parse client-rendered or static layout structures if needed, or retry with a browser provider."
+    ],
+    "critique": "Although the HTTP request succeeded with status 200, the markdown extraction yielded only 39 characters containing just the title. The travel book titles, prices, stock status, and product links required by the caller goal are completely missing from the content, indicating a failure to extract or render the main page content using raw HTTP."
+  },
+  "generation_id": "gen-1785287703-MV8VYeQmpLGgoA0s6wMj",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2179,
+    "completion_tokens": 388,
+    "total_tokens": 2567,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0016237,
+      "upstream_inference_prompt_cost": 0.0006537,
+      "upstream_inference_completions_cost": 0.00097
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2990,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287703-MV8VYeQmpLGgoA0s6wMj",
+    "object": "chat.completion",
+    "created": 1785287703,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+/oUWP0rXBQalTA/Ox3YVgyPub74Y/SCPgCn1eAeYyYpTow9d1H/L07YmWGXM=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

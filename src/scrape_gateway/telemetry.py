@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from .evaluation import CALIBRATION_STATUS, calibration_status
 from .models import FailureReason, ScrapeRequest, ScrapeResult
 from .paths import RUN_ID_PATTERN, safe_child
 
@@ -455,6 +456,7 @@ def summarize_evaluations(
     model_counts: Counter[str] = Counter()
     provider_counts: Counter[str] = Counter()
     prompt_version_counts: Counter[str] = Counter()
+    calibration_status_counts: Counter[str] = Counter()
     check_result_counts: defaultdict[str, Counter[str]] = defaultdict(Counter)
     check_failure_counts: Counter[str] = Counter()
     review_queue: list[dict[str, Any]] = []
@@ -479,6 +481,13 @@ def summarize_evaluations(
         prompt_version = evaluation.get("prompt_version")
         if prompt_version:
             prompt_version_counts[str(prompt_version)] += 1
+        measured_status = evaluation.get("calibration_status")
+        if not measured_status:
+            measured_status = calibration_status(
+                str(evaluation.get("model") or ""),
+                str(prompt_version or ""),
+            )
+        calibration_status_counts[str(measured_status)] += 1
         page_type = evaluation.get("page_type")
         if page_type:
             normalized_page_type = re.sub(r"[\s_-]+", " ", str(page_type).strip().lower())
@@ -568,8 +577,15 @@ def summarize_evaluations(
         )
     ]
 
+    current_calibration_status = (
+        next(iter(calibration_status_counts))
+        if len(calibration_status_counts) == 1
+        else "mixed"
+        if calibration_status_counts
+        else CALIBRATION_STATUS
+    )
     return {
-        "calibration_status": "uncalibrated_audit",
+        "calibration_status": current_calibration_status,
         "runs_scanned": len(reports),
         "evaluated_runs": evaluated_runs,
         "unevaluated_runs": len(reports) - evaluated_runs,
@@ -720,7 +736,7 @@ class TelemetryRecorder:
             "status": outcome.status,
             "model": outcome.model,
             "prompt_version": outcome.prompt_version,
-            "calibration_status": "uncalibrated_audit",
+            "calibration_status": calibration_status(outcome.model, outcome.prompt_version),
             "generation_id": outcome.generation_id,
             "provider": outcome.provider,
             "usage": outcome.usage,

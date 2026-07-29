@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "case_ids": [
+    "clean_article_mdn_http",
+    "clean_article_govuk_progressive_enhancement",
+    "clean_product_books_light_attic",
+    "clean_product_books_tipping_velvet",
+    "clean_product_webscraper_packard",
+    "clean_listing_webscraper_laptops",
+    "cookie_mention_github_docs",
+    "cookie_mention_scnplus_policy",
+    "adversarial_hacker_news_cloudflare_text",
+    "adversarial_wikipedia_web_scraping",
+    "adversarial_wikipedia_captcha_article",
+    "adversarial_cloudflare_turnstile_docs",
+    "bot_block_economist_cloudflare",
+    "captcha_google_recaptcha_demo",
+    "captcha_hcaptcha_demo",
+    "captcha_2captcha_recaptcha_demo",
+    "login_wall_github_settings",
+    "paywall_medium_chrome_devtools",
+    "cookie_wall_tetapux",
+    "cookie_wall_tagconcierge_curl",
+    "truncated_books_travel",
+    "truncated_github_actions",
+    "wrong_locale_german_wikipedia",
+    "empty_httpbin_zero_bytes"
+  ],
+  "started_at": "2026-07-29T01:14:47.832056+00:00",
+  "completed_at": "2026-07-29T01:15:08.421439+00:00"
+}

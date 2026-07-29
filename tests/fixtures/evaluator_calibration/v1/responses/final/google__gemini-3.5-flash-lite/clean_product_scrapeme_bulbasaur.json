@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "clean_product_scrapeme_bulbasaur",
+  "classification": "clean_product",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:10.568300+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP 200 returned with full product details successfully fetched via raw_http."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "Product name (Bulbasaur), price (£63.00), SKU (4391), stock status (45 in stock), and description are all present in the markdown."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Clean and well-structured markdown contains all requested fields in clear text format."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot provided."
+      }
+    },
+    "page_type": "ecommerce product page",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [],
+    "critique": "The scrape successfully retrieved the requested product page for Bulbasaur. All required information including name, price, SKU, stock status, and description are fully present and clearly extractable from the markdown output."
+  },
+  "generation_id": "gen-1785287407-6MIxRwnd7hyu0eh0GRcv",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 3318,
+    "completion_tokens": 299,
+    "total_tokens": 3617,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017429,
+      "upstream_inference_prompt_cost": 0.0009954,
+      "upstream_inference_completions_cost": 0.0007475
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 4090,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287407-6MIxRwnd7hyu0eh0GRcv",
+    "object": "chat.completion",
+    "created": 1785287407,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1+mJSMvUcAQwiY8bftLSg10wxuhFK0lagoGACowpW8hIBEf+q06QTh3Ki+ZaBw=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

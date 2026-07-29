@@ -65,7 +65,7 @@ telemetry:
 
 evaluation:
   mode: audit
-  model: google/gemini-3.1-flash-lite
+  model: google/gemini-3.5-flash-lite
   max_markdown_chars: 30000
   include_screenshot: true
   cache_root: .scrape-gateway/evaluations
@@ -198,8 +198,11 @@ retention policy.
 Run `sgw evaluations` (or `sgw evaluations --format json`) to aggregate verdicts,
 root causes, issue codes, failed checks, page types, OpenRouter billed cost, BYOK
 upstream inference cost, recurring improvement suggestions, and a manual review queue.
-The evaluator is marked `uncalibrated_audit`; no prompt, validator, or routing change
-is applied automatically.
+The default model and `scrape-usability-v2` prompt are marked
+`calibrated_v1_holdout_2026_07_29`. The one-shot 24-case holdout reached 100% TPR,
+91.7% TNR, and 96.0% F1, but `needs_human_review` missed its sole error, so no prompt,
+validator, or routing change is applied automatically. Other model or prompt
+combinations are marked `uncalibrated_audit`.
 
 ## TTL format
 

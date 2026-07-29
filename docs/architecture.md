@@ -81,9 +81,10 @@ attempt HTML and screenshots are kept at the run root. A stable evidence hash ca
 identical content only when provider and attempt context also match. OpenRouter usage
 and generation metadata record the actual upstream provider, token count, cost, and
 BYOK status when available. `sgw evaluations` aggregates these records into a manual
-review queue. The current binary usability judge is labeled `uncalibrated_audit`;
-calibration against human labels is required before using its verdicts as an automated
-acceptance gate.
+review queue. The default model and `scrape-usability-v2` prompt are labeled
+`calibrated_v1_holdout_2026_07_29` from a one-shot 24-case holdout, but the evaluator
+remains advisory because its human-review flag did not catch the holdout error. Any
+other model or prompt combination is labeled `uncalibrated_audit`.
 
 ## Proxy handling
 

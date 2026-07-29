@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "adversarial_hacker_news_cloudflare_text",
+  "classification": "content_adversarial_terms",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:14:55.805057+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "pass",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status 200 with complete Hacker News front page content."
+      },
+      "goal_coverage": {
+        "result": "pass",
+        "evidence": "Story titles, scores, authors, and links are fully visible in the captured markdown."
+      },
+      "extractability": {
+        "result": "pass",
+        "evidence": "Markdown contains structured lists of stories with clear metadata."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was supplied."
+      }
+    },
+    "page_type": "news aggregator front page",
+    "root_cause": "none",
+    "issues": [],
+    "recommended_action": "accept",
+    "improvement_opportunities": [
+      "Proceed with structured parsing of the markdown or raw HTML to extract story elements."
+    ],
+    "critique": "The raw HTTP request successfully retrieved the complete Hacker News front page. All requested fields (story titles, scores, authors, and links) are present and fully extractable from the provided markdown."
+  },
+  "generation_id": "gen-1785287693-hVCEMFksGcTREahQSgbU",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 6879,
+    "completion_tokens": 290,
+    "total_tokens": 7169,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0027887,
+      "upstream_inference_prompt_cost": 0.0020637,
+      "upstream_inference_completions_cost": 0.000725
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2853,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287693-hVCEMFksGcTREahQSgbU",
+    "object": "chat.completion",
+    "created": 1785287693,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19OFreGLmLb7SSOZ2dbG/Ov+P7ucSHrKObfHy518hJRS7++lzu4hgKhT4nQw2s=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "pass",
+    "validation_passed": true,
+    "block_type": null,
+    "validation_detail": null,
+    "classified_failure": null
+  }
+}

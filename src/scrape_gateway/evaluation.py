@@ -17,7 +17,9 @@ from .config import EvaluationConfig
 from .models import ScrapeRequest, ScrapeResult
 
 PROMPT_VERSION = "scrape-usability-v2"
-CALIBRATION_STATUS = "uncalibrated_audit"
+CALIBRATED_MODEL = "google/gemini-3.5-flash-lite"
+CALIBRATION_STATUS = "calibrated_v1_holdout_2026_07_29"
+UNCALIBRATED_STATUS = "uncalibrated_audit"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_GENERATION_URL = "https://openrouter.ai/api/v1/generation"
 GENERATION_METADATA_ATTEMPTS = 3
@@ -51,6 +53,12 @@ EVALUATION RULES
 - Do not recommend changing a validator, prompt, or route from one ambiguous example; set needs_human_review to true instead.
 
 Return only the structured response required by the provided schema."""
+
+
+def calibration_status(model: str, prompt_version: str) -> str:
+    if model == CALIBRATED_MODEL and prompt_version == PROMPT_VERSION:
+        return CALIBRATION_STATUS
+    return UNCALIBRATED_STATUS
 
 
 class _StrictModel(BaseModel):
@@ -177,7 +185,7 @@ class EvaluationOutcome:
             "status": self.status,
             "model": self.model,
             "prompt_version": self.prompt_version,
-            "calibration_status": CALIBRATION_STATUS,
+            "calibration_status": calibration_status(self.model, self.prompt_version),
             "generation_id": self.generation_id,
             "provider": self.provider,
             "usage": self.usage,

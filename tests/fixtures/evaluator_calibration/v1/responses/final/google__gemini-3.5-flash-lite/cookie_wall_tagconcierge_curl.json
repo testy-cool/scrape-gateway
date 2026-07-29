@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "cookie_wall_tagconcierge_curl",
+  "classification": "cookie_wall",
+  "split": "test",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:15:05.381605+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "fail",
+        "evidence": "Matched consent_wall signature: 'we use cookies'"
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "The markdown only shows back links and cookie settings due to the active consent wall blocking the requested content."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "Markdown output is truncated to 65 characters, containing only navigation links."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot evidence was captured."
+      }
+    },
+    "page_type": "consent_wall",
+    "root_cause": "access_block",
+    "issues": [
+      {
+        "code": "cookie_wall",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Matched consent_wall signature: 'we use cookies'"
+      }
+    ],
+    "recommended_action": "retry_render_js",
+    "improvement_opportunities": [
+      "Enable JavaScript rendering to interact with or bypass the consent banner wall."
+    ],
+    "critique": "The scrape captured a page dominated by a consent wall, preventing access to the underlying content required by the caller's goal. Because JavaScript rendering was disabled, the content behind the consent wall could not be loaded or captured."
+  },
+  "generation_id": "gen-1785287703-ySqSNniAYx743OcasRFs",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2218,
+    "completion_tokens": 357,
+    "total_tokens": 2575,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0015579,
+      "upstream_inference_prompt_cost": 0.0006654,
+      "upstream_inference_completions_cost": 0.0008925
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2363,
+  "input_modalities": [
+    "markdown"
+  ],
+  "response_metadata": {
+    "id": "gen-1785287703-ySqSNniAYx743OcasRFs",
+    "object": "chat.completion",
+    "created": 1785287703,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a19EESWZ1EeNzO8En9phmGknU+hslRp4eAWT+ek8Fv3BwTMKroxehg4aU6OuLd0=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "consent_wall",
+    "validation_detail": "Matched consent_wall signature: 'we use cookies'",
+    "classified_failure": "unknown"
+  }
+}

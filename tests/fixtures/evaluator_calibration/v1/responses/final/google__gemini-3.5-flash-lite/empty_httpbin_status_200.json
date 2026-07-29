@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "corpus_version": "v1",
+  "case_id": "empty_httpbin_status_200",
+  "classification": "empty_response",
+  "split": "dev",
+  "model": "google/gemini-3.5-flash-lite",
+  "prompt_version": "scrape-usability-v2",
+  "prompt_sha256": "b7c6e5ed3cad0734446e4a5deb0f31eb4dc46da9b39527822d6229debe12ef0b",
+  "recorded_at": "2026-07-29T01:10:25.918106+00:00",
+  "status": "completed",
+  "judgment": {
+    "verdict": "fail",
+    "needs_human_review": false,
+    "checks": {
+      "access": {
+        "result": "pass",
+        "evidence": "HTTP status code is 200 indicating successful access."
+      },
+      "goal_coverage": {
+        "result": "fail",
+        "evidence": "Markdown and HTML character counts are both 0, failing to capture any response body."
+      },
+      "extractability": {
+        "result": "fail",
+        "evidence": "No content was returned from the server to extract."
+      },
+      "visual_state": {
+        "result": "not_applicable",
+        "evidence": "No screenshot was captured for this HTTP request."
+      }
+    },
+    "page_type": "empty_endpoint",
+    "root_cause": "render_failure",
+    "issues": [
+      {
+        "code": "blank_page",
+        "severity": "high",
+        "source": "deterministic",
+        "evidence": "Content length is 0, below the minimum threshold of 80 characters."
+      }
+    ],
+    "recommended_action": "retry_provider",
+    "improvement_opportunities": [
+      "Retry with a provider that supports full rendering if headers or status endpoints require it."
+    ],
+    "critique": "The requested URL returned an HTTP 200 status code, but the response body is completely empty (0 characters), which fails the caller's goal of capturing a non-empty response body and main content."
+  },
+  "generation_id": "gen-1785287422-XVRV69Mp2syNGZHZqmVo",
+  "provider": "Google",
+  "usage": {
+    "prompt_tokens": 2170,
+    "completion_tokens": 358,
+    "total_tokens": 2528,
+    "cost": 0,
+    "is_byok": true,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001546,
+      "upstream_inference_prompt_cost": 0.000651,
+      "upstream_inference_completions_cost": 0.000895
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "elapsed_ms": 2991,
+  "input_modalities": [],
+  "response_metadata": {
+    "id": "gen-1785287422-XVRV69Mp2syNGZHZqmVo",
+    "object": "chat.completion",
+    "created": 1785287422,
+    "model": "google/gemini-3.5-flash-lite",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choice_metadata": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "refusal": null,
+          "reasoning": null,
+          "reasoning_details": [
+            {
+              "type": "reasoning.text",
+              "signature": "AY89a1/izbawRCuVb/AX/b1RXpd4qsyZCO1sTAkuluhDWflLwHrB4/vh6LRdrHt9yzw=",
+              "format": "google-gemini-v1",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "error": null,
+  "deterministic": {
+    "verdict": "fail",
+    "validation_passed": false,
+    "block_type": "empty_content",
+    "validation_detail": "Content too short: 0 < 80",
+    "classified_failure": "empty_content"
+  }
+}
