@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-07-30
+
+### Added
+- `sgw scrapingevals` exports ordinary provider-attempt traffic and allowlisted run evidence as the versioned `scrapingevals.sgw-observations/v1` staging contract.
+- Stable database and event identities, replay-safe ledger cursors, private-target exclusion, URL redaction, and artifact hashes support incremental transfer without exposing response bodies or local paths.
+- The ScrapingEvals integration guide assigns ownership from SGW's private ledger through receiver review and public promotion, while marking every passive run non-comparable and review-required.
+
 ## [0.22.1] - 2026-07-30
 
 ### Fixed
