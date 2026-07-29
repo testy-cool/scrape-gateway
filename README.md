@@ -25,6 +25,7 @@ cp .env.example .env   # add API keys (optional — free providers work without 
 
 sgw selftest           # verify installation
 sgw url https://example.com
+sgw url https://example.com --screenshot page.jpg
 ```
 
 Run the persistent MCP server and browser console with Docker Compose:

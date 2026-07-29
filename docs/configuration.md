@@ -166,7 +166,12 @@ the evaluator prompt, or the model; do not treat these thresholds as timeless.
 `include_screenshot` means “attach screenshot evidence when the selected provider
 returned it.” Request that evidence with `sgw url ... --screenshot`, the MCP tool's
 `screenshot: true`, or `ScrapeRequest(screenshot=True)`. Screenshot capability can
-change which providers are eligible and may increase provider cost.
+change which providers are eligible and may increase provider cost. The CLI success
+panel shows the saved telemetry path. `sgw url ... --screenshot page.jpg` writes to an
+explicit file even when telemetry is disabled; for a batch,
+`sgw run urls.txt --screenshot screenshots/` writes one URL-slugged image per result
+under an existing directory. A bare request that captures no image or cannot persist
+one always prints a warning.
 
 Use `--evaluation-goal` when general page usability is not specific enough:
 

@@ -119,6 +119,110 @@ def test_url_output_rejects_missing_parent_directory(tmp_path):
     assert not output_path.exists()
 
 
+def test_url_screenshot_path_writes_image_and_surfaces_path(tmp_path):
+    screenshot_path = tmp_path / "requested.jpg"
+    captured = {}
+
+    async def fake_scrape(request, *, use_cache=True, use_memory=True):
+        captured["request"] = request
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html="<main>Captured page</main>",
+            screenshot=b"\xff\xd8\xffrequested-image",
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(
+            app,
+            ["url", "https://example.com", "--screenshot", str(screenshot_path)],
+        )
+
+    assert result.exit_code == 0
+    assert captured["request"].screenshot is True
+    assert screenshot_path.read_bytes() == b"\xff\xd8\xffrequested-image"
+    assert "SUCCESS" in result.output
+    assert "screenshot" in result.output
+    assert str(screenshot_path) in result.output
+
+
+def test_url_bare_screenshot_surfaces_telemetry_artifact(tmp_path):
+    screenshot_path = tmp_path / "runs" / "run-123" / "screenshot.png"
+    screenshot_path.parent.mkdir(parents=True)
+    screenshot_path.write_bytes(b"\x89PNG\r\n\x1a\ntelemetry-image")
+    captured = {}
+
+    async def fake_scrape(request, *, use_cache=True, use_memory=True):
+        captured["request"] = request
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html="<main>Captured page</main>",
+            screenshot=screenshot_path.read_bytes(),
+            route="mock",
+            metadata={"artifacts": {"screenshot": str(screenshot_path)}},
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["url", "https://example.com", "--screenshot"])
+
+    assert result.exit_code == 0
+    assert captured["request"].screenshot is True
+    assert "screenshot" in result.output
+    assert str(screenshot_path) in result.output
+
+
+def test_url_bare_screenshot_warns_when_telemetry_did_not_save():
+    async def fake_scrape(request, *, use_cache=True, use_memory=True):
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html="<main>Captured page</main>",
+            screenshot=b"\x89PNG\r\n\x1a\nunsaved-image",
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(app, ["url", "https://example.com", "--screenshot"])
+
+    assert result.exit_code == 0
+    assert "Screenshot was captured but not saved because telemetry is disabled" in result.output
+    assert "--screenshot PATH" in result.output
+
+
+def test_url_screenshot_warns_when_provider_captures_nothing():
+    result, request = _run_url("https://example.com", "--screenshot")
+
+    assert result.exit_code == 0
+    assert request.screenshot is True
+    assert "Screenshot requested, but no image was captured" in result.output
+
+
+def test_url_screenshot_path_rejects_missing_parent_directory(tmp_path):
+    screenshot_path = tmp_path / "missing" / "page.jpg"
+
+    result, request = _run_url(
+        "https://example.com",
+        "--screenshot",
+        str(screenshot_path),
+    )
+
+    assert result.exit_code == 2
+    assert "Screenshot output directory does not exist" in result.output
+    assert request is None
+    assert not screenshot_path.exists()
+
+
 def test_run_output_writes_each_successful_scrape_in_input_order(tmp_path):
     urls_file = tmp_path / "urls.txt"
     urls_file.write_text("https://one.example\nhttps://two.example\n")
@@ -144,6 +248,43 @@ def test_run_output_writes_each_successful_scrape_in_input_order(tmp_path):
     )
     assert "Wrote 2 scrape results to" in result.output
     assert str(output_path) in result.output
+
+
+def test_run_screenshot_directory_writes_one_named_image_per_url(tmp_path):
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("https://one.example\nhttps://two.example/products\n")
+    screenshot_dir = tmp_path / "screenshots"
+    screenshot_dir.mkdir()
+    captured_requests = []
+
+    async def fake_scrape(request):
+        captured_requests.append(request)
+        return ScrapeResult(
+            url=request.url,
+            provider="mock",
+            success=True,
+            status_code=200,
+            html=f"<main>{request.url}</main>",
+            screenshot=b"\xff\xd8\xffbatch-image",
+            route="mock",
+        )
+
+    with patch("scrape_gateway.cli._build_gateway") as mock_gw:
+        mock_gw.return_value.scrape = AsyncMock(side_effect=fake_scrape)
+        result = runner.invoke(
+            app,
+            ["run", str(urls_file), "--screenshot", str(screenshot_dir)],
+        )
+
+    first = screenshot_dir / "001-one-example.jpg"
+    second = screenshot_dir / "002-two-example-products.jpg"
+    assert result.exit_code == 0
+    assert [request.screenshot for request in captured_requests] == [True, True]
+    assert first.read_bytes() == b"\xff\xd8\xffbatch-image"
+    assert second.read_bytes() == b"\xff\xd8\xffbatch-image"
+    assert "Saved screenshots" in result.output
+    assert str(first) in result.output
+    assert str(second) in result.output
 
 
 def test_run_batch_total_sums_each_complete_run_ledger(tmp_path):

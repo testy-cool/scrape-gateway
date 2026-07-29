@@ -2,20 +2,45 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from typer.core import TyperGroup
 
 from .config import StrategyConfig
 from .discovery import load_command_extensions
 from .models import ScrapeRequest
 from .router import ScrapeGateway
 
+_SCREENSHOT_AUTO = "__SCRAPE_GATEWAY_TELEMETRY__"
+
+
+class ScrapeGatewayGroup(TyperGroup):
+    """Preserve bare --screenshot while also accepting --screenshot PATH."""
+
+    def parse_args(self, ctx, args):
+        normalized = list(args)
+        command_positions = [
+            index for index, value in enumerate(normalized) if value in {"url", "run"}
+        ]
+        if command_positions:
+            command_position = command_positions[0]
+            for index in range(command_position + 1, len(normalized)):
+                if normalized[index] != "--screenshot":
+                    continue
+                if index + 1 == len(normalized) or normalized[index + 1].startswith("-"):
+                    normalized[index] = f"--screenshot={_SCREENSHOT_AUTO}"
+        return super().parse_args(ctx, normalized)
+
+
 app = typer.Typer(
+    cls=ScrapeGatewayGroup,
     help="""Scrape Gateway — a CLI that scrapes web pages through multiple providers,
 picks the cheapest one that works, and remembers what worked per domain.
 
@@ -36,7 +61,7 @@ Commands:
   cost      Summarize recorded spend by domain and provider
   evaluations  Aggregate AI quality audits and review recurring failures
   calibrate-evaluator  Measure the AI audit against human labels
-  selftest  Verify the tool works against safe public URLs"""
+  selftest  Verify the tool works against safe public URLs""",
 )
 console = Console(stderr=True)
 
@@ -267,6 +292,9 @@ def _print_result(result) -> None:
         table.add_row("run", f"[dim]{result.metadata['run_id']}[/]")
     if result.metadata.get("telemetry_report"):
         table.add_row("report", f"[dim]{result.metadata['telemetry_report']}[/]")
+    artifacts = result.metadata.get("artifacts")
+    if isinstance(artifacts, dict) and artifacts.get("screenshot"):
+        table.add_row("screenshot", f"[dim]{artifacts['screenshot']}[/]")
     evaluation = result.metadata.get("evaluation")
     if isinstance(evaluation, dict):
         audit_result = evaluation.get("verdict") or evaluation.get("status") or "unknown"
@@ -279,6 +307,8 @@ def _print_result(result) -> None:
             table.add_row("audit action", str(action))
 
     console.print(Panel(table, title=title, border_style="green" if result.success else "red"))
+    if isinstance(artifacts, dict) and artifacts.get("screenshot"):
+        console.print(f"[dim]Screenshot: {artifacts['screenshot']}[/]", soft_wrap=True)
 
 
 def _validate_output_path(output: Path | None) -> None:
@@ -296,6 +326,66 @@ def _write_output(output: Path, content: str, *, description: str) -> None:
         console.print(f"[red]Could not write output file {output}:[/] {exc}")
         raise typer.Exit(2) from exc
     console.print(f"[green]Wrote {description} to {output}[/]")
+
+
+def _screenshot_destination(value: str | None) -> Path | None:
+    if value is None or value == _SCREENSHOT_AUTO:
+        return None
+    return Path(value)
+
+
+def _validate_screenshot_destination(value: str | None, *, batch: bool) -> None:
+    destination = _screenshot_destination(value)
+    if destination is None:
+        return
+    required_directory = destination if batch else destination.parent
+    if not required_directory.is_dir():
+        console.print(f"[red]Screenshot output directory does not exist:[/] {required_directory}")
+        raise typer.Exit(2)
+
+
+def _saved_screenshot_path(result) -> Path | None:
+    artifacts = result.metadata.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return None
+    value = artifacts.get("screenshot")
+    if not isinstance(value, str):
+        return None
+    path = Path(value)
+    return path if path.is_file() else None
+
+
+def _save_requested_screenshot(result, destination: Path | None) -> Path | None:
+    if not result.screenshot:
+        console.print("[yellow]Screenshot requested, but no image was captured.[/]")
+        return None
+    if destination is not None:
+        try:
+            destination.write_bytes(result.screenshot)
+        except OSError as exc:
+            console.print(f"[red]Could not write screenshot file {destination}:[/] {exc}")
+            raise typer.Exit(2) from exc
+        result.metadata.setdefault("artifacts", {})["screenshot"] = str(destination)
+        console.print(f"[green]Wrote screenshot to {destination}[/]", soft_wrap=True)
+        return destination
+
+    saved = _saved_screenshot_path(result)
+    if saved is not None:
+        return saved
+    console.print(
+        "[yellow]Screenshot was captured but not saved because telemetry is disabled. "
+        "Pass --screenshot PATH to choose a file.[/]"
+    )
+    return None
+
+
+def _batch_screenshot_path(directory: Path, index: int, url: str, content: bytes) -> Path:
+    from .telemetry import screenshot_suffix
+
+    parsed = urlparse(url)
+    raw_slug = f"{parsed.hostname or 'page'}-{parsed.path.strip('/')}"
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", raw_slug).strip("-").lower() or "page"
+    return directory / f"{index:03d}-{slug[:80]}.{screenshot_suffix(content)}"
 
 
 def _result_content(result, output_format: str) -> str:
@@ -322,7 +412,12 @@ def url(
     extra_wait: int = typer.Option(0, "--extra-wait", help="Extra wait in ms after page load"),
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
-    screenshot: bool = typer.Option(False, "--screenshot"),
+    screenshot: str | None = typer.Option(
+        None,
+        "--screenshot",
+        metavar="[PATH]",
+        help="Capture a screenshot; optionally write it to PATH",
+    ),
     tier: str | None = typer.Option(
         None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
     ),
@@ -364,6 +459,9 @@ def url(
     """
 
     _validate_output_path(output)
+    _validate_screenshot_destination(screenshot, batch=False)
+    screenshot_requested = screenshot is not None
+    screenshot_destination = _screenshot_destination(screenshot)
 
     async def run() -> None:
         gateway = _build_gateway(provider)
@@ -384,7 +482,7 @@ def url(
                     country=country,
                     render_js=render_js,
                     premium=premium,
-                    screenshot=screenshot,
+                    screenshot=screenshot_requested,
                     mobile=mobile,
                     wait_event=wait_event,
                     wait_selector=wait_selector,
@@ -397,6 +495,8 @@ def url(
                 use_cache=not no_cache,
                 use_memory=not no_cache,
             )
+        if screenshot_requested:
+            _save_requested_screenshot(result, screenshot_destination)
         _print_result(result)
         if meta and result.success and result.html:
             page_metadata = _extract_page_metadata(result.html, result.url)
@@ -969,7 +1069,12 @@ def run(
     extra_wait: int = typer.Option(0, "--extra-wait", help="Extra wait in ms after page load"),
     block_ads: bool = typer.Option(False, "--block-ads"),
     output_format: str = typer.Option("html", "--format", "-f", help="html|markdown"),
-    screenshot: bool = typer.Option(False, "--screenshot"),
+    screenshot: str | None = typer.Option(
+        None,
+        "--screenshot",
+        metavar="[DIR]",
+        help="Capture screenshots; optionally write one file per URL under DIR",
+    ),
     tier: str | None = typer.Option(
         None, "--tier", "-t", help="ScrapeDrive tier: standard|advanced|hyperdrive"
     ),
@@ -997,6 +1102,9 @@ def run(
     """
 
     _validate_output_path(output)
+    _validate_screenshot_destination(screenshot, batch=True)
+    screenshot_requested = screenshot is not None
+    screenshot_directory = _screenshot_destination(screenshot)
 
     async def execute() -> None:
         gateway = _build_gateway(provider)
@@ -1007,6 +1115,7 @@ def run(
         successes = 0
         total_cost = 0.0
         output_contents: list[str] = []
+        saved_screenshots: list[Path] = []
 
         table = Table(title="Batch Results")
         table.add_column("#", style="dim", width=4)
@@ -1024,7 +1133,7 @@ def run(
                         country=country,
                         render_js=render_js,
                         premium=premium,
-                        screenshot=screenshot,
+                        screenshot=screenshot_requested,
                         mobile=mobile,
                         wait_event=wait_event,
                         wait_selector=wait_selector,
@@ -1037,6 +1146,20 @@ def run(
                 )
             successes += int(result.success)
             total_cost += result.run_cost_units
+            if screenshot_requested:
+                destination = (
+                    _batch_screenshot_path(
+                        screenshot_directory,
+                        i,
+                        item,
+                        result.screenshot,
+                    )
+                    if screenshot_directory is not None and result.screenshot
+                    else None
+                )
+                saved = _save_requested_screenshot(result, destination)
+                if saved is not None:
+                    saved_screenshots.append(saved)
             if output and result.success:
                 output_contents.append(_result_content(result, output_format))
             status_style = "green" if result.success else "red"
@@ -1069,6 +1192,10 @@ def run(
                 "\n".join(output_contents),
                 description=f"{len(output_contents)} scrape results",
             )
+        if saved_screenshots:
+            console.print("\n[bold]Saved screenshots[/]")
+            for path in saved_screenshots:
+                console.print(str(path), soft_wrap=True)
 
     asyncio.run(execute())
 

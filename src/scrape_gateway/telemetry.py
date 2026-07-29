@@ -126,7 +126,7 @@ def _sha256(content: str | bytes | None) -> str | None:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _screenshot_suffix(content: bytes) -> str:
+def screenshot_suffix(content: bytes) -> str:
     if content.startswith(b"\x89PNG\r\n\x1a\n"):
         return "png"
     if content.startswith(b"\xff\xd8\xff"):
@@ -677,7 +677,7 @@ class TelemetryRecorder:
         folder = self._run_folder(run_id)
         folder.mkdir(parents=True, exist_ok=True)
         safe_provider = re.sub(r"[^a-zA-Z0-9_.-]+", "_", provider)
-        suffix = _screenshot_suffix(result.screenshot)
+        suffix = screenshot_suffix(result.screenshot)
         path = folder / f"{index:02d}-{safe_provider}.failed.{suffix}"
         path.write_bytes(result.screenshot)
         return str(path)
@@ -727,7 +727,7 @@ class TelemetryRecorder:
             markdown_path.write_text(result.markdown, encoding="utf-8")
             paths["final_markdown"] = str(markdown_path)
         if result.screenshot:
-            suffix = _screenshot_suffix(result.screenshot)
+            suffix = screenshot_suffix(result.screenshot)
             screenshot_path = folder / f"screenshot.{suffix}"
             screenshot_path.write_bytes(result.screenshot)
             paths["screenshot"] = str(screenshot_path)
@@ -782,7 +782,7 @@ class TelemetryRecorder:
             markdown_path.write_text(result.markdown, encoding="utf-8")
             paths["final_markdown"] = str(markdown_path)
         if result.screenshot:
-            suffix = _screenshot_suffix(result.screenshot)
+            suffix = screenshot_suffix(result.screenshot)
             screenshot_path = folder / f"screenshot.{suffix}"
             screenshot_path.write_bytes(result.screenshot)
             paths["screenshot"] = str(screenshot_path)

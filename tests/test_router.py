@@ -708,6 +708,9 @@ async def test_screenshot_only_result_is_not_rejected_as_empty_html(tmp_dir):
     assert result.success is True
     assert result.screenshot
     assert result.content_validated is None
+    screenshot_path = Path(result.metadata["artifacts"]["screenshot"])
+    assert screenshot_path.exists()
+    assert screenshot_path.read_bytes() == result.screenshot
 
 
 async def test_telemetry_report_records_validation_evidence(tmp_dir):

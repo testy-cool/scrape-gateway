@@ -18,6 +18,12 @@ See [HTTP service](http-service.md) for the endpoint contract and curl examples.
 
 Tries providers from cheapest to most expensive until one succeeds. Results are cached locally so repeat scrapes are instant and free. Domain memory remembers which provider worked. Use `--output`/`-o` to write the selected HTML or Markdown content to a file while keeping the rich scrape summary in the console. The parent directory must already exist and an existing file is overwritten.
 
+`--screenshot` requests visual evidence and shows its telemetry artifact path in
+the success panel. Pass an optional file path to write the image there instead:
+`--screenshot page.jpg`. The parent directory must already exist. If a provider
+returns no image, or a bare `--screenshot` cannot persist one because telemetry
+is disabled, the command prints an explicit warning.
+
 ```bash
 sgw url https://example.com                    # basic scrape
 sgw url https://example.com --render-js        # JS-heavy SPA
@@ -28,6 +34,8 @@ sgw url https://example.com -f markdown -o page.md
 sgw url https://example.com --tier advanced    # force ScrapeDrive tier
 sgw url https://example.com --meta             # extract page metadata inline
 sgw url https://example.com --debug-artifacts  # save failed response bodies
+sgw url https://example.com --screenshot        # save under the telemetry run
+sgw url https://example.com --screenshot page.jpg
 ```
 
 ## `sgw extract` — Pull structured data from listing pages
@@ -130,11 +138,19 @@ Scrapes each URL in a text file and shows a summary table. Use `--output`/`-o`
 to save successful scrape contents in input order; the parent directory must
 already exist and an existing file is overwritten.
 
+Batch screenshot handling follows the same rule as `sgw url`: bare
+`--screenshot` uses each run's telemetry folder and prints every saved path.
+When a path is supplied it must be an existing directory; `sgw run` writes one
+image per URL using an input-order prefix plus a URL slug, such as
+`001-example-com-products.jpg`.
+
 ```bash
 sgw run urls.txt
 sgw run urls.txt --render-js -p scrapedrive
 sgw run urls.txt -p scrapedrive --tier advanced
 sgw run urls.txt -f markdown -o pages.md
+sgw run urls.txt --screenshot
+sgw run urls.txt --screenshot screenshots/
 ```
 
 ## `sgw cost` — Inspect recorded scrape spend

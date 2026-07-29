@@ -467,6 +467,8 @@ class ScrapeGateway:
             attributes={},
         )
         artifact_paths = self.telemetry.write_result_artifacts(report["run_id"], result)
+        if artifact_paths:
+            result.metadata["artifacts"] = artifact_paths
         report_path = self.telemetry.write_report(report)
         emit_progress(
             id="persistence",
