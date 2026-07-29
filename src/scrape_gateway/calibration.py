@@ -216,6 +216,8 @@ def compute_metrics(
         else None
     )
     model_errors = fp + fn
+    total_cost = round(sum(costs), 10)
+    per_judgment = _ratio(total_cost, count)
     return {
         "verdict": {
             "confusion_matrix": {
@@ -249,8 +251,8 @@ def compute_metrics(
             "review_precision": _ratio(reviewed_errors, review_count),
         },
         "cost": {
-            "total": sum(costs),
-            "per_judgment": _ratio(sum(costs), count),
+            "total": total_cost,
+            "per_judgment": round(per_judgment, 12) if per_judgment is not None else None,
         },
         "latency_ms": {
             "p50": _percentile(latencies, 0.50),

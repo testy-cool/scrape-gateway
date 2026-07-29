@@ -34,7 +34,7 @@
       "root_cause_accuracy": 0.9444444444444444,
       "issue_code_exact_accuracy": 0.7777777777777778,
       "cost_total": 0.0939027,
-      "cost_per_judgment": 0.0026084083333333336,
+      "cost_per_judgment": 0.002608408333,
       "latency_p50_ms": 3063.5,
       "latency_p95_ms": 3955.75
     }
@@ -83,7 +83,7 @@
     },
     "cost": {
       "total": 0.0544441,
-      "per_judgment": 0.0022685041666666668
+      "per_judgment": 0.002268504167
     },
     "latency_ms": {
       "p50": 2913,
@@ -134,7 +134,7 @@
     },
     "cost": {
       "total": 0.1483468,
-      "per_judgment": 0.002472446666666667
+      "per_judgment": 0.002472446667
     },
     "latency_ms": {
       "p50": 3021,
