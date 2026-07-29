@@ -1,6 +1,6 @@
 ---
 name: scrape-gateway
-description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sgw", "add a scraping provider", "write an sgw extension", "sgw url", "sgw extract", "sgw recipe", "sgw evaluations", "sgw providers", "sgw extensions", or needs to scrape web pages through multiple providers with automatic fallback, audit scrape quality, extract structured data from listing pages, or build custom scraping providers.
+description: Use when the user asks to "scrape a URL", "extract data from a site", "set up sgw", "add a scraping provider", "write an sgw extension", "sgw url", "sgw extract", "sgw recipe", "sgw evaluations", "sgw cost", "sgw providers", "sgw extensions", "what did scraping cost", "why did that scrape escalate", or needs to scrape web pages through multiple providers with automatic fallback, audit scrape quality, control what AI evaluation is paid for, inspect recorded scrape spend, extract structured data from listing pages, or build custom scraping providers.
 ---
 
 # scrape-gateway (sgw)
@@ -54,9 +54,13 @@ sgw url <url> --no-cache             # skip cache
 sgw url <url> -f markdown            # markdown output
 sgw url <url> --country us           # geo-target
 sgw url <url> --premium              # use highest tier
-sgw url <url> --screenshot           # request visual evidence
+sgw url <url> --screenshot           # visual evidence, saved into the run folder
+sgw url <url> --screenshot shot.jpg  # write the image to an explicit path
 sgw url <url> --evaluation-goal "Capture visible products and prices"
 ```
+
+The success panel prints the saved screenshot path. `sgw run --screenshot <dir>` writes
+one input-ordered, URL-slugged image per captured result into an existing directory.
 
 ### sgw extract — Structured data from listing pages
 
@@ -132,16 +136,46 @@ sgw cache show <url-or-key>          # print cached markdown
 sgw cache purge --expired --yes      # delete expired entries
 ```
 
+### sgw cost — What the scraping actually spent
+
+Every attempt is recorded to SQLite with its provider, route, credits, and whether the
+figure is exact or estimated, so a run that escalates through several tiers and then
+times out still reports what it burned.
+
+```bash
+sgw cost                             # last 30 days by domain and provider
+sgw cost --days 7
+sgw cost --format json
+```
+
+`max_cost_per_url` in `scrape-gateway.yml` is enforced before a tier is attempted, not
+after: an escalation forecast above the ceiling is refused with a `budget_exceeded`
+failure reason rather than being paid for and reported afterwards.
+
+Domain memory records which provider and profile combinations failed, but it is not a
+one-way door — credential failures are excluded, blocks older than 120 days decay, and
+skips are isolated per request profile, so a single bad afternoon does not permanently
+retire a provider.
+
 ### sgw evaluations — Review AI scrape-quality audits
 
 Enable the optional OpenRouter evaluator in `scrape-gateway.yml`:
 
 ```yaml
 evaluation:
-  mode: audit
+  mode: selective            # off | audit | selective
   model: google/gemini-3.5-flash-lite
   include_screenshot: true
 ```
+
+`audit` calls the model on every result. `selective` applies the measured `selective-v1`
+runtime gate first and only pays when the deterministic layer is in its unreliable zone —
+thin HTML or Markdown, script-dominated pages (JS shells), a password input (login walls),
+or a block signature matched against a large content-rich page (false-positive terminology).
+On the 60-case corpus it reaches 60/60 correct verdicts with 21 model calls instead of 60,
+saving 65% of calls while holding good-page recall at 100%. It is slightly *more* accurate
+than always auditing, because the free checks correctly reject a CAPTCHA page the model
+passed. Default is `off`; evaluation never influences routing either way.
 
 Set `OPENROUTER_API_KEY`, then inspect saved results:
 
