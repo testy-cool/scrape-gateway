@@ -48,13 +48,15 @@ class ScraperApiProvider(ProviderAdapter):
                 timeout=request.timeout_seconds, follow_redirects=True
             ) as client:
                 response = await client.get("https://api.scraperapi.com/", params=params)
-            is_screenshot = request.screenshot and response.headers.get(
-                "content-type", ""
-            ).startswith("image/")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+            is_screenshot = request.screenshot and content_type.startswith("image/")
             body = None if is_screenshot else response.text
             failure = (
                 None if is_screenshot else classify_provider_failure(response.status_code, body)
             )
+            screenshot_error = request.screenshot and response.is_success and not is_screenshot
+            if screenshot_error:
+                failure = FailureReason.PROVIDER_ERROR
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
@@ -63,6 +65,12 @@ class ScraperApiProvider(ProviderAdapter):
                 html=body,
                 screenshot=response.content if is_screenshot else None,
                 failure_reason=failure,
+                error=(
+                    f"Screenshot was requested but ScraperAPI returned "
+                    f"{content_type or 'an unknown content type'}"
+                    if screenshot_error
+                    else None
+                ),
                 cost_units=self.estimated_cost_units(request),
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route="scraperapi:premium" if request.premium else "scraperapi",

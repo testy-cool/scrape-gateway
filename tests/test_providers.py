@@ -668,6 +668,26 @@ class TestScraperApi:
         assert result.failure_reason is None
 
     @respx.mock
+    async def test_screenshot_request_rejects_non_image_response(self):
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200,
+                text=GOOD_HTML,
+                headers={"content-type": "text/html"},
+            )
+        )
+
+        result = await ScraperApiProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, screenshot=True)
+        )
+
+        assert result.success is False
+        assert result.screenshot is None
+        assert result.html == GOOD_HTML
+        assert result.failure_reason is FailureReason.PROVIDER_ERROR
+        assert result.error == "Screenshot was requested but ScraperAPI returned text/html"
+
+    @respx.mock
     async def test_timeout(self):
         respx.get(self.BASE).mock(side_effect=httpx.ReadTimeout("timed out"))
         prov = ScraperApiProvider(api_key=self.API_KEY)
