@@ -10,11 +10,29 @@ from unittest.mock import AsyncMock, patch
 from rich.console import Console
 from typer.testing import CliRunner
 
-from scrape_gateway.cli import _print_result, app
+from scrape_gateway.cli import _build_gateway, _print_result, app
+from scrape_gateway.config import StrategyConfig
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 
 runner = CliRunner()
+
+
+def test_preferred_provider_preserves_configured_cost_ceiling():
+    gateway = SimpleNamespace(
+        strategy=StrategyConfig(mode="cheapest_successful", max_cost_per_url=6)
+    )
+
+    with patch(
+        "scrape_gateway.cli.ScrapeGateway.from_config",
+        return_value=gateway,
+    ):
+        result = _build_gateway("scrapedrive")
+
+    assert result is gateway
+    assert result.strategy.provider == "scrapedrive"
+    assert result.strategy.mode == "cheapest_successful"
+    assert result.strategy.max_cost_per_url == 6
 
 
 def _fake_result(url: str) -> ScrapeResult:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,7 +14,6 @@ from rich.table import Table
 from rich.text import Text
 from typer.core import TyperGroup
 
-from .config import StrategyConfig
 from .discovery import load_command_extensions
 from .models import ScrapeRequest
 from .router import ScrapeGateway
@@ -70,7 +70,7 @@ console = Console(stderr=True)
 def _build_gateway(provider: str | None = None) -> ScrapeGateway:
     gateway = ScrapeGateway.from_config()
     if provider:
-        gateway.strategy = StrategyConfig(provider=provider)
+        gateway.strategy = replace(gateway.strategy, provider=provider)
     return gateway
 
 
