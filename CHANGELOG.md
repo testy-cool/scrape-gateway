@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-08-04
+
+### Changed
+- `scripts/sgw-mcp-smoke.sh` now requires `SGW_MCP_URL` instead of defaulting to a
+  specific deployment, and only needs `ssh` when `SGW_MCP_SSH_HOST` is set to read
+  the bearer token out of a container.
+- Remote MCP documentation describes self-hosting generically. Deployment-specific
+  hostnames, application UUIDs, and host aliases no longer ship with the repo.
+
+### Removed
+- `docs/mcp-coolify-ops.md`, an operator runbook for one private deployment.
+
 ## [0.23.0] - 2026-07-30
 
 ### Added
