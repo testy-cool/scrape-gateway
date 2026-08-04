@@ -14,6 +14,7 @@ class RawHttpProvider(ProviderAdapter):
     name = "raw_http"
     cost_rank = 0
     capabilities = frozenset({"html"})
+    is_free = True  # free: plain HTTP with no vendor behind it
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         start = time.perf_counter()

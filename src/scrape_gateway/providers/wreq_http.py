@@ -14,6 +14,7 @@ class WreqProvider(ProviderAdapter):
     name = "wreq"
     cost_rank = 2
     capabilities = frozenset({"html"})
+    is_free = True  # free: local Rust TLS stack, no vendor behind it
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         try:

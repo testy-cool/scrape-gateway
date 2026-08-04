@@ -20,10 +20,12 @@
   repo has not touched — running it against the v0.17.4 tree reports 58, so the pin is
   about the tool moving, not about our code. 21 are auto-fixable; the rest need judgement.
   Until this is done the pin must stay or CI goes red.
-- [ ] **`estimated_cost_units` defaults to `0.0`.** A provider extension that does not
-  override it is forecast as free, so `max_cost_per_url` cannot stop it before it spends.
-  Every in-tree adapter overrides it, so this only bites third-party paid extensions.
-  Either make the base raise, or treat a non-overridden estimate as unaffordable.
+- [x] **`estimated_cost_units` defaults to `0.0`.** Fixed 2026-08-04. The base now returns
+  infinity unless the adapter sets `is_free = True`, and the router treats an unpriced
+  provider as unaffordable while a ceiling is set. Note the original claim that "every
+  in-tree adapter overrides it" was wrong: five did not (`raw_http`, `wreq`, `curl_cffi`,
+  `crawl4ai`, `jina_reader`), and they are now marked `is_free`. A regression test walks
+  the providers package so a new adapter cannot inherit the unpriced default unnoticed.
 - [ ] **Evaluator `needs_human_review` is unreliable.** Measured at 0 of 1 held-out
   verdict errors and 0 of 2 train/dev errors — it does not fire on the model's own
   mistakes. Do not build gating on it until it is fixed or removed. See

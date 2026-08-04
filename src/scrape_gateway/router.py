@@ -660,22 +660,44 @@ class ScrapeGateway:
                     next_cost = float(provider.estimated_cost_units(request))
                 except (TypeError, ValueError, OverflowError):
                     next_cost = None
-                invalid_estimate = (
-                    next_cost is None or not math.isfinite(next_cost) or next_cost < 0
-                )
-                if invalid_estimate or next_cost > remaining_cost + 1e-9:
+                if next_cost is None or math.isnan(next_cost) or next_cost < 0:
+                    estimate_state = "invalid"
+                elif math.isinf(next_cost):
+                    estimate_state = "unpriced"
+                elif next_cost > remaining_cost + 1e-9:
+                    estimate_state = "too_expensive"
+                else:
+                    estimate_state = "affordable"
+                if estimate_state != "affordable":
+                    # Infinity is not representable in JSON, and an unusable estimate has
+                    # no number worth reporting, so only a real forecast is carried out.
+                    reported_cost = next_cost if estimate_state == "too_expensive" else None
                     budget_stop = {
                         "max_cost_per_url": max_cost,
                         "spent_cost_units": spent_cost,
                         "remaining_cost_units": remaining_cost,
                         "next_provider": provider.name,
-                        "next_attempt_cost_units": next_cost,
+                        "next_attempt_cost_units": reported_cost,
+                        "estimate_state": estimate_state,
                     }
-                    estimate_text = f"{next_cost:g}" if not invalid_estimate else "unknown"
-                    error = (
-                        f"Cost budget exhausted after {spent_cost:g} of {max_cost:g} units; "
-                        f"{provider.name} needs up to {estimate_text} units."
-                    )
+                    if estimate_state == "unpriced":
+                        error = (
+                            f"{provider.name} does not report an estimated cost, so a "
+                            f"max_cost_per_url of {max_cost:g} units cannot bound what it "
+                            f"would spend. Set is_free = True on the adapter if it costs "
+                            f"nothing, or override estimated_cost_units."
+                        )
+                    elif estimate_state == "invalid":
+                        error = (
+                            f"{provider.name} returned an unusable cost estimate, so a "
+                            f"max_cost_per_url of {max_cost:g} units cannot bound what it "
+                            f"would spend."
+                        )
+                    else:
+                        error = (
+                            f"Cost budget exhausted after {spent_cost:g} of {max_cost:g} "
+                            f"units; {provider.name} needs up to {next_cost:g} units."
+                        )
                     last_result = ScrapeResult(
                         url=request.url,
                         provider="budget",

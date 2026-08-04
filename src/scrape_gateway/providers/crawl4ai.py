@@ -39,6 +39,7 @@ class Crawl4AIProvider(ProviderAdapter):
     cost_rank = 18
     capabilities = frozenset({"html", "markdown", "render_js", "screenshot"})
     required_configuration = (("base_url", "CRAWL4AI_URL"),)
+    is_free = True  # free: self-hosted Docker service the user already pays for, if anything
 
     def __init__(
         self,

@@ -13,6 +13,7 @@ class CurlCffiProvider(ProviderAdapter):
     name = "curl_cffi"
     cost_rank = 3
     capabilities = frozenset({"html"})
+    is_free = True  # free: local libcurl-impersonate, no vendor behind it
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         try:

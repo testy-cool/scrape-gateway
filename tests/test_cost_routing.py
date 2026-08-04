@@ -343,6 +343,7 @@ async def test_budget_stops_before_next_provider_and_reports_distinct_outcome(
         "remaining_cost_units": 4.0,
         "next_provider": "expensive_success",
         "next_attempt_cost_units": 5.0,
+        "estimate_state": "too_expensive",
     }
     assert "cost budget" in (result.error or "").lower()
     assert "budget" in capsys.readouterr().err.lower()
@@ -418,3 +419,134 @@ async def test_budget_stops_when_provider_cost_estimate_is_invalid(tmp_path: Pat
     assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
     assert result.metadata["budget_stop"]["next_attempt_cost_units"] is None
     assert calls == []
+
+
+class UnpricedProvider(ProviderAdapter):
+    """A paid adapter whose author forgot to override estimated_cost_units."""
+
+    name = "unpriced"
+    cost_rank = 1
+    capabilities = frozenset({"html"})
+
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        self.calls.append(self.name)
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html=(
+                "<html><body><h1>Useful page</h1>"
+                "<p>Enough content for deterministic validation.</p></body></html>"
+            ),
+            cost_units=25,
+        )
+
+
+class DeclaredFreeProvider(UnpricedProvider):
+    name = "declared_free"
+    is_free = True
+
+
+@pytest.mark.asyncio
+async def test_unpriced_provider_is_not_forecast_as_free_under_a_cost_ceiling(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    gateway = ScrapeGateway(
+        providers=[UnpricedProvider(calls)],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(max_cost_per_url=10),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gateway.scrape(
+        ScrapeRequest("https://budget.example/unpriced"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is False
+    assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
+    assert result.metadata["budget_stop"]["estimate_state"] == "unpriced"
+    # Infinity would not survive a JSON round trip through telemetry.
+    assert result.metadata["budget_stop"]["next_attempt_cost_units"] is None
+    assert json.dumps(result.metadata["budget_stop"])
+    assert "does not report an estimated cost" in (result.error or "")
+    # The whole point: the provider never got to spend.
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_unpriced_provider_still_runs_when_no_cost_ceiling_is_set(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    gateway = ScrapeGateway(
+        providers=[UnpricedProvider(calls)],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gateway.scrape(
+        ScrapeRequest("https://budget.example/no-ceiling"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert calls == ["unpriced"]
+
+
+@pytest.mark.asyncio
+async def test_provider_declaring_itself_free_runs_under_a_cost_ceiling(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    gateway = ScrapeGateway(
+        providers=[DeclaredFreeProvider(calls)],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(tmp_path / "memory.sqlite"),
+        strategy=StrategyConfig(max_cost_per_url=10),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gateway.scrape(
+        ScrapeRequest("https://budget.example/declared-free"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is True
+    assert calls == ["declared_free"]
+
+
+def test_every_in_tree_provider_is_priced_or_declares_itself_free() -> None:
+    """A new in-tree adapter must not silently inherit the unpriced default."""
+
+    import importlib
+    import pkgutil
+
+    import scrape_gateway.providers as providers_package
+
+    unpriced: list[str] = []
+    for module_info in pkgutil.iter_modules(providers_package.__path__):
+        module = importlib.import_module(f"{providers_package.__name__}.{module_info.name}")
+        for attribute in vars(module).values():
+            if not isinstance(attribute, type) or not issubclass(attribute, ProviderAdapter):
+                continue
+            if attribute is ProviderAdapter or attribute.__module__ != module.__name__:
+                continue
+            if (
+                not attribute.is_free
+                and attribute.estimated_cost_units is ProviderAdapter.estimated_cost_units
+            ):
+                unpriced.append(attribute.__name__)
+
+    assert unpriced == []

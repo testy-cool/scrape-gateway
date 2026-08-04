@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 
 from .models import ProviderCapability, ScrapeRequest, ScrapeResult
@@ -15,6 +16,7 @@ class ProviderAdapter(ABC):
     capabilities: frozenset[ProviderCapability] = frozenset({"html"})
     install_requires: list[str] = []
     required_configuration: tuple[tuple[str, str], ...] = ()
+    is_free: bool = False
 
     def availability_error(self) -> str | None:
         missing = [
@@ -38,12 +40,20 @@ class ProviderAdapter(ABC):
     def estimated_cost_units(self, request: ScrapeRequest) -> float:
         """Return a conservative upper bound for the next provider call.
 
-        Providers that leave ``ScrapeResult.cost_units`` at its zero default may inherit
-        this implementation. Paid adapters must override it so a configured gateway
-        budget can stop before spend begins.
+        A provider that costs nothing sets ``is_free = True`` and may inherit this
+        implementation. Any provider that can spend money must override this so a
+        configured ``max_cost_per_url`` can stop it before the spend happens.
+
+        Everything else is unpriced, and this returns infinity to say so. The router
+        treats an unpriced provider as unaffordable whenever a cost ceiling is set,
+        because the alternative is forecasting a paid provider as free and billing the
+        user for a call the ceiling existed to prevent. Without a ceiling configured
+        this is never consulted, so an unpriced provider still runs normally.
         """
 
-        return 0.0
+        if self.is_free:
+            return 0.0
+        return math.inf
 
     @abstractmethod
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:

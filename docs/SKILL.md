@@ -261,6 +261,12 @@ Required attributes: `name` (str), `cost_rank` (int), `capabilities` (frozenset)
 Required method: `async scrape(request: ScrapeRequest) -> ScrapeResult`.
 Optional: `install_requires` (list[str]) — deps auto-installed on first load.
 
+Declare cost too: set `is_free = True` if the adapter costs nothing, or override
+`estimated_cost_units()` with a conservative upper bound if it can spend money. An
+adapter that does neither is treated as unaffordable whenever `max_cost_per_url` is
+set, because a paid provider forecast as free defeats the ceiling entirely. With no
+ceiling configured it still runs normally.
+
 For pip-distributable extensions, declare an entry point:
 ```toml
 [project.entry-points."scrape_gateway.providers"]

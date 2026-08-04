@@ -14,6 +14,7 @@ class JinaReaderProvider(ProviderAdapter):
     name = "jina_reader"
     cost_rank = 8
     capabilities = frozenset({"html", "markdown", "render_js"})
+    is_free = True  # free: reports cost_units=0 on every result
 
     def __init__(
         self,

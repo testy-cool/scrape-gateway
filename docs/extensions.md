@@ -32,10 +32,25 @@ class MyProvider(ProviderAdapter):
 `sgw` discovers it automatically. Run `sgw providers` to verify.
 
 Providers that bill non-zero ledger units must override `estimated_cost_units()` with a
-conservative upper bound and return the actual `cost_units` on `ScrapeResult`. The base
-implementation returns zero for free/self-hosted adapters. Internal retry or escalation
-loops must also honor `request.metadata["_remaining_cost_units"]`; otherwise the gateway
-cannot enforce `strategy.max_cost_per_url` inside one adapter call.
+conservative upper bound and return the actual `cost_units` on `ScrapeResult`. Internal
+retry or escalation loops must also honor `request.metadata["_remaining_cost_units"]`;
+otherwise the gateway cannot enforce `strategy.max_cost_per_url` inside one adapter call.
+
+Every adapter must declare its cost one way or the other:
+
+```python
+class MyFreeProvider(ProviderAdapter):
+    is_free = True  # costs nothing; inherits the base estimate of 0.0
+```
+
+An adapter that neither sets `is_free` nor overrides `estimated_cost_units()` is
+**unpriced**. When `strategy.max_cost_per_url` is set, the gateway skips an unpriced
+provider instead of running it, and reports `estimate_state: "unpriced"` in the
+`budget_stop` metadata. That is deliberate: forecasting a paid provider as free is how a
+cost ceiling ends up billing you for the exact call it was configured to prevent.
+
+With no ceiling configured the estimate is never consulted, so an unpriced adapter still
+runs normally. You only need `is_free` if your users set cost ceilings.
 
 If your provider needs a pip package, set `install_requires` — `sgw` will prompt to install it the first time it loads.
 
