@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-08-04
+
+### Fixed
+- `ProviderAdapter.install_requires` is now a `ClassVar`. It was a bare mutable class
+  attribute shared by every adapter, so an adapter that appended to it rather than
+  assigning would have added its dependency to all other providers in the process.
+
+### Changed
+- The `ruff` dev dependency requires `>=0.16`; the `<0.16` ceiling is gone. `TRY004` and
+  `B008` are disabled with documented reasons, since this codebase raises `ValueError`
+  for invalid input by design and `typer.Option` in a default is the Typer idiom.
+- Package installs and CLI registry fetches pass `check=False` to `subprocess.run`
+  explicitly. Behaviour is unchanged; both already inspected `returncode`.
+
 ## [0.24.0] - 2026-08-04
 
 ### Changed
