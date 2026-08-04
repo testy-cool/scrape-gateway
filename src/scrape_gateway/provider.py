@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 from .models import ProviderCapability, ScrapeRequest, ScrapeResult
 
@@ -14,7 +15,9 @@ class ProviderAdapter(ABC):
     name: str
     cost_rank: int = 100
     capabilities: frozenset[ProviderCapability] = frozenset({"html"})
-    install_requires: list[str] = []
+    # ClassVar because every adapter shares this one list object. Without it, an adapter
+    # that appends instead of assigning would add its dependency to every other provider.
+    install_requires: ClassVar[list[str]] = []
     required_configuration: tuple[tuple[str, str], ...] = ()
     is_free: bool = False
 

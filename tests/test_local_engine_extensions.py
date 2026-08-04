@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 import base64
 import asyncio
 import importlib.util
@@ -392,7 +394,7 @@ async def test_cdp_providers_attach_to_configured_endpoint(monkeypatch) -> None:
             return Page()
 
     class Browser:
-        contexts = [Context()]
+        contexts: ClassVar[list] = [Context()]
 
         async def close(self):
             return None

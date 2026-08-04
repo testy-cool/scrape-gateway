@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import sys
 
+from typing import ClassVar
+
 import scrapy
 from scrapy.crawler import CrawlerProcess
 
@@ -17,7 +19,7 @@ def main() -> None:
 
     class SinglePageSpider(scrapy.Spider):
         name = "scrape_gateway_single_page"
-        custom_settings = {
+        custom_settings: ClassVar[dict] = {
             "LOG_ENABLED": False,
             "ROBOTSTXT_OBEY": False,
             "HTTPERROR_ALLOW_ALL": True,

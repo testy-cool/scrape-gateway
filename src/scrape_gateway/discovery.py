@@ -48,6 +48,7 @@ def _check_deps(cls: type[ProviderAdapter]) -> bool:
         ["uv", "pip", "install", "--python", sys.executable, *missing],
         capture_output=True,
         text=True,
+        check=False,  # returncode is inspected below
     )
     if result.returncode == 0:
         print(f"  [extensions] installed {', '.join(missing)}", file=sys.stderr)

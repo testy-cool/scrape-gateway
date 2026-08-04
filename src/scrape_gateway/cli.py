@@ -2518,6 +2518,7 @@ def extensions(
             ["uv", "pip", "install", "--python", sys.executable, pkg],
             capture_output=True,
             text=True,
+            check=False,  # returncode is inspected below
         )
         if result.returncode == 0:
             console.print(f"[green]Installed {pkg}. Run `sgw providers` to verify.[/]")
