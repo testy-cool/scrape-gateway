@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-08-04
+
+### Changed
+- **Breaking for provider extensions.** An adapter must now declare its cost: set
+  `is_free = True`, or override `estimated_cost_units()`. An adapter that does neither is
+  unpriced, and is skipped rather than run whenever `strategy.max_cost_per_url` is set.
+  Previously it inherited an estimate of `0.0` and was forecast as free, so a cost ceiling
+  let a paid provider through and the call was billed. Adapters run unchanged when no
+  ceiling is configured.
+- `budget_stop` metadata gained `estimate_state`, distinguishing `unpriced` from
+  `too_expensive` and `invalid`, each with its own error message. `next_attempt_cost_units`
+  is now `null` unless a real forecast exists.
+
+### Fixed
+- `raw_http`, `wreq`, `curl_cffi`, `crawl4ai`, and `jina_reader` now declare `is_free`.
+  All five are genuinely free and were relying on the old default.
+
 ## [0.23.1] - 2026-08-04
 
 ### Changed
