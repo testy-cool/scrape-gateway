@@ -54,6 +54,25 @@ Run before every commit:
 - `examples/` — extension example
 - `registry.yml` — curated extension registry
 
+## The ScrapingEvals Feed Is a Cross-Repo Contract
+
+`sgw scrapingevals` emits a versioned feed that the private `testy-cool/scrapingevals`
+repo imports. The schema string is declared **independently in both repos**, with nothing
+keeping them in sync:
+
+| Repo | File | Constant |
+|---|---|---|
+| this one | `src/scrape_gateway/scrapingevals.py` | `FEED_SCHEMA = "scrapingevals.sgw-observations/v1"` |
+| scrapingevals | `runner/src/scrapingevals_runner/sgw_import.py` | same string, plus `sgw-observations-store/v1` and `sgw-import-state/v1` |
+
+The importer asserts on that value and rejects anything it does not recognise. So bumping
+the version here does not fail here — it fails later, on the other side, as an
+"unsupported schema" error a long way from the change that caused it.
+
+Before changing `FEED_SCHEMA` or the shape of the exported records, open
+`runner/src/scrapingevals_runner/sgw_import.py` in the scrapingevals repo and land both
+sides together. `tests/test_scrapingevals_feed.py` here only covers the producer.
+
 ## This Repo Is Public
 
 `github.com/testy-cool/scrape-gateway` is a public repository. Everything committed
