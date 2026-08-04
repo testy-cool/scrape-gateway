@@ -7,7 +7,6 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
-
 CORPUS_ROOT = Path(__file__).parent / "fixtures" / "evaluator_calibration" / "v1"
 CASES_PATH = CORPUS_ROOT / "cases.json"
 REQUIRED_FIELDS = {
@@ -96,7 +95,7 @@ def test_calibration_corpus_records_auditable_free_provider_captures() -> None:
         assert case["evaluation_goal"]
         assert case["label_notes"]
         assert case["source_url"].startswith(("http://", "https://"))
-        datetime.fromisoformat(case["captured_at"].replace("Z", "+00:00"))
+        datetime.fromisoformat(case["captured_at"])
 
         artifact = (CORPUS_ROOT / case["artifact"]).resolve()
         assert artifact.is_relative_to(CORPUS_ROOT.resolve())

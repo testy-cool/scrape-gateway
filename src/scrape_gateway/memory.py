@@ -6,12 +6,11 @@ import re
 import secrets
 import sqlite3
 from collections.abc import Callable, Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .models import AttemptLedgerEntry, FailureReason, ScrapeRequest
-
 
 DEFAULT_EVIDENCE_WINDOW_SECONDS = 7 * 86400
 _NON_DOMAIN_FAILURE_REASONS = (
@@ -32,7 +31,7 @@ class DomainMemory:
             raise ValueError("routing memory evidence window must be positive")
         self.db_path = Path(db_path)
         self.evidence_window_seconds = evidence_window_seconds
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # Service-mode dependencies may construct the gateway before the ASGI worker
         # thread starts. Individual operations remain synchronous and transactional.
@@ -147,14 +146,10 @@ class DomainMemory:
 
     @staticmethod
     def _utc_timestamp(value: datetime | None = None) -> str:
-        timestamp = value or datetime.now(timezone.utc)
+        timestamp = value or datetime.now(UTC)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("recorded timestamps must include a timezone")
-        return (
-            timestamp.astimezone(timezone.utc)
-            .isoformat(timespec="microseconds")
-            .replace("+00:00", "Z")
-        )
+        return timestamp.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     def record_attempt_ledger(
         self,
@@ -219,7 +214,7 @@ class DomainMemory:
         window_end = as_of or self._clock()
         if window_end.tzinfo is None or window_end.utcoffset() is None:
             raise ValueError("as_of must include a timezone")
-        window_end = window_end.astimezone(timezone.utc)
+        window_end = window_end.astimezone(UTC)
         window_start = window_end - timedelta(days=days)
         params: list[object] = [
             self._utc_timestamp(window_start),
@@ -335,7 +330,7 @@ class DomainMemory:
         window_end = as_of or self._clock()
         if window_end.tzinfo is None or window_end.utcoffset() is None:
             raise ValueError("as_of must include a timezone")
-        window_end = window_end.astimezone(timezone.utc)
+        window_end = window_end.astimezone(UTC)
         window_start = window_end - timedelta(seconds=self.evidence_window_seconds)
         return self._utc_timestamp(window_start), self._utc_timestamp(window_end)
 
@@ -450,7 +445,7 @@ class DomainMemory:
         window_end = as_of or self._clock()
         if window_end.tzinfo is None or window_end.utcoffset() is None:
             raise ValueError("as_of must include a timezone")
-        window_end = window_end.astimezone(timezone.utc)
+        window_end = window_end.astimezone(UTC)
         probe_start = window_end - timedelta(seconds=interval_seconds)
         row = self.conn.execute(
             """
@@ -659,7 +654,9 @@ class DomainMemory:
             return True
         if total_failures >= 10 and row["success_count"] / max(total_failures, 1) < 0.2:
             return True
-        if (
+        # Kept as a guard so the three skip conditions read as a parallel list. SIM103
+        # would collapse it into one long boolean expression alongside a call.
+        if (  # noqa: SIM103
             row["success_count"] == 0
             and total_failures > 0
             and self._failed_probe_reclosed(request, provider, as_of=as_of)
@@ -709,8 +706,8 @@ class DomainMemory:
         ).fetchall()
         if len(rows) != 6 or rows[0]["success"] or any(row["success"] for row in rows[1:]):
             return False
-        latest = datetime.fromisoformat(rows[0]["recorded_at"].replace("Z", "+00:00"))
-        prior_latest = datetime.fromisoformat(rows[1]["recorded_at"].replace("Z", "+00:00"))
+        latest = datetime.fromisoformat(rows[0]["recorded_at"])
+        prior_latest = datetime.fromisoformat(rows[1]["recorded_at"])
         return prior_latest < latest - timedelta(seconds=self.evidence_window_seconds)
 
     # --- Extraction pattern memory ---
@@ -765,7 +762,7 @@ class DomainMemory:
 
         text = soup.get_text(" ", strip=True)
         prices = re.findall(
-            r"(?:[$€£¥₹]\s?\d[\d,. ]*|\d[\d,. ]*\s?(?:USD|EUR|GBP|RON|lei))", text, re.I
+            r"(?:[$€£¥₹]\s?\d[\d,. ]*|\d[\d,. ]*\s?(?:USD|EUR|GBP|RON|lei))", text, re.IGNORECASE
         )
 
         return {

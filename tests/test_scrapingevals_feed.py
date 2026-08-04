@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,7 +12,6 @@ from scrape_gateway.cli import app
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest
 from scrape_gateway.scrapingevals import build_scrapingevals_feed
-
 
 runner = CliRunner()
 
@@ -25,7 +24,7 @@ def test_scrapingevals_command_exports_privacy_safe_passive_feed(tmp_path) -> No
     memory = DomainMemory(memory_path)
     run_id = "1234567890abcdef"
     target_url = "https://user:password@www.example.com/private/path?token=secret#section"
-    recorded_at = datetime.now(timezone.utc)
+    recorded_at = datetime.now(UTC)
     memory.record_attempt_ledger(
         run_id,
         ScrapeRequest(
@@ -244,7 +243,7 @@ def test_scrapingevals_command_exports_privacy_safe_passive_feed(tmp_path) -> No
 
 def test_feed_excludes_non_public_targets_without_leaking_hostnames(tmp_path) -> None:
     memory = DomainMemory(tmp_path / "memory.sqlite")
-    recorded_at = datetime(2026, 7, 30, 1, tzinfo=timezone.utc)
+    recorded_at = datetime(2026, 7, 30, 1, tzinfo=UTC)
     targets = [
         "http://127.0.0.1/admin",
         "https://service.internal/private",
@@ -303,7 +302,7 @@ def test_feed_excludes_non_public_targets_without_leaking_hostnames(tmp_path) ->
 def test_scrapingevals_command_exports_an_incremental_idempotent_cursor(tmp_path) -> None:
     memory_path = tmp_path / "memory.sqlite"
     memory = DomainMemory(memory_path)
-    recorded_at = datetime.now(timezone.utc)
+    recorded_at = datetime.now(UTC)
     for index in range(1, 4):
         memory.record_attempt_ledger(
             f"{index:016x}",

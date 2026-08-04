@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
-import base64
 import asyncio
+import base64
 import importlib.util
 import io
 import json
@@ -11,11 +9,11 @@ import sys
 import tomllib
 import types
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from scrape_gateway import ProviderAdapter, ScrapeRequest
-
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "https://example.com/products"

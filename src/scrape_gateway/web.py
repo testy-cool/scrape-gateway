@@ -9,10 +9,11 @@ import json
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote
 
 from starlette.applications import Starlette
@@ -834,7 +835,7 @@ def create_console_routes(
             "pending": True,
             "run_id": active_id,
             "url": scrape_request.url,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "status": "running",
             "diagnosis": "in_progress",
             "activity": "Selecting an available provider.",
@@ -919,7 +920,7 @@ def create_console_routes(
                 key: current_step.get(key)
                 for key in ("id", "name", "kind", "status", "outcome", "offset_ms")
             }
-            active_entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+            active_entry["updated_at"] = datetime.now(UTC).isoformat()
 
         async def execute_scrape() -> ScrapeResult:
             try:

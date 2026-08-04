@@ -6,15 +6,19 @@
 import asyncio
 from scrape_gateway import ScrapeGateway, ScrapeRequest
 
+
 async def main():
     gateway = ScrapeGateway.from_config()
-    result = await gateway.scrape(ScrapeRequest(
-        "https://example.com",
-        country="us",
-        render_js=False,
-    ))
+    result = await gateway.scrape(
+        ScrapeRequest(
+            "https://example.com",
+            country="us",
+            render_js=False,
+        )
+    )
     print(result.provider, result.success, result.route)
     print(result.html[:500])
+
 
 asyncio.run(main())
 ```

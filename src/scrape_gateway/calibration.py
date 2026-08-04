@@ -8,7 +8,7 @@ import random
 import re
 import tempfile
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +46,7 @@ def response_directory(
     return Path(root) / run_name / model_slug
 
 
-def _ratio(numerator: int | float, denominator: int | float) -> float | None:
+def _ratio(numerator: float, denominator: float) -> float | None:
     if not denominator:
         return None
     return float(numerator / denominator)
@@ -504,7 +504,7 @@ def claim_live_run(
         "model": model,
         "prompt_version": prompt_version,
         "case_ids": [case["id"] for case in cases],
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
     }
     try:
         with marker.open("x", encoding="utf-8") as handle:
@@ -618,7 +618,7 @@ async def run_live(
         prompt_version=PROMPT_VERSION,
     )
     semaphore = asyncio.Semaphore(concurrency)
-    prompt_sha256 = hashlib.sha256(f"{PROMPT_VERSION}\n{SYSTEM_PROMPT}".encode("utf-8")).hexdigest()
+    prompt_sha256 = hashlib.sha256(f"{PROMPT_VERSION}\n{SYSTEM_PROMPT}".encode()).hexdigest()
     failures: list[str] = []
 
     async def evaluate_case(case: dict[str, Any]) -> None:
@@ -639,7 +639,7 @@ async def run_live(
             "model": model,
             "prompt_version": outcome.prompt_version,
             "prompt_sha256": prompt_sha256,
-            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "recorded_at": datetime.now(UTC).isoformat(),
             "status": outcome.status,
             "judgment": outcome.judgment,
             "generation_id": outcome.generation_id,
@@ -676,7 +676,7 @@ async def run_live(
         marker_payload.update(
             {
                 "status": "completed",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             }
         )
         marker.write_text(

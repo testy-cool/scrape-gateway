@@ -9,7 +9,6 @@ import inspect
 import sys
 from pathlib import Path
 
-
 from scrape_gateway.discovery import (
     _entrypoint_providers,
     _local_providers,
@@ -38,7 +37,6 @@ SHIPPED_PROVIDERS = frozenset(
 )
 from scrape_gateway.models import ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
-
 
 # -- Provider contract tests --------------------------------------------------
 

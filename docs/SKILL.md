@@ -245,6 +245,7 @@ Drop a `.py` file in `~/.config/scrape-gateway/providers/`:
 ```python
 from scrape_gateway import ProviderAdapter, ScrapeRequest, ScrapeResult, FailureReason
 
+
 class MyProvider(ProviderAdapter):
     name = "my_api"
     cost_rank = 10
@@ -279,10 +280,12 @@ my_provider = "my_package:MyProvider"
 import asyncio
 from scrape_gateway import ScrapeGateway, ScrapeRequest
 
+
 async def main():
     gw = ScrapeGateway.from_config()
     result = await gw.scrape(ScrapeRequest("https://example.com"))
     print(result.provider, result.success, result.html[:200])
+
 
 asyncio.run(main())
 ```

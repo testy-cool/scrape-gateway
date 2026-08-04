@@ -17,7 +17,7 @@ class CurlCffiProvider(ProviderAdapter):
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         try:
-            from curl_cffi import AsyncSession  # noqa: F401
+            from curl_cffi import AsyncSession
         except ImportError:
             return ScrapeResult(
                 request.url,

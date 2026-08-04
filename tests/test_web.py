@@ -862,7 +862,7 @@ def test_service_app_preserves_authenticated_mcp_middleware(monkeypatch) -> None
 
     from starlette.testclient import TestClient
 
-    import scrape_gateway.mcp_server as mcp_server
+    from scrape_gateway import mcp_server
 
     with monkeypatch.context() as env:
         env.setenv("SGW_MCP_TOKEN", "operator-secret")

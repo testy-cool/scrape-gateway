@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -15,8 +15,7 @@ from scrape_gateway.provider import ProviderAdapter
 from scrape_gateway.router import ScrapeGateway
 from scrape_gateway.telemetry import TelemetryRecorder
 
-
-NOW = datetime(2026, 7, 28, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
 
 class TrackingProvider(ProviderAdapter):

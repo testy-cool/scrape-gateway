@@ -73,7 +73,9 @@ def _entrypoint_providers() -> dict[str, type[ProviderAdapter]]:
     for ep in entry_points(group="scrape_gateway.providers"):
         try:
             cls = ep.load()
-            if isinstance(cls, type) and issubclass(cls, ProviderAdapter):
+            # Kept nested: _check_deps can prompt the user and install packages, so it
+            # stays visually separate from the cheap type check that gates it.
+            if isinstance(cls, type) and issubclass(cls, ProviderAdapter):  # noqa: SIM102
                 if _check_deps(cls):
                     result[cls.name] = cls
         except Exception:  # noqa: BLE001
@@ -101,9 +103,8 @@ def _local_providers() -> dict[str, type[ProviderAdapter]]:
                     and issubclass(obj, ProviderAdapter)
                     and obj is not ProviderAdapter
                     and hasattr(obj, "name")
-                ):
-                    if _check_deps(obj):
-                        result[obj.name] = obj
+                ) and _check_deps(obj):
+                    result[obj.name] = obj
         except Exception as exc:  # noqa: BLE001
             print(f"  [extensions] failed to load {f.name}: {exc}", file=sys.stderr)
     return result

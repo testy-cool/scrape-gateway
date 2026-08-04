@@ -1,12 +1,11 @@
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest
 
-
-NOW = datetime(2026, 7, 28, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
 
 def _record(

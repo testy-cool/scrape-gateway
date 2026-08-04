@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
 _BROWSER_MANAGED_HEADERS = {
     "accept",
     "priority",

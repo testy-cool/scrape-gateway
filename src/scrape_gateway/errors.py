@@ -3,7 +3,6 @@ from __future__ import annotations
 from .models import FailureReason
 from .validators import find_block_signature
 
-
 _BLOCK_FAILURE_REASONS = {
     "cloudflare": FailureReason.CLOUDFLARE,
     "captcha": FailureReason.CAPTCHA,

@@ -31,8 +31,15 @@ Run before every commit:
 - Never run bare `pytest`. Both `--ignore` flags are what keep the paid live-provider
   tests out; without them a routine test run spends real money.
 - Live tests need API keys in `.env` and hit real services — run manually when touching providers
-- Lint gates are `ruff check .` and `ruff format --check .`. The dev dependency is pinned
-  below 0.16 because ruff 0.16 expanded its default rule set; see the pin in `pyproject.toml`.
+- Lint gates are `ruff check .` and `ruff format --check .`. The dev dependency now
+  requires `ruff>=0.16`; the old `<0.16` ceiling was lifted on 2026-08-04.
+- `uv sync` alone does **not** install ruff — it lives in the `dev` extra. Use
+  `uv sync --all-extras`, or `uv pip install -e '.[dev]'` the way CI does.
+- Two rules are switched off on purpose, both documented in `pyproject.toml`: `TRY004`,
+  because validation failures raise `ValueError` deliberately and `web.py` converts those
+  into JSON errors, and `B008` in `cli.py`, because `typer.Option(...)` in a default is
+  the Typer idiom. Individual deliberate exceptions carry a `# noqa` with a reason
+  instead of switching a rule off globally.
 
 ## Project Layout
 

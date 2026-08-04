@@ -11,7 +11,6 @@ from scrape_gateway.config import EvaluationConfig
 from scrape_gateway.models import FailureReason, ScrapeRequest, ScrapeResult
 from scrape_gateway.provider import ProviderAdapter
 
-
 GOOD_JUDGMENT = {
     "verdict": "pass",
     "needs_human_review": False,

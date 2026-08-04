@@ -31,6 +31,5 @@ def emit_progress(**event: Any) -> None:
         return
     try:
         reporter(event)
-    except Exception:
-        # Operator visibility must never change the scrape result.
+    except Exception:  # noqa: BLE001 - operator visibility must never change the scrape result
         return

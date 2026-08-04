@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scrape_gateway.cli import _detect_patterns, _element_to_row, _extract_rows, _apply_field_map
+from scrape_gateway.cli import _apply_field_map, _detect_patterns, _element_to_row, _extract_rows
 from scrape_gateway.memory import DomainMemory
 
 # ── Realistic HTML fixtures ──────────────────────────────────────

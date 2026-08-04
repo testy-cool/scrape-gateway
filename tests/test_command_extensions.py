@@ -5,7 +5,6 @@ from typer.testing import CliRunner
 
 from scrape_gateway import discovery
 
-
 runner = CliRunner()
 
 

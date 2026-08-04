@@ -54,7 +54,7 @@ class MyApiProvider(ProviderAdapter):
                 cost_units=1,
                 route=self.name,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - an adapter must convert any failure into a ScrapeResult
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,

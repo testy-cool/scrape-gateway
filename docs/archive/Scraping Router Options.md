@@ -173,7 +173,7 @@ result = scrape(
     freshness="24h",
     allowed_tiers=["cache", "raw", "browser", "scrapedrive", "scrapfly"],
     country_hint="US",
-    return_formats=["html", "markdown", "screenshot"]
+    return_formats=["html", "markdown", "screenshot"],
 )
 ```
 
@@ -555,8 +555,7 @@ class ProviderAdapter:
     name = "myprovider"
     supports = ["html", "markdown", "screenshot", "country"]
 
-    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
-        ...
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult: ...
 ```
 
 This creates a contributor flywheel. People can add their favorite provider without touching the core.
@@ -2154,11 +2153,7 @@ scrape-gateway report-false-positive <attempt_id>
 or:
 
 ```python id="6jr99o"
-client.report_result(
-    attempt_id="...",
-    verdict="false_positive",
-    reason="login_wall"
-)
+client.report_result(attempt_id="...", verdict="false_positive", reason="login_wall")
 ```
 
 False positives should hurt route confidence harder than normal failures.

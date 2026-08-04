@@ -10,8 +10,8 @@ from scrape_gateway.cache import ArtifactCache
 from scrape_gateway.config import EvaluationConfig, GatewayConfig
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
-from scrape_gateway.provider import ProviderAdapter
 from scrape_gateway.progress import observe_progress
+from scrape_gateway.provider import ProviderAdapter
 from scrape_gateway.providers.scrapfly import ScrapflyProvider
 from scrape_gateway.router import ScrapeGateway
 from scrape_gateway.telemetry import TelemetryRecorder

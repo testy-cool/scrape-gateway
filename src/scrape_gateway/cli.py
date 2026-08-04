@@ -1672,11 +1672,11 @@ def _element_to_row(el) -> dict[str, str]:
     if heading:
         row["title"] = heading.get_text(strip=True)
         a = heading.find("a")
-        if a and a.get("href"):
+        # SIM114 would merge these with `or`, but the elif rebinds `a` with a walrus.
+        if a and a.get("href"):  # noqa: SIM114
             row["href"] = a["href"]
-        elif a := heading.find_parent("a"):
-            if a.get("href"):
-                row["href"] = a["href"]
+        elif (a := heading.find_parent("a")) and a.get("href"):
+            row["href"] = a["href"]
 
     img = el.find("img")
     if img and img.get("src"):
@@ -1785,7 +1785,6 @@ def _llm_pick_pattern(
     import json
 
     import llm
-
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
@@ -1833,7 +1832,7 @@ def _llm_pick_pattern(
     except json.JSONDecodeError as exc:
         console.print(f"[dim]llm: model returned invalid JSON: {exc}[/]")
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any model or transport failure degrades to no evaluation
         console.print(f"[dim]llm: {type(exc).__name__}: {exc}[/]")
         return None
 
@@ -2491,7 +2490,7 @@ def extensions(
         resp = httpx.get(REGISTRY_URL, timeout=10, follow_redirects=True)
         resp.raise_for_status()
         entries = yaml.safe_load(resp.text) or []
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - any registry fetch failure falls back to the bundled copy below
         pass
     if entries is None:
         from .config import _PROJECT_ROOT

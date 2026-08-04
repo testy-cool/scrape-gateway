@@ -5,7 +5,6 @@ import pytest
 
 from scrape_gateway.validators import validate_content
 
-
 _CONSENT_CASES = json.loads(
     (Path(__file__).parent / "fixtures" / "consent_validation_cases.json").read_text()
 )

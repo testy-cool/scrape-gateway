@@ -10,7 +10,7 @@ import sys
 import time
 from collections.abc import Iterable
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import urlparse
@@ -22,13 +22,13 @@ from .config import GatewayConfig, StrategyConfig, load_config
 from .memory import DomainMemory
 from .models import AttemptLedgerEntry, FailureReason, ScrapeRequest, ScrapeResult
 from .paths import RUN_ID_PATTERN, safe_child
+from .progress import emit_progress
 from .provider import (
     MAX_COST_METADATA_KEY,
     REMAINING_COST_METADATA_KEY,
     SPENT_COST_METADATA_KEY,
     ProviderAdapter,
 )
-from .progress import emit_progress
 from .recipes import DomainRecipeStore
 from .telemetry import TelemetryRecorder, new_run_id, safe_metadata, utc_now
 from .validators import validate_content
@@ -54,7 +54,7 @@ def _init_logger() -> None:
 
 def _log_event(event: str, **data) -> None:
     _init_logger()
-    entry = {"ts": datetime.now(timezone.utc).isoformat(), "event": event, **data}
+    entry = {"ts": datetime.now(UTC).isoformat(), "event": event, **data}
     logger.info(json.dumps(entry, default=str))
 
 
@@ -760,7 +760,9 @@ class ScrapeGateway:
                     "screenshot_requested": request.screenshot,
                 },
             )
-            if request.skip_validation and not result.success and result.html:
+            # Outer asks whether this result is a rescue candidate, inner whether the
+            # status actually justifies it. One merged condition hides that split.
+            if request.skip_validation and not result.success and result.html:  # noqa: SIM102
                 if result.status_code and 200 <= result.status_code < 400:
                     result.success = True
                     result.failure_reason = None
@@ -1158,7 +1160,7 @@ class ScrapeGateway:
             providers = sorted(providers, key=lambda provider: provider.name not in probe_names)
             probe_name = next(
                 (provider.name for provider in providers if provider.name in probe_names),
-                sorted(probe_names)[0],
+                min(probe_names),
             )
             reason = f"Running a half-open recovery probe for {probe_name}."
             request.metadata["routing_decision"] = {

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier

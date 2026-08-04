@@ -25,7 +25,7 @@ mcp = ["mcp[cli]>=1.12,<2", "fastapi>=0.115", "uvicorn[standard]>=0.34"]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.25",
-  "ruff>=0.8,<0.16",
+  "ruff>=0.16",
   "respx>=0.22",
   "mcp[cli]>=1.12,<2",
   "fastapi>=0.115",
@@ -64,8 +64,16 @@ packages = ["src/scrape_gateway"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+# Validation failures in this codebase raise ValueError on purpose, including for wrong
+# types. web.py catches ValueError and turns it into a JSON error response, so following
+# TRY004 into TypeError would convert clean 400s into unhandled 500s.
+ignore = ["TRY004"]
+
 [tool.ruff.lint.per-file-ignores]
-"src/scrape_gateway/cli.py" = ["E402"]
+# typer.Option(...) in an argument default is the documented Typer idiom, not a mutable
+# default argument bug.
+"src/scrape_gateway/cli.py" = ["E402", "B008"]
 "tests/test_discovery.py" = ["E402"]
 
 [tool.pytest.ini_options]

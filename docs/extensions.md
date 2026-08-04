@@ -15,6 +15,7 @@ Put a `.py` file in `~/.config/scrape-gateway/providers/`:
 ```python
 from scrape_gateway import ProviderAdapter, ScrapeRequest, ScrapeResult
 
+
 class MyProvider(ProviderAdapter):
     name = "my_api"
     cost_rank = 10

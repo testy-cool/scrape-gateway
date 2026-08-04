@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scrape_gateway.memory import DomainMemory
 from scrape_gateway.models import AttemptLedgerEntry, FailureReason, ScrapeRequest
@@ -54,7 +54,7 @@ def _record(
 
 def test_record_attempt_ledger_denormalizes_request_and_exact_entry_fields(tmp_path) -> None:
     memory = DomainMemory(db_path=tmp_path / "memory.sqlite")
-    recorded_at = datetime(2026, 7, 20, 11, 12, 13, 456789, tzinfo=timezone.utc)
+    recorded_at = datetime(2026, 7, 20, 11, 12, 13, 456789, tzinfo=UTC)
     entries = [
         AttemptLedgerEntry(
             provider="scrapedrive",
@@ -154,9 +154,9 @@ def test_record_attempt_ledger_denormalizes_request_and_exact_entry_fields(tmp_p
 
 def test_attempt_cost_summary_answers_domain_provider_spend_for_recent_window(tmp_path) -> None:
     memory = DomainMemory(db_path=tmp_path / "memory.sqlite")
-    as_of = datetime(2026, 7, 28, 12, tzinfo=timezone.utc)
-    recent = datetime(2026, 7, 27, 12, tzinfo=timezone.utc)
-    old = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+    as_of = datetime(2026, 7, 28, 12, tzinfo=UTC)
+    recent = datetime(2026, 7, 27, 12, tzinfo=UTC)
+    old = datetime(2026, 7, 1, 12, tzinfo=UTC)
     _record(
         memory,
         run_id="recent_a",
@@ -217,7 +217,7 @@ def test_attempt_cost_summary_answers_domain_provider_spend_for_recent_window(tm
 
 def test_schema_finds_cheapest_successful_provider_attempt_for_same_profile(tmp_path) -> None:
     memory = DomainMemory(db_path=tmp_path / "memory.sqlite")
-    recorded_at = datetime(2026, 7, 28, tzinfo=timezone.utc)
+    recorded_at = datetime(2026, 7, 28, tzinfo=UTC)
     _record(
         memory,
         run_id="retrying_run",
@@ -275,7 +275,7 @@ def test_schema_finds_cheapest_successful_provider_attempt_for_same_profile(tmp_
 
 def test_schema_totals_failed_attempt_spend_without_losing_zero_cost_attempts(tmp_path) -> None:
     memory = DomainMemory(db_path=tmp_path / "memory.sqlite")
-    recorded_at = datetime(2026, 7, 28, tzinfo=timezone.utc)
+    recorded_at = datetime(2026, 7, 28, tzinfo=UTC)
     _record(
         memory,
         run_id="failed_spend",
@@ -305,7 +305,7 @@ def test_schema_totals_failed_attempt_spend_without_losing_zero_cost_attempts(tm
 
 def test_schema_ranks_domains_by_credits_per_successful_run_with_fallback_spend(tmp_path) -> None:
     memory = DomainMemory(db_path=tmp_path / "memory.sqlite")
-    recorded_at = datetime(2026, 7, 28, tzinfo=timezone.utc)
+    recorded_at = datetime(2026, 7, 28, tzinfo=UTC)
     _record(
         memory,
         run_id="alpha_success",

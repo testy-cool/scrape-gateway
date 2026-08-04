@@ -6,7 +6,6 @@ import pytest
 from scrape_gateway.errors import classify_failure
 from scrape_gateway.validators import validate_content
 
-
 _FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "block_detection"
 _CASES = json.loads((_FIXTURE_ROOT / "cases.json").read_text())
 

@@ -15,11 +15,13 @@
 
 ## Known gaps (2026-07-29)
 
-- [ ] **Adopt ruff 0.16's default rules.** `pyproject.toml` pins `ruff>=0.8,<0.16`. Ruff
-  0.16 expanded its default rule set and reports ~57 findings, almost all in files this
-  repo has not touched — running it against the v0.17.4 tree reports 58, so the pin is
-  about the tool moving, not about our code. 21 are auto-fixable; the rest need judgement.
-  Until this is done the pin must stay or CI goes red.
+- [x] **Adopt ruff 0.16's default rules.** Done 2026-08-04, pin lifted to `ruff>=0.16`.
+  The estimate here was stale: it was 103 findings by the time anyone ran it, not ~57,
+  and 61 were auto-fixable rather than 21. 102 were mechanical or configuration. The
+  substantive ones were a shared mutable class default on `ProviderAdapter`
+  (fixed separately) and two `SIM103` rewrites that made the code worse and were
+  reverted behind a `# noqa` with the reason. `TRY004` and `B008` are switched off with
+  documented rationale rather than followed.
 - [x] **`estimated_cost_units` defaults to `0.0`.** Fixed 2026-08-04. The base now returns
   infinity unless the adapter sets `is_free = True`, and the router treats an unpriced
   provider as unaffordable while a ceiling is set. Note the original claim that "every

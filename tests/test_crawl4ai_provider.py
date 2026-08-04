@@ -6,7 +6,6 @@ import respx
 from scrape_gateway.models import FailureReason, ScrapeRequest
 from scrape_gateway.providers.crawl4ai import Crawl4AIProvider
 
-
 TARGET = "https://example.com/products"
 HTML = "<html><body><h1>Products</h1><p>Rendered product content for testing.</p></body></html>"
 MARKDOWN = "# Products\n\nRendered product content for testing and downstream extraction."

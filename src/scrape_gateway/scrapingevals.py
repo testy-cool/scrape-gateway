@@ -4,7 +4,7 @@ import hashlib
 import ipaddress
 import json
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
@@ -12,7 +12,6 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from .memory import DomainMemory
 from .paths import RUN_ID_PATTERN, safe_child
-
 
 FEED_SCHEMA = "scrapingevals.sgw-observations/v1"
 _PRIVATE_HOST_SUFFIXES = (
@@ -29,7 +28,7 @@ _PRIVATE_HOST_SUFFIXES = (
 
 
 def _utc_timestamp(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _package_version() -> str:
@@ -249,14 +248,14 @@ def build_scrapingevals_feed(
         raise ValueError("after_ledger_id must be non-negative")
     if limit < 1:
         raise ValueError("limit must be at least 1")
-    now = generated_at or datetime.now(timezone.utc)
+    now = generated_at or datetime.now(UTC)
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("generated_at must include a timezone")
     source_instance_id = memory.source_instance_id()
     params: list[Any] = [after_ledger_id]
     time_clause = ""
     if days:
-        since = now.astimezone(timezone.utc) - timedelta(days=days)
+        since = now.astimezone(UTC) - timedelta(days=days)
         time_clause = "and recorded_at >= ? and recorded_at <= ?"
         params.extend((_utc_timestamp(since), _utc_timestamp(now)))
     params.append(limit + 1)

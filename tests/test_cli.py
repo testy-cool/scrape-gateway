@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -386,7 +386,7 @@ def test_run_batch_surfaces_budget_exceeded_status(tmp_path):
 
 def _record_cli_cost_fixture(db_path) -> None:
     memory = DomainMemory(db_path)
-    recorded_at = datetime.now(timezone.utc)
+    recorded_at = datetime.now(UTC)
     memory.record_attempt_ledger(
         "run-example",
         ScrapeRequest("https://example.com/products", render_js=True),

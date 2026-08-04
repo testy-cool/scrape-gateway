@@ -463,57 +463,73 @@ TEST_DOCS = {
 CATEGORY_DOCS = {
     "test_cache": (
         "Cache",
-        "Scraping costs money and time. The cache stores results locally so repeat visits "
-        "to the same URL are instant and free. These tests verify save, retrieve, TTL expiry, "
-        "and metadata storage.",
+        (
+            "Scraping costs money and time. The cache stores results locally so repeat visits "
+            "to the same URL are instant and free. These tests verify save, retrieve, TTL expiry, "
+            "and metadata storage."
+        ),
     ),
     "test_config": (
         "Configuration",
-        "sg reads settings from a YAML file and .env for secrets. These tests verify "
-        "that time strings parse correctly, defaults work when no config exists, and "
-        "all config sections load properly.",
+        (
+            "sg reads settings from a YAML file and .env for secrets. These tests verify "
+            "that time strings parse correctly, defaults work when no config exists, and "
+            "all config sections load properly."
+        ),
     ),
     "test_errors": (
         "Error Classification",
-        "When a scrape fails, we need to know WHY — is it a 403 block, a rate limit, "
-        "an empty page, or a captcha? The error classifier inspects HTTP status codes "
-        "and response bodies to categorize failures. The router uses this to decide "
-        "what to try next.",
+        (
+            "When a scrape fails, we need to know WHY — is it a 403 block, a rate limit, "
+            "an empty page, or a captcha? The error classifier inspects HTTP status codes "
+            "and response bodies to categorize failures. The router uses this to decide "
+            "what to try next."
+        ),
     ),
     "test_extract": (
         "Data Extraction",
-        "The sg extract command: detect repeated patterns on a page (product cards, "
-        "article lists), pull structured data from each element, and optionally use an "
-        "LLM to pick the best pattern and name the fields. These tests cover the full "
-        "pipeline from HTML to JSON rows.",
+        (
+            "The sg extract command: detect repeated patterns on a page (product cards, "
+            "article lists), pull structured data from each element, and optionally use an "
+            "LLM to pick the best pattern and name the fields. These tests cover the full "
+            "pipeline from HTML to JSON rows."
+        ),
     ),
     "test_memory": (
         "Domain Memory",
-        "sg remembers which scraping provider worked for each domain. After one successful "
-        "scrape of example.com with ScrapeDrive, every future scrape skips straight to "
-        "ScrapeDrive instead of trying free providers first. Memory also tracks failures, "
-        "blocks, and tier escalation.",
+        (
+            "sg remembers which scraping provider worked for each domain. After one successful "
+            "scrape of example.com with ScrapeDrive, every future scrape skips straight to "
+            "ScrapeDrive instead of trying free providers first. Memory also tracks failures, "
+            "blocks, and tier escalation."
+        ),
     ),
     "test_providers": (
         "Provider Adapters",
-        "Each scraping provider (raw HTTP, ScrapeDrive, ScrapingBee, ScraperAPI, Scrape.do) "
-        "has a different API with different parameter names and response formats. These "
-        "adapters normalize everything into a common ScrapeRequest/ScrapeResult interface. "
-        "Tests use mocked HTTP to verify correct API calls without spending money.",
+        (
+            "Each scraping provider (raw HTTP, ScrapeDrive, ScrapingBee, ScraperAPI, Scrape.do) "
+            "has a different API with different parameter names and response formats. These "
+            "adapters normalize everything into a common ScrapeRequest/ScrapeResult interface. "
+            "Tests use mocked HTTP to verify correct API calls without spending money."
+        ),
     ),
     "test_router": (
         "Router & Strategy",
-        "The router is the brain: it decides which provider to try, in what order, and "
-        "handles fallback when one fails. It checks the cache first, consults domain "
-        "memory, validates returned content (catching block pages), and remembers what "
-        "worked. These tests simulate multi-provider scenarios end-to-end.",
+        (
+            "The router is the brain: it decides which provider to try, in what order, and "
+            "handles fallback when one fails. It checks the cache first, consults domain "
+            "memory, validates returned content (catching block pages), and remembers what "
+            "worked. These tests simulate multi-provider scenarios end-to-end."
+        ),
     ),
     "test_validators": (
         "Content Validation",
-        "A scrape can return HTTP 200 but still fail — the page might be a Cloudflare "
-        "challenge, a captcha wall, or a 'please enable JavaScript' placeholder. The "
-        "validator inspects the actual HTML content to catch these. It also supports "
-        "custom rules like 'page must contain the word pricing'.",
+        (
+            "A scrape can return HTTP 200 but still fail — the page might be a Cloudflare "
+            "challenge, a captcha wall, or a 'please enable JavaScript' placeholder. The "
+            "validator inspects the actual HTML content to catch these. It also supports "
+            "custom rules like 'page must contain the word pricing'."
+        ),
     ),
 }
 
