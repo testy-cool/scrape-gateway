@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_HOST="${SGW_MCP_SSH_HOST:-coolify-host}"
+SSH_HOST="${SGW_MCP_SSH_HOST:-}"
 RESOURCE_LABEL="${SGW_MCP_RESOURCE_LABEL:-sgw-mcp}"
-MCP_URL="${SGW_MCP_URL:-https://sgw.example.com/mcp}"
+MCP_URL="${SGW_MCP_URL:-}"
+
+if [ -z "$MCP_URL" ]; then
+  echo "set SGW_MCP_URL to your deployment's /mcp endpoint" >&2
+  exit 2
+fi
 
 need() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -14,7 +19,6 @@ need() {
 
 need curl
 need python3
-need ssh
 
 echo "Checking unauthenticated endpoint..."
 status="$(
@@ -30,6 +34,11 @@ if [ "$status" != "401" ]; then
 fi
 
 if [ -z "${SGW_MCP_TOKEN:-}" ]; then
+  if [ -z "$SSH_HOST" ]; then
+    echo "set SGW_MCP_TOKEN, or SGW_MCP_SSH_HOST to read it from the container" >&2
+    exit 2
+  fi
+  need ssh
   echo "Fetching token from $SSH_HOST container env..."
   SGW_MCP_TOKEN="$(
     ssh "$SSH_HOST" \

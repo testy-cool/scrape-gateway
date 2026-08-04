@@ -12,7 +12,7 @@ Unified CLI for scraping web pages through multiple providers with cheapest-firs
 **Config**: `scrape-gateway.yml` (project root or CWD)
 **API keys**: `.env` (copy from `.env.example`)
 **Extensions dir**: `~/.config/scrape-gateway/providers/`
-**Remote MCP**: `https://sgw.example.com/mcp` (Coolify app `sgw-mcp`)
+**Remote MCP**: set `SGW_MCP_URL` to your own deployment's `/mcp` endpoint
 
 ## Setup
 
@@ -218,19 +218,25 @@ routing from its verdicts. Other model or prompt combinations remain
 
 ## Remote MCP Ops
 
-Scrape Gateway also runs as a hosted MCP server on `coolify-host`. For deployment, proxy, token, persistence, and smoke-test details, read:
+Scrape Gateway can run as a hosted MCP server behind a reverse proxy. Point
+`SGW_MCP_URL` at your deployment and `SGW_MCP_TOKEN` at its bearer token; both
+the `/mcp` endpoint and the console's `/api/session` require that token.
 
-```text
-docs/mcp-coolify-ops.md
-```
+Key rule when deploying under Coolify: route Caddy to the stable Docker network
+alias `sgw-mcp:8100`, not a container IP or a timestamped container name. Normal
+redeploys change the container name.
 
-Key rule: Caddy must route to the stable Docker network alias `sgw-mcp:8100`, not a container IP or timestamped Coolify container name. Normal redeploys change the container name.
+Persist `/data/.scrape-gateway/` via a bind mount so cache artifacts, domain
+memory, telemetry runs, and logs survive redeploys.
 
 Use this helper after proxy/deploy changes:
 
 ```bash
-scripts/sgw-mcp-smoke.sh
+SGW_MCP_URL=https://your-host/mcp scripts/sgw-mcp-smoke.sh
 ```
+
+Deployment-specific hostnames, UUIDs, and host aliases belong in your own
+private operator notes, not in this repo.
 
 ## Writing Extensions
 
