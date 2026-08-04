@@ -47,6 +47,30 @@ Run before every commit:
 - `examples/` — extension example
 - `registry.yml` — curated extension registry
 
+## This Repo Is Public
+
+`github.com/testy-cool/scrape-gateway` is a public repository. Everything committed
+here is world-readable the moment it lands, including in docs and shell scripts.
+
+Never commit deployment-specific detail:
+
+- Live hostnames for our own services (`*.voidxd.cloud` and similar)
+- Coolify application or service UUIDs, container names, network aliases
+- SSH host aliases (`coolify-gen2`), server IPs, on-disk server paths
+- Reverse-proxy config that maps our actual topology
+
+Write self-hosting docs generically: `SGW_MCP_URL`, `SGW_MCP_TOKEN`, and the shape
+of the deployment. Scripts must not default to one of our hosts; require the env
+var instead. Operator runbooks belong in the private
+`~/Work/claude-skills/project-index/references/` notes, not in `docs/`.
+
+This is written down because `docs/mcp-coolify-ops.md` published the live MCP
+hostname, the Coolify app UUID, the host alias, the Langfuse subdomain, and the
+Caddy layout for two months before anyone noticed. No credential ever leaked and
+every endpoint held at 401, but a force-push does not undo publication: GitHub
+still serves orphaned commits by SHA after a history rewrite, so only a Support
+request clears them. Keeping it out in the first place is the only cheap fix.
+
 ## Config Files (not committed)
 
 - `.env` — API keys (gitignored)
