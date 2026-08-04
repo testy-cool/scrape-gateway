@@ -28,19 +28,34 @@ wreq and curl_cffi (free anti-detect HTTP) are included as required dependencies
 
 ## Providers
 
-7 built-in, all discovered via entry points. Extensions use the same mechanism.
+15 built-in, all discovered via entry points. Extensions use the same mechanism.
 
-| Provider | Cost Rank | Free | JS | Anti-bot |
-|---|---|---|---|---|
-| `raw_http` | 0 | yes | no | none |
-| `wreq` | 2 | yes | no | TLS fingerprinting |
-| `curl_cffi` | 3 | yes | no | TLS fingerprinting |
-| `scrapedrive` | 25 | no | yes | full (3 tiers) |
-| `scrape_do` | 30 | no | yes | residential proxies |
-| `scrapingbee` | 35 | no | yes | premium proxies |
-| `scraperapi` | 40 | no | yes | premium proxies |
+| Provider | Cost Rank | Free | JS | Screenshot | Anti-bot |
+|---|---|---|---|---|---|
+| `raw_http` | 0 | yes | no | no | none |
+| `wreq` | 2 | yes | no | no | TLS fingerprinting |
+| `curl_cffi` | 3 | yes | no | no | TLS fingerprinting |
+| `jina_reader` | 8 | yes | yes | no | none |
+| `crawl4ai` | 18 | yes | yes | yes | none (self-hosted) |
+| `spider_cloud` | 24 | no | yes | no | premium |
+| `scrapedrive` | 25 | no | yes | yes | premium (3 tiers) |
+| `firecrawl` | 26 | no | yes | yes | premium |
+| `scrape_do` | 30 | no | yes | no | premium |
+| `scrapfly` | 32 | no | yes | no | premium |
+| `zenrows` | 34 | no | yes | no | premium |
+| `scrapingbee` | 35 | no | yes | no | premium |
+| `scraperapi` | 40 | no | yes | yes | premium |
+| `oxylabs` | 45 | no | yes | yes | premium |
+| `brightdata` | 50 | no | yes | yes | premium |
 
-Router tries cheapest first. Domain memory skips to what worked last time.
+The five free providers declare `is_free = True`; the other ten implement
+`estimated_cost_units`. Eight declare `country`: `scrapedrive`, `firecrawl`,
+`scrape_do`, `scrapfly`, `zenrows`, `scrapingbee`, `scraperapi`, `oxylabs`.
+
+Router tries cheapest first, then switches to observed cost once a provider has 5
+attempts and 2 successes on the same request profile. Domain memory **skips providers
+with bad history for that domain** — it does not jump to a previous winner. Run
+`sgw providers` to see the live table, which also includes any installed extensions.
 
 ## Core Commands
 
@@ -111,6 +126,43 @@ output: results.json
 sgw recipe books.yml                 # run it
 sgw recipe books.yml --dry-run       # preview
 ```
+
+### sgw setup — First-run configuration
+
+Interactive: choose which providers to activate and enter API keys. Writes
+`scrape-gateway.yml` and `.env` into the current directory. No flags.
+
+```bash
+sgw setup
+```
+
+### sgw search — Find URLs
+
+Web search across several backends, for when you do not already have the URL.
+
+```bash
+sgw search "query"                   # rich output, 10 results
+sgw search "query" -b brave -n 25    # auto|bing|duckduckgo|google|brave
+sgw search "query" -t w -f urls      # last week, one bare URL per line
+sgw search "query" --proxy           # route via SCRAPE_PROXY_URL
+```
+
+`-f urls` is the pipe-friendly format: feed it straight into `sgw run`.
+
+### sgw calibrate-evaluator — Score the AI evaluator
+
+Measures the advisory evaluator against the versioned human-labelled corpus.
+Replays recorded responses by default, so it costs nothing and needs no API key.
+
+```bash
+sgw calibrate-evaluator                    # offline replay, dev split
+sgw calibrate-evaluator --split test       # held-out set, claim it once
+sgw calibrate-evaluator --live             # actually call the model
+sgw calibrate-evaluator --live --concurrency 8
+```
+
+`--live` spends OpenRouter credit. `--model` overrides the configured evaluator
+model, but note that changing it invalidates the calibration status.
 
 ### sgw providers — List available providers
 
