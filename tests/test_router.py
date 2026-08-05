@@ -83,7 +83,7 @@ async def test_router_persists_combined_fallback_ledger_with_run_and_request_pro
     class EstimatedFailure(ProviderAdapter):
         name = "estimated_failure"
         cost_rank = 1
-        capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
+        capabilities = frozenset({"html", "render_js", "premium", "screenshot", "country"})
 
         async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
             return ScrapeResult(
@@ -100,7 +100,7 @@ async def test_router_persists_combined_fallback_ledger_with_run_and_request_pro
     class RetryingSuccess(ProviderAdapter):
         name = "retrying_success"
         cost_rank = 2
-        capabilities = frozenset({"html", "render_js", "premium", "screenshot"})
+        capabilities = frozenset({"html", "render_js", "premium", "screenshot", "country"})
 
         async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
             return ScrapeResult(

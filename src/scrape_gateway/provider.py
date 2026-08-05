@@ -32,14 +32,16 @@ class ProviderAdapter(ABC):
         return f"Missing {' or '.join(missing)}"
 
     def can_handle(self, request: ScrapeRequest) -> bool:
-        # Three parallel capability guards. SIM103 wants the last one inverted into the
-        # return, which breaks the symmetry and makes adding a fourth capability read
-        # differently from the first three.
+        # Four parallel capability guards. SIM103 wants the last one inverted into the
+        # return, which breaks the symmetry and makes adding a fifth capability read
+        # differently from the first four.
         if request.render_js and "render_js" not in self.capabilities:
             return False
         if request.premium and "premium" not in self.capabilities:
             return False
-        if request.screenshot and "screenshot" not in self.capabilities:  # noqa: SIM103
+        if request.screenshot and "screenshot" not in self.capabilities:
+            return False
+        if request.country and "country" not in self.capabilities:  # noqa: SIM103
             return False
         return True
 

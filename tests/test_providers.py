@@ -694,3 +694,44 @@ class TestScraperApi:
         result = await prov.scrape(ScrapeRequest(url=TARGET_URL))
         assert result.success is False
         assert result.failure_reason == FailureReason.TIMEOUT
+
+
+class TestCapabilityGuards:
+    """`can_handle` is the only thing standing between a request that asks for a
+    capability and a provider that cannot deliver it. A guard that is missing here
+    does not raise; the request is accepted and the option is silently discarded."""
+
+    class HtmlOnly(RawHttpProvider):
+        name = "html_only"
+        capabilities = frozenset({"html"})
+
+    class FullyCapable(RawHttpProvider):
+        name = "fully_capable"
+        capabilities = frozenset({"html", "render_js", "premium", "screenshot", "country"})
+
+    @pytest.mark.parametrize(
+        ("kwargs", "capability"),
+        [
+            ({"render_js": True}, "render_js"),
+            ({"premium": True}, "premium"),
+            ({"screenshot": True}, "screenshot"),
+            ({"country": "RO"}, "country"),
+        ],
+    )
+    def test_provider_lacking_the_capability_is_rejected(self, kwargs, capability):
+        request = ScrapeRequest(url=TARGET_URL, **kwargs)
+
+        assert self.HtmlOnly().can_handle(request) is False, (
+            f"a provider without {capability!r} accepted a request that needs it, "
+            "so the option would be dropped without an error"
+        )
+        assert self.FullyCapable().can_handle(request) is True
+
+    def test_plain_request_is_handled_by_the_least_capable_provider(self):
+        assert self.HtmlOnly().can_handle(ScrapeRequest(url=TARGET_URL)) is True
+
+    def test_empty_country_does_not_restrict_routing(self):
+        """`country=None` and `country=""` mean "no preference", not "any country"."""
+        for value in (None, ""):
+            request = ScrapeRequest(url=TARGET_URL, country=value)
+            assert self.HtmlOnly().can_handle(request) is True
