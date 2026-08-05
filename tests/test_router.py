@@ -1073,3 +1073,80 @@ async def test_explicit_header_overrides_auto_referer(tmp_dir):
         use_cache=False,
     )
     assert cap.captured_headers["Referer"] == "https://bing.com"
+
+
+class UnavailablePreferred(ProviderAdapter):
+    name = "needs_credentials"
+    cost_rank = 1
+    capabilities = frozenset({"html"})
+    required_configuration = (("token", "NEEDS_CREDENTIALS_TOKEN"),)
+
+    def __init__(self) -> None:
+        self.token = ""
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:  # pragma: no cover
+        raise AssertionError("must not be called while unavailable")
+
+
+class AlwaysWorks(ProviderAdapter):
+    name = "always_works"
+    cost_rank = 9
+    capabilities = frozenset({"html"})
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html="<html><body>" + ("filler content " * 30) + "</body></html>",
+        )
+
+
+async def test_skipping_the_requested_provider_is_announced_not_buried(tmp_path, capsys):
+    """Asking for a provider and getting a different one must not read as a plain success.
+
+    The end-of-run [skip] summary does not cover this: it only prints when the loop
+    finishes with no result, so a later provider succeeding hides the skip entirely.
+    """
+    gw = ScrapeGateway(
+        providers=[UnavailablePreferred(), AlwaysWorks()],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    request = ScrapeRequest(
+        "https://example.com/page",
+        metadata={"preferred_provider": "needs_credentials"},
+    )
+    result = await gw.scrape(request, use_cache=False, use_memory=False)
+
+    assert result.success is True
+    assert result.provider == "always_works"
+
+    stderr = capsys.readouterr().err
+    assert "[warn] needs_credentials was requested but skipped" in stderr
+
+    skipped = request.metadata.get("chosen_provider_skipped")
+    assert skipped is not None, "the skip must survive on the request for callers to see"
+    assert skipped["provider"] == "needs_credentials"
+
+
+async def test_no_warning_when_the_requested_provider_actually_runs(tmp_path, capsys):
+    gw = ScrapeGateway(
+        providers=[AlwaysWorks()],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    request = ScrapeRequest(
+        "https://example.com/page",
+        metadata={"preferred_provider": "always_works"},
+    )
+    result = await gw.scrape(request, use_cache=False, use_memory=False)
+
+    assert result.success is True
+    assert "[warn]" not in capsys.readouterr().err
+    assert "chosen_provider_skipped" not in request.metadata

@@ -127,6 +127,31 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+# Skips that are chosen for you are routine and belong in the end-of-run summary. A skip
+# of the provider you named is different: you asked for it, something else answered, and
+# the run reads as a plain success. The summary line does not cover that case, because it
+# only prints once the loop ends without a result.
+_CHOSEN_PROVIDER_KINDS = frozenset({"request_preference", "strategy", "recipe"})
+
+
+def _warn_if_chosen_provider_skipped(
+    request: ScrapeRequest, provider_name: str, reason: str
+) -> None:
+    decision = request.metadata.get("routing_decision")
+    if not isinstance(decision, dict):
+        return
+    if decision.get("kind") not in _CHOSEN_PROVIDER_KINDS:
+        return
+    if decision.get("provider") != provider_name:
+        return
+    _log(f"  [warn] {provider_name} was requested but skipped: {reason}")
+    _log("  [warn] continuing with the rest of the provider order")
+    request.metadata["chosen_provider_skipped"] = {
+        "provider": provider_name,
+        "reason": reason,
+    }
+
+
 def _provider_ledger(
     provider: ProviderAdapter,
     result: ScrapeResult,
@@ -614,6 +639,9 @@ class ScrapeGateway:
                 )
             if not provider.can_handle(request):
                 skipped.append(f"{provider.name}(no capability)")
+                _warn_if_chosen_provider_skipped(
+                    request, provider.name, "it cannot satisfy the requested options"
+                )
                 emit_progress(
                     id=provider_step_id,
                     name=f"{provider.name} attempt",
@@ -630,6 +658,7 @@ class ScrapeGateway:
             availability_error = provider.availability_error()
             if availability_error:
                 skipped.append(f"{provider.name}(unavailable)")
+                _warn_if_chosen_provider_skipped(request, provider.name, availability_error)
                 emit_progress(
                     id=provider_step_id,
                     name=f"{provider.name} attempt",
@@ -642,6 +671,9 @@ class ScrapeGateway:
                 continue
             if use_memory and self.memory.should_skip_provider(request, provider.name):
                 skipped.append(f"{provider.name}(bad history)")
+                _warn_if_chosen_provider_skipped(
+                    request, provider.name, "it has failed repeatedly on this domain"
+                )
                 emit_progress(
                     id=provider_step_id,
                     name=f"{provider.name} attempt",
