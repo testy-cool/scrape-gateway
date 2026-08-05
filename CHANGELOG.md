@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-08-05
+
+Three fixes for the same failure shape: you ask for something, it is quietly not done,
+and the result looks like success.
+
+### Fixed
+- **A `country` request can no longer be served by a provider that ignores country.**
+  `country` was a declared capability that nothing checked, so `--country ro` on a cold
+  domain routed to `raw_http` and fetched the page from wherever the process happened to
+  be. No error, and a result indistinguishable from a correctly geolocated one.
+- **The artifact cache no longer returns pages fetched under different options.** The key
+  hashed only the URL and `render_js`; `country`, `premium` and `mobile` are now part of
+  it. Options are appended only when set, so plain requests keep their existing keys and
+  warm caches survive the upgrade. Country is lowercased and stripped.
+- **A preferred provider that gets skipped now says so.** Naming a provider with `-p` and
+  receiving a different one was invisible: the end-of-run skip summary only prints when
+  nothing succeeded, so a later provider answering hid the skip entirely. All three skip
+  paths report it, and it is left on the request as `chosen_provider_skipped`.
+
+### Added
+- The Browserless adapter honours `SCRAPE_PROXY_URL`, via
+  `?launch={"args":["--proxy-server=..."]}`. Note that Chrome ignores credentials in that
+  value and browserless's `externalProxyServer` parameter, which does accept them, exists
+  only on the managed cloud service — so a credentialed proxy URL is skipped with the
+  reason recorded as `proxy_skipped` rather than silently ignored. Chrome reports proxy
+  trouble as a page-load error, so those are detected and retried once without the proxy.
+
 ## [0.24.2] - 2026-08-05
 
 ### Fixed
