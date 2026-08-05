@@ -545,6 +545,9 @@ class ScrapeGateway:
             result = self.cache.get_result(
                 request.url,
                 render_js=request.render_js,
+                country=request.country,
+                premium=request.premium,
+                mobile=request.mobile,
                 require_screenshot=request.screenshot,
                 ttl_seconds=recipe.ttl_seconds if recipe else None,
             )
@@ -868,7 +871,13 @@ class ScrapeGateway:
                     attempts=[*attempts, attempt],
                     elapsed_ms=elapsed_ms,
                 )
-                self.cache.save(result, render_js=request.render_js)
+                self.cache.save(
+                    result,
+                    render_js=request.render_js,
+                    country=request.country,
+                    premium=request.premium,
+                    mobile=request.mobile,
+                )
                 if result.html:
                     hreflang = _check_hreflang(result.html, request.url, request.country)
                     if hreflang:

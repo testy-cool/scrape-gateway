@@ -73,7 +73,12 @@ def test_scrape_endpoint_maps_request_and_returns_requested_formats(tmp_path) ->
     assert body["success"] is True
     assert body["provider"] == "mock"
     assert body["route"] == "mock:rendered"
+    # country and premium are part of the key: the same URL fetched from a different
+    # country is a different page, and a cache that ignores that returns the wrong one.
     assert body["cache_key"] == gateway.cache.key_for_url(
+        "https://shop.example/product", render_js=True, country="US", premium=True
+    )
+    assert body["cache_key"] != gateway.cache.key_for_url(
         "https://shop.example/product", render_js=True
     )
     assert body["content"] == {

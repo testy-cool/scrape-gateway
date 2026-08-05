@@ -18,12 +18,43 @@ class ArtifactCache:
         self.root.mkdir(parents=True, exist_ok=True)
         self.ttl_seconds = ttl_seconds
 
-    def key_for_url(self, url: str, render_js: bool = False) -> str:
+    def key_for_url(
+        self,
+        url: str,
+        render_js: bool = False,
+        *,
+        country: str | None = None,
+        premium: bool = False,
+        mobile: bool = False,
+    ) -> str:
+        """Hash every request option that can change what the page contains.
+
+        Options are appended only when set, so a plain request keeps the key it had
+        before country, premium and mobile were part of it. Adding them
+        unconditionally would rename every existing entry and throw away a warm cache
+        to fix a collision that only affects requests carrying those options.
+        """
         raw = f"{url}|js={render_js}"
+        if country:
+            raw += f"|country={country.strip().lower()}"
+        if premium:
+            raw += "|premium=1"
+        if mobile:
+            raw += "|mobile=1"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
-    def paths_for_url(self, url: str, render_js: bool = False) -> dict[str, Path]:
-        key = self.key_for_url(url, render_js=render_js)
+    def paths_for_url(
+        self,
+        url: str,
+        render_js: bool = False,
+        *,
+        country: str | None = None,
+        premium: bool = False,
+        mobile: bool = False,
+    ) -> dict[str, Path]:
+        key = self.key_for_url(
+            url, render_js=render_js, country=country, premium=premium, mobile=mobile
+        )
         folder = self.root / key
         return {
             "folder": folder,
@@ -38,9 +69,14 @@ class ArtifactCache:
         url: str,
         render_js: bool = False,
         *,
+        country: str | None = None,
+        premium: bool = False,
+        mobile: bool = False,
         ttl_seconds: int | None = None,
     ) -> str | None:
-        paths = self.paths_for_url(url, render_js=render_js)
+        paths = self.paths_for_url(
+            url, render_js=render_js, country=country, premium=premium, mobile=mobile
+        )
         html_path = paths["html"]
         meta_path = paths["meta"]
         if not html_path.exists():
@@ -61,16 +97,28 @@ class ArtifactCache:
         url: str,
         render_js: bool = False,
         *,
+        country: str | None = None,
+        premium: bool = False,
+        mobile: bool = False,
         require_screenshot: bool = False,
         ttl_seconds: int | None = None,
     ) -> ScrapeResult | None:
         """Restore a complete cached result without mixing artifact generations."""
 
-        html = self.get_html(url, render_js=render_js, ttl_seconds=ttl_seconds)
+        html = self.get_html(
+            url,
+            render_js=render_js,
+            country=country,
+            premium=premium,
+            mobile=mobile,
+            ttl_seconds=ttl_seconds,
+        )
         if html is None:
             return None
 
-        paths = self.paths_for_url(url, render_js=render_js)
+        paths = self.paths_for_url(
+            url, render_js=render_js, country=country, premium=premium, mobile=mobile
+        )
         screenshot = paths["screenshot"].read_bytes() if paths["screenshot"].exists() else None
         if require_screenshot and not screenshot:
             return None
@@ -103,8 +151,18 @@ class ArtifactCache:
             },
         )
 
-    def save(self, result: ScrapeResult, render_js: bool = False) -> None:
-        paths = self.paths_for_url(result.url, render_js=render_js)
+    def save(
+        self,
+        result: ScrapeResult,
+        render_js: bool = False,
+        *,
+        country: str | None = None,
+        premium: bool = False,
+        mobile: bool = False,
+    ) -> None:
+        paths = self.paths_for_url(
+            result.url, render_js=render_js, country=country, premium=premium, mobile=mobile
+        )
         paths["folder"].mkdir(parents=True, exist_ok=True)
         if result.html:
             paths["html"].write_text(result.html, encoding="utf-8")

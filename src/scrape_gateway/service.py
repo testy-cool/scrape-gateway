@@ -126,7 +126,11 @@ def create_app(
         return {
             "url": result.url,
             "cache_key": gateway_instance.cache.key_for_url(
-                result.url, render_js=request.render_js
+                result.url,
+                render_js=request.render_js,
+                country=request.country,
+                premium=request.premium,
+                mobile=request.mobile,
             ),
             "success": result.success,
             "provider": result.provider,

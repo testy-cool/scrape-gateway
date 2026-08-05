@@ -143,3 +143,57 @@ def test_ttl_not_expired():
         )
         cache.save(result)
         assert cache.get_html("https://example.com") == "<html>fresh</html>"
+
+
+class TestCacheKeyCoversRequestProfile:
+    """A cache key that ignores an option lets a hit return content fetched under a
+    different one. It fails silently: no error, wrong page, and `--no-cache` is the
+    only way out."""
+
+    def test_options_that_change_the_page_change_the_key(self, tmp_path):
+        cache = ArtifactCache(root=tmp_path / "artifacts")
+        url = "https://example.com/prices"
+        base = cache.key_for_url(url)
+
+        assert cache.key_for_url(url, country="RO") != base
+        assert cache.key_for_url(url, premium=True) != base
+        assert cache.key_for_url(url, mobile=True) != base
+        assert cache.key_for_url(url, render_js=True) != base
+
+    def test_countries_do_not_collide_with_each_other(self, tmp_path):
+        cache = ArtifactCache(root=tmp_path / "artifacts")
+        url = "https://example.com/prices"
+
+        assert cache.key_for_url(url, country="RO") != cache.key_for_url(url, country="DE")
+
+    def test_country_case_and_padding_are_normalised(self, tmp_path):
+        cache = ArtifactCache(root=tmp_path / "artifacts")
+        url = "https://example.com/prices"
+
+        assert cache.key_for_url(url, country="ro") == cache.key_for_url(url, country=" RO ")
+
+    def test_plain_requests_keep_their_existing_key(self, tmp_path):
+        """Options are appended only when set, so warm caches survive this change."""
+        cache = ArtifactCache(root=tmp_path / "artifacts")
+        url = "https://example.com/prices"
+
+        assert cache.key_for_url(url) == cache.key_for_url(
+            url, country=None, premium=False, mobile=False
+        )
+        assert cache.key_for_url(url, country="") == cache.key_for_url(url)
+
+    def test_a_country_request_does_not_read_an_unqualified_entry(self, tmp_path):
+        cache = ArtifactCache(root=tmp_path / "artifacts")
+        url = "https://example.com/prices"
+        cache.save(
+            ScrapeResult(
+                url=url,
+                provider="raw_http",
+                success=True,
+                html="<html><body>US pricing, fetched with no country set</body></html>",
+            )
+        )
+
+        assert cache.get_html(url) is not None
+        assert cache.get_html(url, country="RO") is None
+        assert cache.get_result(url, country="RO") is None
