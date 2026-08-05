@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import replace
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import urlparse
 
 import typer
@@ -2290,6 +2291,27 @@ def recipe(
     asyncio.run(run_recipe())
 
 
+SEARCH_BACKENDS = ("auto", "bing", "duckduckgo", "google", "brave")
+
+
+def _search_backend_failed(backend: str, detail: str) -> NoReturn:
+    """Report a dead search backend without dumping a ddgs traceback.
+
+    Every backend is a scraper against markup the engine controls, so any of
+    them can start returning nothing without warning. The useful response is
+    to name another backend, not to show the user ddgs internals.
+    """
+    console.print(f"[yellow]{detail.strip() or 'No results found.'}[/]")
+    others = [b for b in SEARCH_BACKENDS if b not in {backend, "auto"}]
+    console.print(
+        f"[dim]Backend [/][cyan]{backend}[/][dim] returned nothing. "
+        f"These scrape live engines and break without notice — "
+        f"try another before rewording the query:[/]"
+    )
+    console.print(f"[dim]  {' '.join(f'-b {b}' for b in others)}[/]")
+    raise typer.Exit(1)
+
+
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query"),
@@ -2301,21 +2323,33 @@ def search(
         None, "--time", "-t", help="Time filter: d(ay), w(eek), m(onth), y(ear)"
     ),
     backend: str = typer.Option(
-        "auto", "--backend", "-b", help="Backend: auto, bing, duckduckgo, google, brave"
+        "auto",
+        "--backend",
+        "-b",
+        help=f"Search engine to scrape: {', '.join(SEARCH_BACKENDS)}",
     ),
     proxy: bool = typer.Option(
         False, "--proxy", help="Route through SCRAPE_PROXY_URL (Evomi residential)"
     ),
     output_format: str = typer.Option("rich", "--format", "-f", help="rich|json|urls"),
 ) -> None:
-    """Search the web via DuckDuckGo and return results.
+    """Search the web and return results.
 
-    Uses ddgs library for web search with optional proxy routing
-    through your configured residential proxy (SCRAPE_PROXY_URL).
+    Uses the ddgs library, which scrapes several engines. Pick one with
+    --backend; they do not all work at any given time, because each is a
+    scraper against markup the engine controls. If one returns nothing,
+    try another before assuming the query is at fault.
+
+    Region is <country>-<lang>. It mainly reorders results within the
+    language you already searched in, so translate the query first.
+
+    Optional proxy routing goes through SCRAPE_PROXY_URL.
 
     Examples:
       sgw search "python web scraping"
+      sgw search "python web scraping" -b bing     # pick an engine
       sgw search "site:github.com scraping" -n 20
+      sgw search "cele mai bune laptopuri" -r ro-ro  # native-language query
       sgw search "price tracker" --proxy          # via Evomi residential
       sgw search "news today" -t d -f json        # today only, JSON output
       sgw search "best laptops" -f urls            # just URLs, one per line
@@ -2323,6 +2357,7 @@ def search(
     import os
 
     from ddgs import DDGS
+    from ddgs.exceptions import DDGSException
 
     proxy_url = None
     if proxy:
@@ -2333,18 +2368,21 @@ def search(
 
     with console.status("[bold cyan]Searching...", spinner="dots"):
         ddgs = DDGS(proxy=proxy_url)
-        results = ddgs.text(
-            query,
-            region=region,
-            safesearch="moderate",
-            timelimit=timelimit,
-            max_results=max_results,
-            backend=backend,
-        )
+        try:
+            results = ddgs.text(
+                query,
+                region=region,
+                safesearch="moderate",
+                timelimit=timelimit,
+                max_results=max_results,
+                backend=backend,
+            )
+        except DDGSException as exc:
+            results = []
+            _search_backend_failed(backend, str(exc))
 
     if not results:
-        console.print("[yellow]No results found.[/]")
-        raise typer.Exit(1)
+        _search_backend_failed(backend, "No results found.")
 
     if output_format == "json":
         print(json.dumps(results, indent=2, ensure_ascii=False))
