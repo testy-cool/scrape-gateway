@@ -131,3 +131,84 @@ class TestBrowserlessProvider:
 
         assert result.success is False
         assert result.failure_reason == FailureReason.TIMEOUT
+
+    @respx.mock
+    async def test_credential_free_proxy_is_passed_as_launch_arg(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("SCRAPE_PROXY_URL", "http://proxy.test:8080")
+        route = respx.post(f"{self.BASE}/content").mock(
+            return_value=httpx.Response(200, text=GOOD_HTML)
+        )
+
+        provider = provider_cls()
+        result = await provider(base_url=self.BASE, token=self.TOKEN).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        launch = json.loads(dict(route.calls.last.request.url.params)["launch"])
+        assert launch == {"args": ["--proxy-server=http://proxy.test:8080"]}
+        assert result.success is True
+        assert result.metadata["proxy"] == "http://proxy.test:8080"
+
+    @respx.mock
+    async def test_proxy_credentials_are_reported_not_silently_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Chrome's --proxy-server ignores userinfo, so the proxy cannot be applied.
+
+        The scrape still succeeds unproxied, but the result has to say so — otherwise a
+        request the operator believed was proxied leaves from the wrong address with no
+        trace of it.
+        """
+        monkeypatch.setenv("SCRAPE_PROXY_URL", "http://user:pass@proxy.test:8080")
+        route = respx.post(f"{self.BASE}/content").mock(
+            return_value=httpx.Response(200, text=GOOD_HTML)
+        )
+
+        provider = provider_cls()
+        result = await provider(base_url=self.BASE, token=self.TOKEN).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert "launch" not in dict(route.calls.last.request.url.params)
+        assert result.success is True
+        assert "proxy" not in result.metadata
+        assert "credentials" in result.metadata["proxy_skipped"]
+
+    @respx.mock
+    async def test_dead_proxy_falls_back_to_a_direct_fetch(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("SCRAPE_PROXY_URL", "http://proxy.test:8080")
+        respx.post(f"{self.BASE}/content").mock(
+            side_effect=[
+                httpx.Response(500, text="Error: net::ERR_PROXY_CONNECTION_FAILED at /page"),
+                httpx.Response(200, text=GOOD_HTML),
+            ]
+        )
+
+        provider = provider_cls()
+        result = await provider(base_url=self.BASE, token=self.TOKEN).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.success is True
+        assert result.html == GOOD_HTML
+        assert result.metadata["proxy_fallback"] == "disabled_after_proxy_error"
+        assert "ERR_PROXY_CONNECTION_FAILED" in result.metadata["proxy_error"]
+        assert "proxy" not in result.metadata
+
+    @respx.mock
+    async def test_no_proxy_configured_adds_no_launch_param(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("SCRAPE_PROXY_URL", raising=False)
+        route = respx.post(f"{self.BASE}/content").mock(
+            return_value=httpx.Response(200, text=GOOD_HTML)
+        )
+
+        provider = provider_cls()
+        result = await provider(base_url=self.BASE, token=self.TOKEN).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert dict(route.calls.last.request.url.params) == {}
+        assert result.success is True
+        assert result.metadata == {}
