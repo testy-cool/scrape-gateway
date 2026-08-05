@@ -20,6 +20,31 @@ What counts as a release:
 What does NOT need a release:
 - README typos, internal refactors with no behavior change, test-only changes with no fixes
 
+## `uv tool upgrade` Silently Removes Extensions
+
+The `sgw` on PATH is a `uv tool` install, separate from the repo venv. Extensions are
+not dependencies of the main package, so **`uv tool upgrade scrape-gateway` uninstalls
+every one of them** and says so only in a `- sg-playwright==0.1.0` line buried in its
+output. Nothing warns afterwards; the provider is simply gone from `sgw providers` and
+the routing ladder is quietly shorter.
+
+Reinstall with the extensions named instead:
+
+```bash
+uv tool install --reinstall \
+  --with ./extensions/sg-playwright \
+  --with ./extensions/sg-browserless .
+```
+
+Then confirm with `sgw providers` that the ranks you expect are present. This happened
+on 2026-08-05 and cost a free JS-rendering provider until someone read the upgrade
+output closely.
+
+Also worth knowing: the tool install and the repo venv drift apart. The tool install sat
+at 0.23.0 for two releases while the repo was on 0.24.1, so `sgw` on PATH was not
+running the code being edited. Check with
+`~/.local/share/uv/tools/scrape-gateway/bin/python3 -c "from importlib.metadata import version; print(version('scrape-gateway'))"`.
+
 ## Testing
 
 Run before every commit:
