@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.2] - 2026-08-05
+
+### Fixed
+- `sgw search` reports a dead backend as a readable message naming the alternatives,
+  instead of a rich-formatted `ddgs` traceback with library source lines. The engines
+  behind each backend are scraped, so any of them can stop returning results without
+  notice; trying another backend is the correct first response and the error now says
+  so. At the time of writing `duckduckgo` and `google` return nothing while `bing` and
+  `brave` work.
+- `docs/SKILL.md` listed 7 providers and claimed that was all of them. It lists all 15,
+  with the screenshot capability each one declares. Agents read this file, so the
+  omission misinformed every agent session that consulted it.
+- `docs/SKILL.md` claimed domain memory routes to a domain's previous winner. It does
+  not; it skips providers with bad history for that domain and otherwise leaves the
+  cost-ranked order alone. `DomainMemory.preferred_provider` exists but nothing calls it.
+- The README version badge showed 0.23.0.
+
+### Changed
+- `sgw search --help` no longer names DuckDuckGo as the engine it uses, and documents
+  that `--region` mostly reorders results within the language the query is already in.
+- `docs/SKILL.md` documents `sgw setup`, `sgw search`, and `sgw calibrate-evaluator`,
+  which existed but had no entry.
+
 ## [0.24.1] - 2026-08-04
 
 ### Fixed
