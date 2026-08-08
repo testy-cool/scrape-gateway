@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.1] - 2026-08-05
+
+### Fixed
+- 0.25.0's country enforcement combined with TLD auto-detection to route every ccTLD
+  domain (.ro, .de, .fr, ...) straight past all free providers to paid ones, because the
+  router wrote its TLD guess into `request.country` before routing. The inferred country
+  is now a per-attempt hint that only country-capable providers receive; country-blind
+  providers serve ccTLD domains exactly as before 0.25.0, the guess no longer reaches
+  the cache key, and an explicit `--country` remains binding.
+
 ## [0.25.0] - 2026-08-05
 
 Three fixes for the same failure shape: you ask for something, it is quietly not done,
