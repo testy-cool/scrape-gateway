@@ -119,15 +119,20 @@ def _parse_ttl(value: str | int) -> int:
     return int(value)
 
 
+# The extensions already live in ~/.config/scrape-gateway/; the keys can too. Without
+# this, an installed sgw run outside a checkout finds no .env at all — its project root
+# sits inside the tool venv — and every keyed provider silently drops off the ladder.
+USER_CONFIG_DOTENV = Path("~/.config/scrape-gateway/.env").expanduser()
+
+
 def _load_dotenv(path: Path | None = None) -> None:
     if path:
         dotenv = path
-    elif Path(".env").exists():
-        dotenv = Path(".env")
-    elif (_PROJECT_ROOT / ".env").exists():
-        dotenv = _PROJECT_ROOT / ".env"
     else:
-        return
+        candidates = (Path(".env"), _PROJECT_ROOT / ".env", USER_CONFIG_DOTENV)
+        dotenv = next((c for c in candidates if c.exists()), None)
+        if dotenv is None:
+            return
     if not dotenv.exists():
         return
     for line in dotenv.read_text().splitlines():

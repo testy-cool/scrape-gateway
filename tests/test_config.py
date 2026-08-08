@@ -211,3 +211,47 @@ memory:
 
     assert config.memory_path == "custom-memory.sqlite"
     assert config.memory.evidence_window_seconds == 3 * 86400
+
+
+def test_dotenv_falls_back_to_the_user_config_dir(monkeypatch, tmp_path):
+    """An installed sgw run outside any checkout must still find its keys.
+
+    The tool install's project root sits inside its venv, so before the user-config
+    fallback existed, running from an arbitrary directory loaded no .env at all and
+    every keyed provider silently vanished from the ladder."""
+    from scrape_gateway import config
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config, "_PROJECT_ROOT", tmp_path / "venv-project-root")
+    user_env = tmp_path / "config" / ".env"
+    user_env.parent.mkdir()
+    user_env.write_text("USER_CONFIG_KEY_XYZ=from_user_config\n")
+    monkeypatch.setattr(config, "USER_CONFIG_DOTENV", user_env)
+    monkeypatch.delenv("USER_CONFIG_KEY_XYZ", raising=False)
+
+    config._load_dotenv()
+
+    import os
+
+    assert os.environ.pop("USER_CONFIG_KEY_XYZ") == "from_user_config"
+
+
+def test_local_dotenv_still_wins_over_the_user_config_dir(monkeypatch, tmp_path):
+    from scrape_gateway import config
+
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    (cwd / ".env").write_text("PRECEDENCE_KEY_XYZ=from_cwd\n")
+    monkeypatch.chdir(cwd)
+    monkeypatch.setattr(config, "_PROJECT_ROOT", tmp_path / "venv-project-root")
+    user_env = tmp_path / "config" / ".env"
+    user_env.parent.mkdir()
+    user_env.write_text("PRECEDENCE_KEY_XYZ=from_user_config\n")
+    monkeypatch.setattr(config, "USER_CONFIG_DOTENV", user_env)
+    monkeypatch.delenv("PRECEDENCE_KEY_XYZ", raising=False)
+
+    config._load_dotenv()
+
+    import os
+
+    assert os.environ.pop("PRECEDENCE_KEY_XYZ") == "from_cwd"
