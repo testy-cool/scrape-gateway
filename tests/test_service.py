@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from scrape_gateway.cache import ArtifactCache
 from scrape_gateway.cli import app as cli_app
 from scrape_gateway.memory import DomainMemory
-from scrape_gateway.models import ScrapeResult
+from scrape_gateway.models import AttemptLedgerEntry, ScrapeRequest, ScrapeResult
 from scrape_gateway.service import create_app
 
 
@@ -129,8 +129,22 @@ def test_cache_endpoint_reads_artifacts_by_hash(tmp_path) -> None:
 
 def test_stats_endpoint_returns_domain_memory(tmp_path) -> None:
     gateway = FakeGateway(tmp_path)
-    gateway.memory.remember_success(
-        "https://shop.example/product", "mock", "US", True, True, tier="rendered"
+    gateway.memory.record_attempt_ledger(
+        "stats-run",
+        ScrapeRequest("https://shop.example/product", country="US", render_js=True, premium=True),
+        [
+            AttemptLedgerEntry(
+                provider="mock",
+                route="mock:rendered",
+                cost_units=0,
+                cost_provenance="estimated",
+                success=True,
+                latency_ms=1,
+                status_code=200,
+                failure_reason=None,
+                block_type=None,
+            )
+        ],
     )
     client = TestClient(create_app(gateway))
 
@@ -140,6 +154,8 @@ def test_stats_endpoint_returns_domain_memory(tmp_path) -> None:
     assert response.json()["domain"] == "shop.example"
     assert response.json()["providers"][0]["provider"] == "mock"
     assert response.json()["providers"][0]["success_count"] == 1
+    assert response.json()["providers"][0]["last_success_country"] == "US"
+    assert response.json()["providers"][0]["last_success_route"] == "mock:rendered"
 
 
 def test_bearer_token_protects_v1_routes_but_not_health(tmp_path) -> None:

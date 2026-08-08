@@ -252,17 +252,33 @@ def test_preferred_provider_uses_recent_successes_from_the_exact_profile(tmp_pat
     assert memory.preferred_provider(rendered) == ("browser", "browser:rendered")
 
 
-def test_legacy_aggregate_history_is_preserved_but_does_not_drive_routing(tmp_path) -> None:
-    memory = DomainMemory(
-        tmp_path / "memory.sqlite",
-        evidence_window_seconds=7 * 86400,
-        clock=lambda: NOW,
-    )
-    request = ScrapeRequest("https://example.com/products")
-    memory.remember_success(request.url, "legacy", None, False, False, tier="legacy:tier")
+def test_old_databases_with_legacy_tables_still_open_and_stay_ignored(tmp_path) -> None:
+    """Pre-ledger databases carry domain_provider_stats and domain_routes rows.
 
-    assert memory.conn.execute("select count(*) from domain_provider_stats").fetchone()[0] == 1
-    assert memory.conn.execute("select count(*) from domain_routes").fetchone()[0] == 1
+    New code neither creates nor reads those tables, but it must keep opening old
+    databases that have them, and their contents must not leak into stats or routing.
+    """
+    import sqlite3
+
+    db = tmp_path / "memory.sqlite"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        create table domain_provider_stats (
+          domain text, provider text, success_count integer, primary key (domain, provider)
+        );
+        insert into domain_provider_stats values ('example.com', 'legacy', 9);
+        create table domain_routes (domain text primary key, provider text);
+        insert into domain_routes values ('example.com', 'legacy');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    memory = DomainMemory(db, evidence_window_seconds=7 * 86400, clock=lambda: NOW)
+    request = ScrapeRequest("https://example.com/products")
+
+    assert memory.provider_stats(request.url) == []
     assert memory.preferred_provider(request) is None
 
 
@@ -377,5 +393,8 @@ async def test_unavailable_provider_is_skipped_before_scraping_and_can_recover(t
     recovered = await gateway.scrape(request, use_cache=False)
     assert recovered.success is True
     assert calls == ["recoverable"]
-    assert memory.conn.execute("select count(*) from domain_provider_stats").fetchone()[0] == 0
-    assert memory.conn.execute("select count(*) from domain_routes").fetchone()[0] == 0
+    legacy_tables = memory.conn.execute(
+        "select count(*) from sqlite_master where name in "
+        "('domain_provider_stats', 'domain_routes')"
+    ).fetchone()[0]
+    assert legacy_tables == 0, "the scrape path must not resurrect legacy aggregate tables"

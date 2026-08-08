@@ -60,9 +60,9 @@ def test_domain_extraction():
 
 def test_success_count_increments():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success("https://example.com/a", "raw_http", None, False, False)
-        mem.remember_success("https://example.com/b", "raw_http", None, False, False)
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        _record(mem, "success-a", ScrapeRequest("https://example.com/a"), "raw_http", success=True)
+        _record(mem, "success-b", ScrapeRequest("https://example.com/b"), "raw_http", success=True)
         stats = mem.provider_stats("https://example.com")
         assert len(stats) == 1
         assert stats[0]["provider"] == "raw_http"
@@ -71,9 +71,9 @@ def test_success_count_increments():
 
 def test_remember_failure():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_failure("https://example.com/a", "raw_http")
-        mem.remember_failure("https://example.com/b", "raw_http")
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        _record(mem, "failure-a", ScrapeRequest("https://example.com/a"), "raw_http", success=False)
+        _record(mem, "failure-b", ScrapeRequest("https://example.com/b"), "raw_http", success=False)
         stats = mem.provider_stats("https://example.com")
         assert stats[0]["failure_count"] == 2
         assert stats[0]["success_count"] == 0
@@ -81,8 +81,15 @@ def test_remember_failure():
 
 def test_remember_block():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_failure("https://example.com/a", "raw_http", block_type="cloudflare")
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        _record(
+            mem,
+            "block-a",
+            ScrapeRequest("https://example.com/a"),
+            "raw_http",
+            success=False,
+            block_type="cloudflare",
+        )
         stats = mem.provider_stats("https://example.com")
         assert stats[0]["block_count"] == 1
         assert stats[0]["last_block_type"] == "cloudflare"
@@ -181,10 +188,15 @@ def test_preferred_provider_returns_none_when_no_history():
 
 def test_stores_tier_info():
     with tempfile.TemporaryDirectory() as tmp:
-        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite")
-        mem.remember_success(
-            "https://example.com/a", "scrapedrive", "us", False, True, tier="scrapedrive:advanced"
+        mem = DomainMemory(db_path=Path(tmp) / "test.sqlite", clock=lambda: NOW)
+        _record(
+            mem,
+            "tier-run",
+            ScrapeRequest("https://example.com/a", country="us", premium=True),
+            "scrapedrive",
+            success=True,
+            route="scrapedrive:advanced",
         )
         stats = mem.provider_stats("https://example.com")
-        assert stats[0]["last_success_tier"] == "scrapedrive:advanced"
+        assert stats[0]["last_success_route"] == "scrapedrive:advanced"
         assert stats[0]["last_success_country"] == "us"

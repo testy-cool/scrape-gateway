@@ -42,19 +42,6 @@ class DomainMemory:
     def _migrate(self) -> None:
         self.conn.executescript(
             """
-            create table if not exists domain_provider_stats (
-              domain text not null,
-              provider text not null,
-              success_count integer default 0,
-              failure_count integer default 0,
-              block_count integer default 0,
-              last_success_country text,
-              last_success_tier text,
-              last_block_type text,
-              updated_at datetime default current_timestamp,
-              primary key (domain, provider)
-            );
-
             create table if not exists page_history (
               id integer primary key autoincrement,
               url text not null,
@@ -110,17 +97,6 @@ class DomainMemory:
               learned_at datetime default current_timestamp
             );
 
-            -- legacy table kept for backward compat during migration
-            create table if not exists domain_routes (
-              domain text primary key,
-              provider text not null,
-              country text,
-              render_js integer default 0,
-              premium integer default 0,
-              success_count integer default 0,
-              failure_count integer default 0,
-              updated_at datetime default current_timestamp
-            );
             """
         )
 
@@ -251,76 +227,6 @@ class DomainMemory:
             params,
         ).fetchall()
         return [dict(row) for row in rows]
-
-    def remember_success(
-        self,
-        url: str,
-        provider: str,
-        country: str | None,
-        render_js: bool,
-        premium: bool,
-        tier: str | None = None,
-    ) -> None:
-        domain = self.domain_for_url(url)
-        self.conn.execute(
-            """
-            insert into domain_provider_stats(domain, provider, success_count, last_success_country, last_success_tier)
-            values (?, ?, 1, ?, ?)
-            on conflict(domain, provider) do update set
-              success_count = success_count + 1,
-              last_success_country = excluded.last_success_country,
-              last_success_tier = excluded.last_success_tier,
-              updated_at = current_timestamp
-            """,
-            (domain, provider, country, tier),
-        )
-        self.conn.execute(
-            """
-            insert into domain_routes(domain, provider, country, render_js, premium, success_count)
-            values (?, ?, ?, ?, ?, 1)
-            on conflict(domain) do update set
-              provider=excluded.provider,
-              country=excluded.country,
-              render_js=excluded.render_js,
-              premium=excluded.premium,
-              success_count=success_count + 1,
-              updated_at=current_timestamp
-            """,
-            (domain, provider, country, int(render_js), int(premium)),
-        )
-        self.conn.commit()
-
-    def remember_failure(
-        self,
-        url: str,
-        provider: str,
-        block_type: str | None = None,
-    ) -> None:
-        domain = self.domain_for_url(url)
-        if block_type:
-            self.conn.execute(
-                """
-                insert into domain_provider_stats(domain, provider, block_count, last_block_type)
-                values (?, ?, 1, ?)
-                on conflict(domain, provider) do update set
-                  block_count = block_count + 1,
-                  last_block_type = excluded.last_block_type,
-                  updated_at = current_timestamp
-                """,
-                (domain, provider, block_type),
-            )
-        else:
-            self.conn.execute(
-                """
-                insert into domain_provider_stats(domain, provider, failure_count)
-                values (?, ?, 1)
-                on conflict(domain, provider) do update set
-                  failure_count = failure_count + 1,
-                  updated_at = current_timestamp
-                """,
-                (domain, provider),
-            )
-        self.conn.commit()
 
     @staticmethod
     def _request(value: ScrapeRequest | str) -> ScrapeRequest:
@@ -600,13 +506,46 @@ class DomainMemory:
         return [row["provider"] for row in rows]
 
     def provider_stats(self, url: str) -> list[dict]:
+        """Aggregate the attempt ledger per provider for one domain.
+
+        The ledger is the only place scrapes are actually recorded, so it is the only
+        honest source for these numbers. An earlier design kept a parallel
+        domain_provider_stats table, but nothing in the scrape path ever wrote to it,
+        which left the stats endpoint permanently empty in production.
+        """
         domain = self.domain_for_url(url)
         rows = self.conn.execute(
             """
-            select provider, success_count, failure_count, block_count,
-                   last_success_country, last_success_tier, last_block_type, updated_at
-            from domain_provider_stats
-            where domain = ?
+            select al.provider,
+                   coalesce(sum(al.success), 0) as success_count,
+                   coalesce(
+                     sum(case when al.success = 0 and al.block_type is null then 1 else 0 end),
+                     0
+                   ) as failure_count,
+                   coalesce(
+                     sum(case when al.success = 0 and al.block_type is not null then 1 else 0 end),
+                     0
+                   ) as block_count,
+                   (
+                     select s.country from attempt_ledger s
+                     where s.domain = al.domain and s.provider = al.provider and s.success = 1
+                     order by s.recorded_at desc, s.id desc limit 1
+                   ) as last_success_country,
+                   (
+                     select s.route from attempt_ledger s
+                     where s.domain = al.domain and s.provider = al.provider and s.success = 1
+                     order by s.recorded_at desc, s.id desc limit 1
+                   ) as last_success_route,
+                   (
+                     select b.block_type from attempt_ledger b
+                     where b.domain = al.domain and b.provider = al.provider
+                       and b.block_type is not null
+                     order by b.recorded_at desc, b.id desc limit 1
+                   ) as last_block_type,
+                   max(al.recorded_at) as updated_at
+            from attempt_ledger al
+            where al.domain = ?
+            group by al.provider
             order by success_count - (failure_count + block_count * 3) desc
             """,
             (domain,),
