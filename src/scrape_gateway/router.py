@@ -559,10 +559,14 @@ class ScrapeGateway:
         if not request.country:
             detected = _country_from_tld(request.url)
             if detected:
-                request.country = detected
+                # A TLD is a hint, not an instruction. Writing it into request.country
+                # would let the capability guard drop every country-blind provider,
+                # turning each ccTLD domain into a paid scrape nobody asked for. It is
+                # instead injected per-attempt, only for providers that can honor it.
+                request.metadata["auto_country"] = detected
                 req_data["country"] = detected
                 req_data["country_source"] = "tld"
-                _log(f"  [auto-country] {detected} (from TLD)")
+                _log(f"  [auto-country] {detected} (from TLD, hint only)")
 
         _log_event("scrape_start", **req_data)
 
@@ -769,7 +773,19 @@ class ScrapeGateway:
                     "render_js": request.render_js,
                 },
             )
-            result = await provider.scrape(request)
+            auto_country = request.metadata.get("auto_country")
+            inject_country = (
+                isinstance(auto_country, str)
+                and not request.country
+                and "country" in provider.capabilities
+            )
+            if inject_country:
+                request.country = auto_country
+            try:
+                result = await provider.scrape(request)
+            finally:
+                if inject_country:
+                    request.country = None
             elapsed = time.perf_counter() - start
             emit_progress(
                 id=provider_step_id,
@@ -911,17 +927,21 @@ class ScrapeGateway:
                     mobile=request.mobile,
                 )
                 if result.html:
-                    hreflang = _check_hreflang(result.html, request.url, request.country)
+                    # The hreflang diagnostic keeps seeing the TLD hint: it only logs
+                    # and annotates, so the hint is safe here in a way it is not in
+                    # routing or cache keys.
+                    hreflang_country = request.country or request.metadata.get("auto_country")
+                    hreflang = _check_hreflang(result.html, request.url, hreflang_country)
                     if hreflang:
                         result.metadata["hreflang"] = hreflang
                         if hreflang.get("country_match") is False:
                             avail = hreflang.get("available_countries", [])
                             _log(
-                                f"  [hreflang] country {request.country} not in page alternatives: {', '.join(avail)}"
+                                f"  [hreflang] country {hreflang_country} not in page alternatives: {', '.join(avail)}"
                             )
                         elif hreflang.get("canonical_url"):
                             _log(
-                                f"  [hreflang] canonical for {request.country}: {hreflang['canonical_url']}"
+                                f"  [hreflang] canonical for {hreflang_country}: {hreflang['canonical_url']}"
                             )
                     changes = self.memory.record_scrape(request.url, result.html, provider.name)
                     if changes and changes != ["no changes"]:

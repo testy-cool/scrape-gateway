@@ -1150,3 +1150,90 @@ async def test_no_warning_when_the_requested_provider_actually_runs(tmp_path, ca
     assert result.success is True
     assert "[warn]" not in capsys.readouterr().err
     assert "chosen_provider_skipped" not in request.metadata
+
+
+class CountryRecorder(ProviderAdapter):
+    """Records the country value its scrape call actually saw."""
+
+    name = "country_recorder"
+    cost_rank = 5
+    capabilities = frozenset({"html", "country"})
+
+    def __init__(self) -> None:
+        self.seen_country: str | None = "never-called"
+
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
+        self.seen_country = request.country
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=True,
+            status_code=200,
+            html="<html><body>" + ("filler content " * 30) + "</body></html>",
+        )
+
+
+class CountryBlindRecorder(CountryRecorder):
+    name = "country_blind_recorder"
+    cost_rank = 1
+    capabilities = frozenset({"html"})
+
+
+async def test_tld_country_is_a_hint_not_a_capability_requirement(tmp_path):
+    """Auto-detected country must not empty the free tier.
+
+    On 2026-08-05 the country capability guard combined with TLD auto-detection to
+    route every .ro domain straight past all six free providers to paid ones. The TLD
+    is a guess about the site, not something the caller asked for.
+    """
+    blind = CountryBlindRecorder()
+    gw = ScrapeGateway(
+        providers=[blind],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gw.scrape(
+        ScrapeRequest("https://scoala-exemplu.ro/"), use_cache=False, use_memory=False
+    )
+
+    assert result.success is True, "a country-blind provider must still serve .ro domains"
+    assert result.provider == "country_blind_recorder"
+    assert blind.seen_country is None, "the unhonorable hint must not reach the provider"
+
+
+async def test_tld_country_hint_reaches_providers_that_can_honor_it(tmp_path):
+    capable = CountryRecorder()
+    request = ScrapeRequest("https://scoala-exemplu.ro/")
+    gw = ScrapeGateway(
+        providers=[capable],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gw.scrape(request, use_cache=False, use_memory=False)
+
+    assert result.success is True
+    assert capable.seen_country == "RO"
+    assert request.country is None, "the hint must not persist as an explicit country"
+
+
+async def test_explicit_country_still_excludes_blind_providers(tmp_path):
+    blind = CountryBlindRecorder()
+    gw = ScrapeGateway(
+        providers=[blind],
+        cache=ArtifactCache(root=tmp_path / "cache"),
+        memory=DomainMemory(db_path=tmp_path / "mem.sqlite"),
+        telemetry=TelemetryRecorder(root=tmp_path / "runs"),
+    )
+
+    result = await gw.scrape(
+        ScrapeRequest("https://scoala-exemplu.ro/", country="RO"),
+        use_cache=False,
+        use_memory=False,
+    )
+
+    assert result.success is False
+    assert blind.seen_country == "never-called"
