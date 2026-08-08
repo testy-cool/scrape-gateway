@@ -3,7 +3,12 @@
 ## How the router works
 
 ```
+0. Drop providers that cannot satisfy the request: render_js, premium, screenshot,
+   and country are capability-gated. A country inferred from the TLD is a hint and
+   does not gate anything; only an explicit country does.
 1. Check cache → hit? return cached result, done.
+   The key covers the URL, render_js, country, premium, and mobile, so a hit can
+   never be a page fetched under different options.
 2. Check recent, exact-profile ledger evidence:
    a. Rank providers by total weighted spend per successful page once a provider has
       at least five attempts and two successes.
@@ -23,9 +28,12 @@
 Domain memory persists in `.scrape-gateway/memory.sqlite`. Routing matches domain,
 country, `render_js`, premium, mobile, and screenshot exactly and uses a configurable
 seven-day evidence window by default. Missing or invalid credentials and local
-configuration failures are excluded from domain evidence. The older aggregate routing
-tables remain intact for compatibility but are no longer part of routing. Cache stores
-HTML + Markdown artifacts in `.scrape-gateway/artifacts/`. Both survive across sessions.
+configuration failures are excluded from domain evidence. The attempt ledger is the
+only record of what was scraped: routing, the per-domain stats at `/v1/stats/{domain}`,
+and cost reporting all read it, and the older aggregate tables that once shadowed it
+are gone. Databases written before the ledger still open; their leftover tables are
+ignored rather than migrated. Cache stores HTML + Markdown artifacts in
+`.scrape-gateway/artifacts/`. Both survive across sessions.
 
 The observed score is weighted total spend divided by weighted successes, so failed
 attempts count against a provider instead of disappearing from its apparent price.

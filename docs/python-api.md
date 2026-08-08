@@ -28,7 +28,7 @@ asyncio.run(main())
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `url` | str | required | URL to scrape |
-| `country` | str | None | Geo-target (e.g. "us", "gb") |
+| `country` | str | None | Geo-target (e.g. "us", "gb"). Restricts routing to providers declaring the `country` capability, so setting it rules out the free HTTP clients. Leave it unset unless the exit country matters. |
 | `render_js` | bool | False | Render JavaScript before returning |
 | `premium` | bool | False | Use highest-tier provider options |
 | `mobile` | bool | False | Mobile user agent |
