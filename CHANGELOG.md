@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-08-05
+
+### Fixed
+- `GET /v1/stats/{domain}` returned `[]` no matter how much scraping had happened. It
+  read `domain_provider_stats`, a table only `remember_success`/`remember_failure` wrote
+  to, and nothing in the scrape path has called either in a long time. `provider_stats`
+  now aggregates the attempt ledger, which is where scrapes are actually recorded.
+
+### Removed
+- **Breaking for direct `DomainMemory` users.** `remember_success` and `remember_failure`
+  are gone, along with the `domain_provider_stats` and `domain_routes` tables. Nothing in
+  the gateway called them. Databases written before the ledger still open; their leftover
+  tables are ignored rather than migrated. `provider_stats` returns the same shape except
+  `last_success_tier`, which is replaced by `last_success_route` — the ledger records the
+  route taken rather than a tier guess.
+
+### Changed
+- `docs/architecture.md` documents capability filtering and the full-profile cache key,
+  and no longer claims the legacy aggregate tables are retained. `docs/python-api.md`
+  records that `country` now restricts routing to country-capable providers.
+
 ## [0.26.0] - 2026-08-05
 
 ### Added
