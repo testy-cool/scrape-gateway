@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-08-05
+
+### Added
+- `.env` discovery falls back to `~/.config/scrape-gateway/.env`, next to the existing
+  extension directories. The installed tool's project root sits inside its venv, so
+  outside a checkout sgw previously loaded no keys at all and every keyed provider
+  silently dropped off the ladder. A local `.env` still wins, and real environment
+  variables still override every file.
+
 ## [0.25.1] - 2026-08-05
 
 ### Fixed
