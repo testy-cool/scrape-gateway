@@ -539,6 +539,66 @@ def test_cost_command_handles_empty_ledger(tmp_path):
     assert "No cost ledger entries found" in result.output
 
 
+def test_print_result_surfaces_final_html_and_markdown_paths(monkeypatch):
+    output = StringIO()
+    monkeypatch.setattr(
+        "scrape_gateway.cli.console",
+        Console(file=output, force_terminal=False, color_system=None),
+    )
+    result = _fake_result("https://example.com/products")
+    result.metadata["artifacts"] = {
+        "final_html": "/tmp/runs/run-1/final.html",
+        "final_markdown": "/tmp/runs/run-1/final.md",
+    }
+
+    _print_result(result)
+
+    rendered = output.getvalue()
+    assert "html path" in rendered
+    assert "HTML:" in rendered
+    assert "/tmp/runs/run-1/final.html" in rendered
+    assert "markdown path" in rendered
+    assert "Markdown:" in rendered
+    assert "/tmp/runs/run-1/final.md" in rendered
+
+
+def test_print_result_omits_missing_markdown_path(monkeypatch):
+    output = StringIO()
+    monkeypatch.setattr(
+        "scrape_gateway.cli.console",
+        Console(file=output, force_terminal=False, color_system=None),
+    )
+    result = _fake_result("https://example.com/products")
+    result.markdown = None
+    result.metadata["artifacts"] = {"final_html": "/tmp/runs/run-1/final.html"}
+
+    _print_result(result)
+
+    rendered = output.getvalue()
+    assert "html path" in rendered
+    assert "HTML:" in rendered
+    assert "/tmp/runs/run-1/final.html" in rendered
+    assert "markdown path" not in rendered
+    assert "Markdown:" not in rendered
+
+
+def test_print_result_omits_paths_when_telemetry_did_not_persist(monkeypatch):
+    output = StringIO()
+    monkeypatch.setattr(
+        "scrape_gateway.cli.console",
+        Console(file=output, force_terminal=False, color_system=None),
+    )
+    result = _fake_result("https://example.com/products")
+
+    _print_result(result)
+
+    rendered = output.getvalue()
+    assert "html path" not in rendered
+    assert "HTML:" not in rendered
+    assert "markdown path" not in rendered
+    assert "Markdown:" not in rendered
+
+
 def test_print_result_surfaces_failed_audit_without_marking_scrape_failed(monkeypatch):
     output = StringIO()
     monkeypatch.setattr(

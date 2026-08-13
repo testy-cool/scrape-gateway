@@ -295,8 +295,13 @@ def _print_result(result) -> None:
     if result.metadata.get("telemetry_report"):
         table.add_row("report", f"[dim]{result.metadata['telemetry_report']}[/]")
     artifacts = result.metadata.get("artifacts")
-    if isinstance(artifacts, dict) and artifacts.get("screenshot"):
-        table.add_row("screenshot", f"[dim]{artifacts['screenshot']}[/]")
+    if isinstance(artifacts, dict):
+        if isinstance(artifacts.get("final_html"), str):
+            table.add_row("html path", f"[dim]{artifacts['final_html']}[/]")
+        if isinstance(artifacts.get("final_markdown"), str):
+            table.add_row("markdown path", f"[dim]{artifacts['final_markdown']}[/]")
+        if artifacts.get("screenshot"):
+            table.add_row("screenshot", f"[dim]{artifacts['screenshot']}[/]")
     evaluation = result.metadata.get("evaluation")
     if isinstance(evaluation, dict):
         audit_result = evaluation.get("verdict") or evaluation.get("status") or "unknown"
@@ -309,8 +314,13 @@ def _print_result(result) -> None:
             table.add_row("audit action", str(action))
 
     console.print(Panel(table, title=title, border_style="green" if result.success else "red"))
-    if isinstance(artifacts, dict) and artifacts.get("screenshot"):
-        console.print(f"[dim]Screenshot: {artifacts['screenshot']}[/]", soft_wrap=True)
+    if isinstance(artifacts, dict):
+        if isinstance(artifacts.get("final_html"), str):
+            console.print(f"[dim]HTML: {artifacts['final_html']}[/]", soft_wrap=True)
+        if isinstance(artifacts.get("final_markdown"), str):
+            console.print(f"[dim]Markdown: {artifacts['final_markdown']}[/]", soft_wrap=True)
+        if artifacts.get("screenshot"):
+            console.print(f"[dim]Screenshot: {artifacts['screenshot']}[/]", soft_wrap=True)
 
 
 def _validate_output_path(output: Path | None) -> None:
