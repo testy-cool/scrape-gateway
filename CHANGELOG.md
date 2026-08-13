@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] - 2026-08-13
+
+### Fixed
+- ScrapeDrive returned HTTP 422 on every request because the adapter still sent the
+  removed `scrape_tier` field and the renamed `country_code`, `wait_for_selector`, and
+  `extra_wait` fields. The adapter now sends only current spec fields: `standard` /
+  `advanced` / `hyperdrive` are internal profiles translated to `proxy_pool`,
+  `render_js`, `proxy_country`, `wait_browser`, `wait_for`, `wait_ms`, and
+  `block_resources`, and `block_ads` is sent explicitly so the API's blocking default
+  no longer overrides the sgw default.
+
+### Changed
+- ScrapeDrive cost estimates use the spec's additive credit model — base 5 plus 5 for
+  JavaScript, 5 for a residential proxy, and 5 for a screenshot — replacing the old
+  1/5/25 tier estimates. Validation (422), rate-limit/backlog (429), and
+  insufficient-credit (402) rejections are recorded as 0 units because the spec
+  guarantees they are never charged. Responses never report a billed amount, so every
+  ScrapeDrive cost now carries `estimated` provenance.
+
 ## [0.27.0] - 2026-08-05
 
 ### Fixed
