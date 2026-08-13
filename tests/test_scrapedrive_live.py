@@ -34,7 +34,7 @@ class TestStandardTier:
         assert result.success is True
         assert result.status_code == 200
         assert result.route == "scrapedrive:standard"
-        assert result.cost_units == 1
+        assert result.cost_units == 5
         assert "Example Domain" in (result.html or "")
 
     async def test_returns_html(self, provider):
@@ -54,19 +54,19 @@ class TestTierEscalation:
         )
         assert result.success is True
         assert result.route == "scrapedrive:advanced"
-        assert result.cost_units == 5
+        assert result.cost_units == 10
 
     async def test_country_starts_at_advanced(self, provider):
         result = await provider.scrape(ScrapeRequest(url="https://example.com", country="US"))
         assert result.success is True
         assert result.route == "scrapedrive:advanced"
-        assert result.cost_units == 5
+        assert result.cost_units == 10
 
     async def test_premium_starts_at_hyperdrive(self, provider):
         result = await provider.scrape(ScrapeRequest(url="https://example.com", premium=True))
         assert result.success is True
         assert result.route == "scrapedrive:hyperdrive"
-        assert result.cost_units == 25
+        assert result.cost_units == 15
 
 
 class TestParams:

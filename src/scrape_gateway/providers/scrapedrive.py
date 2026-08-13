@@ -19,8 +19,54 @@ from ..provider import (
 
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
 
+# Public SGW tier vocabulary, kept as backward-compatible internal profiles. Each
+# profile translates to explicit current spec fields (proxy_pool, render_js,
+# proxy_country, wait_browser, wait_for, wait_ms, block_resources). The wire no
+# longer carries scrape_tier; it only ever sees those concrete fields.
 TIER_ORDER = ["standard", "advanced", "hyperdrive"]
-TIER_COST = {"standard": 1, "advanced": 5, "hyperdrive": 25}
+
+# Additive credit model from the live spec: a fixed price reserved before the job
+# runs. base 5 + JS 5 + residential 5 + screenshot 5.
+BASE_COST = 5.0
+RENDER_JS_COST = 5.0
+RESIDENTIAL_COST = 5.0
+SCREENSHOT_COST = 5.0
+
+# Statuses the spec guarantees are rejected before any job is reserved, so they are
+# never charged: validation (422), insufficient credits (402), rate limit / async
+# backlog (429).
+UNCHARGED_STATUS_CODES = frozenset({402, 422, 429})
+
+
+def _tier_shape(request: ScrapeRequest, tier: str) -> tuple[bool, bool, bool]:
+    """Return ``(residential, render_js, screenshot)`` for a tier's actual request shape.
+
+    - standard: datacenter, JS only when the caller asked (or screenshot forces it).
+    - advanced: residential (with proxy_country when the caller supplied one).
+    - hyperdrive: residential browser — render_js always on, networkidle wait, full
+      resources.
+    - screenshot: the spec forces render_js on and resource blocking off.
+    """
+    residential = tier in {"advanced", "hyperdrive"}
+    render_js = bool(request.render_js or request.screenshot or tier == "hyperdrive")
+    screenshot = bool(request.screenshot)
+    return residential, render_js, screenshot
+
+
+def _shape_cost(residential: bool, render_js: bool, screenshot: bool) -> float:
+    cost = BASE_COST
+    if render_js or screenshot:  # screenshot forces render_js, so the addon applies once
+        cost += RENDER_JS_COST
+    if residential:
+        cost += RESIDENTIAL_COST
+    if screenshot:
+        cost += SCREENSHOT_COST
+    return cost
+
+
+def _tier_cost(request: ScrapeRequest, tier: str) -> float:
+    residential, render_js, screenshot = _tier_shape(request, tier)
+    return _shape_cost(residential, render_js, screenshot)
 
 
 def _start_tier(request: ScrapeRequest) -> str:
@@ -51,7 +97,38 @@ class ScrapeDriveProvider(ProviderAdapter):
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
 
     def estimated_cost_units(self, request: ScrapeRequest) -> float:
-        return float(TIER_COST[_start_tier(request)])
+        return _tier_cost(request, _start_tier(request))
+
+    def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:
+        residential, render_js, screenshot = _tier_shape(request, tier)
+        params: dict[str, str] = {
+            "api_key": self.api_key,
+            "url": request.url,
+            "proxy_pool": "residential" if residential else "datacenter",
+            "render_js": "true" if render_js else "false",
+            "device_type": "mobile" if request.mobile else "desktop",
+            "result_type": "html",
+            # The spec defaults block_ads to true; sgw defaults it to false, so send
+            # the caller's intent explicitly rather than inheriting the API default.
+            "block_ads": "true" if request.block_ads else "false",
+        }
+        if residential and request.country:
+            params["proxy_country"] = request.country.upper()
+        if render_js:
+            if tier == "hyperdrive":
+                params["wait_browser"] = "networkidle"
+            elif request.wait_event:
+                params["wait_browser"] = request.wait_event
+            # Screenshot forces block_resources off per the spec; hyperdrive wants the
+            # full-resource capture shape. Otherwise keep the fast blocked fetch.
+            params["block_resources"] = "false" if (screenshot or tier == "hyperdrive") else "true"
+            if request.wait_selector:
+                params["wait_for"] = request.wait_selector
+            if request.extra_wait_ms:
+                params["wait_ms"] = str(min(request.extra_wait_ms, 30_000))
+        if screenshot:
+            params["screenshot"] = "true"
+        return params
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if error := self.availability_error():
@@ -81,7 +158,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             async with asyncio.timeout(request.timeout_seconds):
                 last_result: ScrapeResult | None = None
                 for tier in tiers:
-                    tier_cost = TIER_COST[tier]
+                    tier_cost = _tier_cost(request, tier)
                     if remaining_cost is not None and tier_cost > remaining_cost + 1e-9:
                         spent_before = request.metadata.get(SPENT_COST_METADATA_KEY, 0)
                         global_spent = float(spent_before) + sum(
@@ -124,11 +201,16 @@ class ScrapeDriveProvider(ProviderAdapter):
                     active_started = time.perf_counter()
                     result = await self._attempt(request, tier)
                     attempt_latency_ms = int((time.perf_counter() - active_started) * 1000)
+                    # Rejected requests are never charged; everything else costs the
+                    # full profile shape, estimated because responses never report the
+                    # actual reserved credits.
+                    charged = result.status_code not in UNCHARGED_STATUS_CODES
+                    ledger_cost = 0.0 if not charged else tier_cost
                     ledger.append(
                         AttemptLedgerEntry(
                             provider=self.name,
                             route=f"scrapedrive:{tier}",
-                            cost_units=TIER_COST[tier],
+                            cost_units=ledger_cost,
                             cost_provenance="estimated",
                             success=result.success,
                             latency_ms=(
@@ -145,7 +227,7 @@ class ScrapeDriveProvider(ProviderAdapter):
                     result.cost_units = result.run_cost_units
                     result.metadata["attempted_tiers"] = list(attempted_tiers)
                     if remaining_cost is not None:
-                        remaining_cost = max(0.0, remaining_cost - tier_cost)
+                        remaining_cost = max(0.0, remaining_cost - ledger_cost)
                     if result.success:
                         return result
                     last_result = result
@@ -162,7 +244,7 @@ class ScrapeDriveProvider(ProviderAdapter):
                     AttemptLedgerEntry(
                         provider=self.name,
                         route=f"scrapedrive:{active_tier}",
-                        cost_units=TIER_COST[active_tier],
+                        cost_units=_tier_cost(request, active_tier),
                         cost_provenance="estimated",
                         success=False,
                         latency_ms=(
@@ -194,32 +276,8 @@ class ScrapeDriveProvider(ProviderAdapter):
             )
 
     async def _attempt(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
-        params: dict[str, str] = {
-            "api_key": self.api_key,
-            "url": request.url,
-            "scrape_tier": tier,
-            "render_js": "true" if request.render_js else "false",
-            "device_type": "mobile" if request.mobile else "desktop",
-            "block_resources": "true",
-            "result_type": "html",
-        }
-        if request.country and tier != "standard":
-            params["country_code"] = request.country.upper()
-        if request.screenshot:
-            params["screenshot"] = "true"
-        if request.block_ads:
-            params["block_ads"] = "true"
-        if request.wait_selector:
-            params["wait_for_selector"] = request.wait_selector
-        if request.extra_wait_ms:
-            params["extra_wait"] = str(request.extra_wait_ms)
-        if tier == "hyperdrive":
-            params["block_resources"] = "false"
-            params["wait_browser"] = "networkidle"
-            params["render_js"] = "true"
-        elif request.wait_event:
-            params["wait_browser"] = request.wait_event
-
+        params = self._build_params(request, tier)
+        shape_cost = _tier_cost(request, tier)
         timeout = request.timeout_seconds
         start = time.perf_counter()
         try:
@@ -272,6 +330,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             )
             if request.screenshot and not screenshot and failure is None:
                 failure = FailureReason.PROVIDER_ERROR
+            charged = response.status_code not in UNCHARGED_STATUS_CODES
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
@@ -282,11 +341,13 @@ class ScrapeDriveProvider(ProviderAdapter):
                 screenshot=screenshot,
                 failure_reason=failure,
                 error=screenshot_error,
-                cost_units=TIER_COST.get(tier, 1),
+                cost_units=0.0 if not charged else shape_cost,
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 route=f"scrapedrive:{tier}",
                 metadata={
                     "tier": tier,
+                    "charged": charged,
+                    "cost_provenance": "estimated",
                     "screenshot_url": screenshot_url,
                     "screenshot_bytes": len(screenshot or b""),
                     **({"raw_json": data} if isinstance(data, dict) else {}),

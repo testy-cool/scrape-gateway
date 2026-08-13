@@ -158,13 +158,13 @@ class TestScrapeDrive:
         assert result.success is True
         assert result.html == GOOD_HTML
         assert result.route == "scrapedrive:standard"
-        assert result.cost_units == 1
-        assert result.run_cost_units == 1
+        assert result.cost_units == 5
+        assert result.run_cost_units == 5
         assert [entry.to_dict() for entry in result.attempt_ledger] == [
             {
                 "provider": "scrapedrive",
                 "route": "scrapedrive:standard",
-                "cost_units": 1,
+                "cost_units": 5,
                 "cost_provenance": "estimated",
                 "success": True,
                 "latency_ms": result.latency_ms,
@@ -177,16 +177,24 @@ class TestScrapeDrive:
         req = route.calls[0].request
         assert req.url.params["api_key"] == self.API_KEY
         assert req.url.params["url"] == TARGET_URL
-        assert req.url.params["scrape_tier"] == "standard"
+        assert req.url.params["proxy_pool"] == "datacenter"
+        assert req.url.params["render_js"] == "false"
+        assert "scrape_tier" not in req.url.params
 
     @respx.mock
     async def test_premium_maps_to_hyperdrive(self):
-        respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
         prov = ScrapeDriveProvider(api_key=self.API_KEY)
         result = await prov.scrape(ScrapeRequest(url=TARGET_URL, premium=True))
 
         assert result.route == "scrapedrive:hyperdrive"
-        assert result.cost_units == 25
+        assert result.cost_units == 15
+
+        req = route.calls[0].request
+        assert req.url.params["proxy_pool"] == "residential"
+        assert req.url.params["render_js"] == "true"
+        assert req.url.params["wait_browser"] == "networkidle"
+        assert req.url.params["block_resources"] == "false"
 
     @respx.mock
     async def test_country_maps_to_advanced(self):
@@ -195,10 +203,12 @@ class TestScrapeDrive:
         result = await prov.scrape(ScrapeRequest(url=TARGET_URL, country="us"))
 
         assert result.route == "scrapedrive:advanced"
-        assert result.cost_units == 5
+        assert result.cost_units == 10
 
         req = route.calls[0].request
-        assert req.url.params["country_code"] == "US"
+        assert req.url.params["proxy_pool"] == "residential"
+        assert req.url.params["proxy_country"] == "US"
+        assert "country_code" not in req.url.params
 
     @respx.mock
     async def test_timeout(self):
@@ -258,8 +268,8 @@ class TestScrapeDrive:
         assert result.failure_reason == FailureReason.TIMEOUT
         assert attempted_tiers == ["standard", "advanced"]
         assert result.metadata["attempted_tiers"] == ["standard", "advanced"]
-        assert result.cost_units == 6
-        assert result.run_cost_units == 6
+        assert result.cost_units == 15
+        assert result.run_cost_units == 15
         assert [entry.route for entry in result.attempt_ledger] == [
             "scrapedrive:standard",
             "scrapedrive:advanced",
@@ -287,17 +297,17 @@ class TestScrapeDrive:
         result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
             ScrapeRequest(
                 url=TARGET_URL,
-                metadata={"_remaining_cost_units": 4},
+                metadata={"_remaining_cost_units": 8},
             )
         )
 
         assert attempted_tiers == ["standard"]
         assert result.success is False
         assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
-        assert result.run_cost_units == 1
+        assert result.run_cost_units == 5
         assert [entry.route for entry in result.attempt_ledger] == ["scrapedrive:standard"]
         assert result.metadata["budget_stop"]["next_tier"] == "advanced"
-        assert result.metadata["budget_stop"]["next_attempt_cost_units"] == 5
+        assert result.metadata["budget_stop"]["next_attempt_cost_units"] == 10
 
     async def test_cost_budget_allows_internal_tier_that_exactly_fits(
         self, monkeypatch: pytest.MonkeyPatch
@@ -321,20 +331,24 @@ class TestScrapeDrive:
         result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
             ScrapeRequest(
                 url=TARGET_URL,
-                metadata={"_remaining_cost_units": 6},
+                metadata={"_remaining_cost_units": 15},
             )
         )
 
         assert result.success is True
         assert attempted_tiers == ["standard", "advanced"]
-        assert result.run_cost_units == 6
+        assert result.run_cost_units == 15
 
     @pytest.mark.parametrize(
         ("scrape_request", "expected"),
         [
-            (ScrapeRequest(TARGET_URL), 1),
-            (ScrapeRequest(TARGET_URL, country="US"), 5),
-            (ScrapeRequest(TARGET_URL, premium=True), 25),
+            (ScrapeRequest(TARGET_URL), 5),
+            (ScrapeRequest(TARGET_URL, country="US"), 10),
+            (ScrapeRequest(TARGET_URL, premium=True), 15),
+            (ScrapeRequest(TARGET_URL, render_js=True), 10),
+            (ScrapeRequest(TARGET_URL, screenshot=True), 15),
+            (ScrapeRequest(TARGET_URL, country="US", render_js=True), 15),
+            (ScrapeRequest(TARGET_URL, premium=True, screenshot=True), 20),
         ],
     )
     def test_estimates_next_tier_cost(self, scrape_request, expected):
@@ -348,7 +362,7 @@ class TestScrapeDrive:
         route = respx.get(self.BASE).mock(
             side_effect=[
                 httpx.Response(403, text="Forbidden"),
-                httpx.Response(429, text="Too many requests"),
+                httpx.Response(403, text="Forbidden"),
                 httpx.Response(200, text=GOOD_HTML),
             ]
         )
@@ -359,16 +373,33 @@ class TestScrapeDrive:
 
         assert result.success is True
         assert result.route == "scrapedrive:hyperdrive"
-        assert result.cost_units == 31
-        assert result.run_cost_units == 31
+        assert result.cost_units == 30
+        assert result.run_cost_units == 30
         assert [entry.route for entry in result.attempt_ledger] == [
             "scrapedrive:standard",
             "scrapedrive:advanced",
             "scrapedrive:hyperdrive",
         ]
-        assert [entry.cost_units for entry in result.attempt_ledger] == [1, 5, 25]
+        assert [entry.cost_units for entry in result.attempt_ledger] == [5, 10, 15]
         assert [entry.success for entry in result.attempt_ledger] == [False, False, True]
         assert len(route.calls) == 3
+
+    @pytest.mark.parametrize("status", [402, 422, 429])
+    @respx.mock
+    async def test_uncharged_rejections_record_zero_cost(self, status):
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(status, text='{"detail": "rejected"}')
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scrapedrive:hyperdrive"})
+        )
+
+        assert result.success is False
+        assert result.cost_units == 0
+        assert result.run_cost_units == 0
+        assert [entry.cost_units for entry in result.attempt_ledger] == [0]
+        assert all(entry.cost_provenance == "estimated" for entry in result.attempt_ledger)
 
     @respx.mock
     async def test_all_tier_failure_charges_every_started_tier(self):
@@ -379,9 +410,9 @@ class TestScrapeDrive:
         )
 
         assert result.success is False
-        assert result.cost_units == 31
-        assert result.run_cost_units == 31
-        assert [entry.cost_units for entry in result.attempt_ledger] == [1, 5, 25]
+        assert result.cost_units == 30
+        assert result.run_cost_units == 30
+        assert [entry.cost_units for entry in result.attempt_ledger] == [5, 10, 15]
         assert all(entry.success is False for entry in result.attempt_ledger)
         assert len(route.calls) == 3
 
@@ -463,7 +494,8 @@ class TestScrapeDrive:
         await prov.scrape(request)
 
         called_params = dict(route.calls[0].request.url.params)
-        assert called_params["scrape_tier"] == "advanced"
+        assert called_params["proxy_pool"] == "residential"
+        assert "scrape_tier" not in called_params
 
     @respx.mock
     async def test_start_tier_hyperdrive(self):
@@ -473,7 +505,10 @@ class TestScrapeDrive:
         await prov.scrape(request)
 
         called_params = dict(route.calls[0].request.url.params)
-        assert called_params["scrape_tier"] == "hyperdrive"
+        assert called_params["proxy_pool"] == "residential"
+        assert called_params["render_js"] == "true"
+        assert called_params["wait_browser"] == "networkidle"
+        assert called_params["block_resources"] == "false"
 
     @respx.mock
     async def test_ignores_irrelevant_start_tier(self):
@@ -483,7 +518,61 @@ class TestScrapeDrive:
         await prov.scrape(request)
 
         called_params = dict(route.calls[0].request.url.params)
-        assert called_params["scrape_tier"] == "standard"
+        assert called_params["proxy_pool"] == "datacenter"
+
+    @respx.mock
+    async def test_no_removed_fields_transmitted(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(
+            url=TARGET_URL,
+            country="us",
+            render_js=True,
+            wait_selector="#product",
+            extra_wait_ms=1500,
+        )
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        for removed in ("scrape_tier", "country_code", "wait_for_selector", "extra_wait"):
+            assert removed not in called_params
+
+    @respx.mock
+    async def test_wait_fields_map_to_current_names(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(
+            url=TARGET_URL,
+            render_js=True,
+            wait_selector="#product",
+            extra_wait_ms=1500,
+            block_ads=True,
+        )
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["wait_for"] == "#product"
+        assert called_params["wait_ms"] == "1500"
+        assert called_params["block_ads"] == "true"
+
+    @respx.mock
+    async def test_wait_ms_is_clamped_to_spec_bound(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        request = ScrapeRequest(url=TARGET_URL, render_js=True, extra_wait_ms=999_999)
+        await prov.scrape(request)
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["wait_ms"] == "30000"
+
+    @respx.mock
+    async def test_block_ads_defaults_to_false_explicitly(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        await prov.scrape(ScrapeRequest(url=TARGET_URL, render_js=True))
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["block_ads"] == "false"
 
 
 # ---------- ScrapeDoProvider ----------
