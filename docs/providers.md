@@ -27,11 +27,29 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 
 ### ScrapeDrive
 
-- Endpoint: configurable via `SCRAPEDRIVE_BASE_URL`
-- Auth: `SCRAPEDRIVE_API_KEY`
-- Tiers: standard → advanced → hyperdrive (auto-escalates on failure)
-- `premium` flag maps to hyperdrive tier
-- `country` auto-upgrades to advanced tier (geo-proxies required)
+- Endpoint: `https://sync.scrapedrive.com/api/v1/scrape` (sync; async/poll run on
+  `api.scrapedrive.com:8443`)
+- Auth: `SCRAPEDRIVE_API_KEY`, sent as the `api_key` query parameter
+- The public tier vocabulary is kept as internal profiles and translated to the
+  current spec fields — `scrape_tier` is never sent:
+
+  | profile | proxy_pool | render_js | proxy_country | wait_browser | block_resources |
+  |---|---|---|---|---|---|
+  | standard | datacenter | per request | — | per `wait_event` | true |
+  | advanced | residential | per request | `country` (upper) | per `wait_event` | true |
+  | hyperdrive | residential | true | `country` (upper) | networkidle | false |
+
+- `premium` starts at hyperdrive, `country` starts at advanced, and failures escalate
+  standard → advanced → hyperdrive.
+- `wait_selector` → `wait_for`, `extra_wait_ms` → `wait_ms` (clamped to 30 000),
+  `country` → `proxy_country`. The removed `scrape_tier` / `country_code` /
+  `wait_for_selector` / `extra_wait` fields are never transmitted.
+- Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
+  residential proxy + 5 for a screenshot. Validation (422), rate-limit/backlog (429),
+  and insufficient-credit (402) rejections are never charged and are recorded as 0
+  units. Responses never report a billed amount, so every ScrapeDrive cost carries
+  `estimated` provenance.
+- Official contract: the live spec at `https://api.scrapedrive.com:8443/api/v1/spec`
 
 ### Scrape.do
 

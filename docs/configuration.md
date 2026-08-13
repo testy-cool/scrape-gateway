@@ -103,8 +103,9 @@ adapter's conservative cost estimate before the next call. A value of `0` permit
 providers that report zero cost. An attempt whose estimate would make the total exceed
 the ceiling is not started; an exact fit is allowed.
 
-ScrapeDrive enforces the remaining allowance between its 1, 5, and 25-unit internal
-tiers, and Scrapfly clips its ASP `cost_budget` to the remaining allowance. If the
+ScrapeDrive enforces the remaining allowance against each profile's additive cost —
+base 5 plus 5 for JavaScript rendering, 5 for a residential proxy, and 5 for a
+screenshot — and Scrapfly clips its ASP `cost_budget` to the remaining allowance. If the
 ceiling stops routing, Python callers receive `FailureReason.BUDGET_EXCEEDED` plus
 `result.metadata["budget_stop"]`. The CLI prints the spent/maximum/next-attempt values,
 and the telemetry report uses diagnosis `budget_exceeded`, so a budget stop is distinct
