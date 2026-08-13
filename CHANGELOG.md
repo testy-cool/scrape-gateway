@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.2] - 2026-08-13
+
+### Added
+- The `sgw url` result panel now shows the absolute paths of the persisted per-run
+  `final.html` and `final.md` files (and prints full, copyable `HTML:` / `Markdown:`
+  lines after the panel). Paths come from the same telemetry write that creates the
+  files, so a path is shown only when the file was actually persisted, and nothing is
+  shown when telemetry is disabled.
+
 ## [0.27.1] - 2026-08-13
 
 ### Fixed
