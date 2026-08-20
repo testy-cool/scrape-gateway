@@ -174,6 +174,22 @@ def _uses_async(request: ScrapeRequest) -> bool:
     return request.timeout_seconds * 1000 > TIMEOUT_MS_MAX
 
 
+def _forwarded_headers(request: ScrapeRequest) -> dict[str, str]:
+    """Caller headers, renamed to the prefix ScrapeDrive forwards to the target.
+
+    Anything sent as `sdrive-X` arrives at the target as `X`. Without this the
+    adapter accepted a headers dict and silently dropped it, which is worse than
+    refusing it.
+    """
+    headers = {f"sdrive-{name}": value for name, value in request.headers.items()}
+    # referer is its own field on the request: None means "let the provider
+    # decide", and an empty string means "send none", so only a real value is
+    # forwarded. A header the caller set explicitly still wins.
+    if request.referer and not any(name.lower() == "sdrive-referer" for name in headers):
+        headers["sdrive-Referer"] = request.referer
+    return headers
+
+
 def _start_tier(request: ScrapeRequest) -> str:
     start_tier = request.metadata.get("start_tier", "")
     if start_tier.startswith("scrapedrive:"):
@@ -265,6 +281,8 @@ class ScrapeDriveProvider(ProviderAdapter):
                 fields["wait_ms"] = min(request.extra_wait_ms, WAIT_MS_MAX)
         if screenshot:
             fields["screenshot"] = True
+        if request.headers or request.referer:
+            fields["forward_sdrive_headers"] = True
         return fields
 
     def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:
@@ -294,6 +312,17 @@ class ScrapeDriveProvider(ProviderAdapter):
                 failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
 
+        if (request.headers or request.referer) and not _uses_async(request):
+            # Verified 2026-08-20: the async host strips the sdrive- prefix and
+            # passes the header on, the sync host silently does not. Both are sent
+            # either way, so this stops being a caveat the day sync catches up —
+            # but until then a dropped Authorization header must not be silent.
+            _log(
+                f"    [{self.name}] the sync host does not forward sdrive- headers, so "
+                f"{len(request.headers) + bool(request.referer)} caller header(s) will not "
+                f"reach the target; a timeout above {TIMEOUT_MS_MAX // 1000}s routes the job "
+                f"to the async host, which does forward them"
+            )
         if self._uses_auto(request):
             tiers = [AUTO_TIER]
         else:
@@ -498,7 +527,11 @@ class ScrapeDriveProvider(ProviderAdapter):
             async with httpx.AsyncClient(
                 timeout=JOB_HTTP_TIMEOUT_SECONDS, follow_redirects=True
             ) as client:
-                submit = await client.post(self.async_url, json=self._build_payload(request, tier))
+                submit = await client.post(
+                    self.async_url,
+                    json=self._build_payload(request, tier),
+                    headers=_forwarded_headers(request) or None,
+                )
                 if not submit.is_success:
                     return failed(
                         f"ScrapeDrive refused the async job: HTTP {submit.status_code} "
@@ -622,7 +655,9 @@ class ScrapeDriveProvider(ProviderAdapter):
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(self.base_url, params=params)
+                response = await client.get(
+                    self.base_url, params=params, headers=_forwarded_headers(request) or None
+                )
 
             content_type = response.headers.get("content-type", "")
             if "application/json" in content_type:

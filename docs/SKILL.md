@@ -215,6 +215,8 @@ Bad-key (401), insufficient-credit (402), validation (422), and rate-limit/backl
 A ScrapeDrive request whose timeout exceeds 120s is submitted as an async job and
 polled, because the sync connection cannot be held past that ceiling. An async job
 reports the credits it was charged, so its cost is `exact` rather than `estimated`.
+Caller headers only reach the target on that path; the sync host ignores them and the
+adapter logs a warning when it drops them.
 
 Setting `SCRAPEDRIVE_AUTO=true` replaces that ladder with ScrapeDrive's own escalation:
 one call with a `max_credits` ceiling, charged once for the configuration that

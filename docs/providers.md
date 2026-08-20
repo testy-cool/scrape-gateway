@@ -58,6 +58,12 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - A screenshot URL is returned before the object store has finished writing the file,
   so the download is retried three times a second apart. Without the retry the first
   403 fails the attempt and escalates the entire ladder.
+- Caller headers go out as `sdrive-<name>` with `forward_sdrive_headers=true`, which
+  ScrapeDrive strips before passing them to the target. `referer` rides along as
+  `sdrive-Referer` unless the caller set that header itself; an empty `referer` means
+  "send none" and is not forwarded. **The sync host accepts the parameter and ignores
+  it** — verified 2026-08-20, the header never reaches the target — so a sync scrape
+  with caller headers logs a warning saying so. The async host does forward them.
 - Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
   residential proxy + 5 for a screenshot. Rejections are never charged and are
   recorded as 0 units: bad key (401), insufficient credits (402), validation (422),

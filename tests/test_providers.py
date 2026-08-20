@@ -231,7 +231,7 @@ class TestScrapeDrive:
             async def __aexit__(self, *args):
                 return None
 
-            async def get(self, url, params):
+            async def get(self, url, params, headers=None):
                 return httpx.Response(200, text=GOOD_HTML, request=httpx.Request("GET", url))
 
         monkeypatch.setattr("scrape_gateway.providers.scrapedrive.httpx.AsyncClient", FakeClient)
@@ -895,6 +895,104 @@ class TestScrapeDriveAsync:
 
         assert result.success is False
         assert result.run_cost_units == 0
+
+
+class TestScrapeDriveHeaders:
+    """The adapter took a headers dict and threw it away."""
+
+    API_KEY = "sd_test_key_123"
+    BASE = "https://sync.scrapedrive.com/api/v1/scrape"
+
+    @respx.mock
+    async def test_caller_headers_are_forwarded_with_the_prefix(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, headers={"Authorization": "Bearer token"})
+        )
+
+        sent = route.calls[0].request
+        # ScrapeDrive strips the prefix before passing the header to the target.
+        assert sent.headers["sdrive-Authorization"] == "Bearer token"
+        assert sent.url.params["forward_sdrive_headers"] == "true"
+
+    @respx.mock
+    async def test_a_referer_travels_as_a_header(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, referer="https://news.example/story")
+        )
+
+        assert route.calls[0].request.headers["sdrive-Referer"] == "https://news.example/story"
+
+    @respx.mock
+    async def test_a_sync_scrape_says_the_headers_will_be_dropped(self, capsys):
+        respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, headers={"Authorization": "Bearer token"})
+        )
+
+        # The sync host accepts forward_sdrive_headers and ignores it. Losing an
+        # Authorization header without a word is how a caller ends up debugging
+        # the wrong thing.
+        warning = capsys.readouterr().err
+        assert "does not forward sdrive- headers" in warning
+
+    @respx.mock
+    async def test_a_long_job_does_not_warn_because_async_forwards_them(self, capsys):
+        respx.post("https://api.scrapedrive.com:8443/api/v1/scrape/async").mock(
+            return_value=httpx.Response(
+                202,
+                json={
+                    "id": "01JOB",
+                    "status": "queued",
+                    "status_url": "https://api.scrapedrive.com:8443/api/v1/job/01JOB",
+                },
+            )
+        )
+        respx.get("https://api.scrapedrive.com:8443/api/v1/job/01JOB").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "01JOB",
+                    "status": "completed",
+                    "response": {
+                        "status_code": 200,
+                        "final_url": TARGET_URL,
+                        "headers": {},
+                        "body": GOOD_HTML,
+                        "credits": 5,
+                    },
+                },
+            )
+        )
+
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL, headers={"Authorization": "Bearer token"}, timeout_seconds=300
+            )
+        )
+
+        assert "does not forward" not in capsys.readouterr().err
+
+    @respx.mock
+    async def test_nothing_is_forwarded_when_the_caller_set_nothing(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(ScrapeRequest(url=TARGET_URL))
+
+        sent = route.calls[0].request
+        assert "forward_sdrive_headers" not in sent.url.params
+        assert not [name for name in sent.headers if name.lower().startswith("sdrive-")]
+
+    @respx.mock
+    async def test_an_empty_referer_means_send_none(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        # "" is the request model's way of saying no referer at all, as distinct
+        # from None, which means let the provider decide.
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, referer="")
+        )
+
+        assert "sdrive-Referer" not in route.calls[0].request.headers
 
 
 class TestScrapeDriveAuto:

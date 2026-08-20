@@ -177,6 +177,31 @@ class TestAsyncMode:
         assert result.route == "scrapedrive:auto"
 
 
+class TestHeaderForwarding:
+    """Verified 2026-08-20: async forwards sdrive- headers, sync does not."""
+
+    async def test_async_forwards_a_caller_header_to_the_target(self, provider):
+        result = await provider.scrape(
+            ScrapeRequest(
+                url="https://httpbin.org/headers",
+                headers={"X-Sgw-Probe": "forwarded-ok"},
+                timeout_seconds=200,
+            )
+        )
+        assert result.success is True
+        assert "forwarded-ok" in (result.html or "")
+
+    async def test_sync_warns_that_it_will_drop_them(self, provider, capsys):
+        # example.com rather than httpbin: this asserts the warning, not the
+        # scrape, and httpbin fails often enough to escalate all three tiers.
+        # That the sync host really ignores the header is covered by the unit
+        # test and was confirmed by hand against httpbin.
+        await provider.scrape(
+            ScrapeRequest(url="https://example.com", headers={"X-Sgw-Probe": "dropped"})
+        )
+        assert "does not forward sdrive- headers" in capsys.readouterr().err
+
+
 class TestErrorHandling:
     async def test_invalid_url(self, provider):
         result = await provider.scrape(
