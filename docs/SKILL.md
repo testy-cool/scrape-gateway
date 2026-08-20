@@ -207,10 +207,10 @@ failure reason rather than being paid for and reported afterwards.
 ScrapeDrive's cost is additive per job — base 5 plus 5 for JavaScript, 5 for a
 residential proxy, and 5 for a screenshot — and its `standard`/`advanced`/`hyperdrive`
 tiers are internal profiles mapped to the current spec fields (`proxy_pool`,
-`render_js`, `proxy_country`, `wait_for`, `wait_ms`, `block_resources`). Validation
-(422), rate-limit/backlog (429), and insufficient-credit (402) rejections are never
-charged and are recorded as 0 units; all ScrapeDrive cost is `estimated` provenance
-because responses do not report a billed amount.
+`render_js`, `proxy_country`, `wait_for`, `wait_ms`, `block_resources`, `timeout_ms`).
+Bad-key (401), insufficient-credit (402), validation (422), and rate-limit/backlog
+(429) rejections are never charged and are recorded as 0 units; all ScrapeDrive cost is
+`estimated` provenance because responses do not report a billed amount.
 
 Domain memory records which provider and profile combinations failed, but it is not a
 one-way door — credential failures are excluded, blocks older than 120 days decay, and

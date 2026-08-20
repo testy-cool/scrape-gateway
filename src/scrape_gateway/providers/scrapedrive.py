@@ -17,6 +17,8 @@ from ..provider import (
     ProviderAdapter,
 )
 
+# Spec: https://api.scrapedrive.com:8443/api/v1/spec (v1.1). The sync host blocks
+# until the scrape finishes; the async host is not used here.
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
 
 # Public SGW tier vocabulary, kept as backward-compatible internal profiles. Each
@@ -33,9 +35,16 @@ RESIDENTIAL_COST = 5.0
 SCREENSHOT_COST = 5.0
 
 # Statuses the spec guarantees are rejected before any job is reserved, so they are
-# never charged: validation (422), insufficient credits (402), rate limit / async
-# backlog (429).
-UNCHARGED_STATUS_CODES = frozenset({402, 422, 429})
+# never charged: bad credentials (401), insufficient credits (402), validation (422),
+# rate limit / async backlog (429).
+UNCHARGED_STATUS_CODES = frozenset({401, 402, 422, 429})
+
+# The spec's own bounds. wait_ms is rejected above 30s, and timeout_ms is rejected
+# below 10s or above the sync ceiling of 120s, so both are clamped rather than
+# forwarded verbatim into a 422 that costs a whole attempt.
+WAIT_MS_MAX = 30_000
+TIMEOUT_MS_MIN = 10_000
+TIMEOUT_MS_MAX = 120_000
 
 
 def _tier_shape(request: ScrapeRequest, tier: str) -> tuple[bool, bool, bool]:
@@ -69,6 +78,22 @@ def _tier_cost(request: ScrapeRequest, tier: str) -> float:
     return _shape_cost(residential, render_js, screenshot)
 
 
+def _remaining_cost(request: ScrapeRequest) -> float | None:
+    raw = request.metadata.get(REMAINING_COST_METADATA_KEY)
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    return float(raw)
+
+
+def _timeout_ms(request: ScrapeRequest) -> int:
+    """Give the job the same deadline the HTTP client is holding it to.
+
+    Without this the server keeps working — and charging — on a job the client has
+    already hung up on, because its own default runs to the 120s sync ceiling.
+    """
+    return max(TIMEOUT_MS_MIN, min(TIMEOUT_MS_MAX, int(request.timeout_seconds * 1000)))
+
+
 def _start_tier(request: ScrapeRequest) -> str:
     start_tier = request.metadata.get("start_tier", "")
     if start_tier.startswith("scrapedrive:"):
@@ -93,8 +118,9 @@ class ScrapeDriveProvider(ProviderAdapter):
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
     required_configuration = (("api_key", "SCRAPEDRIVE_API_KEY"),)
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
+        self.base_url = base_url or os.getenv("SCRAPEDRIVE_BASE_URL") or SYNC_BASE
 
     def estimated_cost_units(self, request: ScrapeRequest) -> float:
         return _tier_cost(request, _start_tier(request))
@@ -104,17 +130,20 @@ class ScrapeDriveProvider(ProviderAdapter):
         params: dict[str, str] = {
             "api_key": self.api_key,
             "url": request.url,
-            "proxy_pool": "residential" if residential else "datacenter",
             "render_js": "true" if render_js else "false",
             "device_type": "mobile" if request.mobile else "desktop",
-            "result_type": "html",
-            # The spec defaults block_ads to true; sgw defaults it to false, so send
-            # the caller's intent explicitly rather than inheriting the API default.
-            "block_ads": "true" if request.block_ads else "false",
+            "result_type": ("page_markdown" if request.output_format == "markdown" else "html"),
+            "timeout_ms": str(_timeout_ms(request)),
         }
+        params["proxy_pool"] = "residential" if residential else "datacenter"
         if residential and request.country:
             params["proxy_country"] = request.country.upper()
         if render_js:
+            # block_ads and block_resources are browser-only; the spec says they do
+            # nothing on an HTML fetch, so they are only sent when one is running.
+            # The spec defaults block_ads to true; sgw defaults it to false, so send
+            # the caller's intent explicitly rather than inheriting the API default.
+            params["block_ads"] = "true" if request.block_ads else "false"
             if tier == "hyperdrive":
                 params["wait_browser"] = "networkidle"
             elif request.wait_event:
@@ -125,7 +154,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             if request.wait_selector:
                 params["wait_for"] = request.wait_selector
             if request.extra_wait_ms:
-                params["wait_ms"] = str(min(request.extra_wait_ms, 30_000))
+                params["wait_ms"] = str(min(request.extra_wait_ms, WAIT_MS_MAX))
         if screenshot:
             params["screenshot"] = "true"
         return params
@@ -147,12 +176,7 @@ class ScrapeDriveProvider(ProviderAdapter):
         provider_start = time.perf_counter()
         active_tier: str | None = None
         active_started: float | None = None
-        raw_remaining = request.metadata.get(REMAINING_COST_METADATA_KEY)
-        remaining_cost = (
-            float(raw_remaining)
-            if isinstance(raw_remaining, (int, float)) and not isinstance(raw_remaining, bool)
-            else None
-        )
+        remaining_cost = _remaining_cost(request)
 
         try:
             async with asyncio.timeout(request.timeout_seconds):
@@ -282,7 +306,7 @@ class ScrapeDriveProvider(ProviderAdapter):
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(SYNC_BASE, params=params)
+                response = await client.get(self.base_url, params=params)
 
             content_type = response.headers.get("content-type", "")
             if "application/json" in content_type:
@@ -290,9 +314,16 @@ class ScrapeDriveProvider(ProviderAdapter):
                 html = data.get("html") or data.get("body") or data.get("content", "")
                 markdown = data.get("markdown")
             else:
+                # A successful sync scrape returns the body itself and replays the
+                # target's own content-type, so page_markdown arrives labelled
+                # text/html. What was asked for is the only way to know what came back.
                 html = response.text
                 data = None
-                markdown = None
+                markdown = (
+                    response.text
+                    if request.output_format == "markdown" and response.is_success
+                    else None
+                )
 
             screenshot_url = response.headers.get("x-sdrive-screenshot-url") or (
                 data.get("screenshot_url") if isinstance(data, dict) else None
@@ -321,7 +352,8 @@ class ScrapeDriveProvider(ProviderAdapter):
                     else:
                         screenshot_error = (
                             "Screenshot download failed with HTTP "
-                            f"{screenshot_response.status_code} ({screenshot_content_type or 'unknown type'})"
+                            f"{screenshot_response.status_code} "
+                            f"({screenshot_content_type or 'unknown type'})"
                         )
 
             failure = classify_provider_failure(
@@ -348,6 +380,8 @@ class ScrapeDriveProvider(ProviderAdapter):
                     "tier": tier,
                     "charged": charged,
                     "cost_provenance": "estimated",
+                    # The only handle ScrapeDrive support can trace a job by.
+                    "job_id": response.headers.get("x-sdrive-job-id"),
                     "screenshot_url": screenshot_url,
                     "screenshot_bytes": len(screenshot or b""),
                     **({"raw_json": data} if isinstance(data, dict) else {}),

@@ -44,11 +44,22 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - `wait_selector` → `wait_for`, `extra_wait_ms` → `wait_ms` (clamped to 30 000),
   `country` → `proxy_country`. The removed `scrape_tier` / `country_code` /
   `wait_for_selector` / `extra_wait` fields are never transmitted.
+- `output_format: markdown` → `result_type=page_markdown`, which returns extracted
+  main content as markdown rather than the page source. It is an extraction, not a
+  conversion: on a page the extractor misreads it can drop content the HTML fetch
+  keeps, so ask for `html` when completeness matters more than shape.
+- `timeout_seconds` → `timeout_ms`, clamped into the spec's 10 000–120 000 window.
+  Without it the job runs to the server's own 120s ceiling and keeps being charged
+  for work after the client has hung up.
+- `block_ads` and `block_resources` are only sent with `render_js`, because the spec
+  says they do nothing on an HTML fetch.
+- The `x-sdrive-job-id` response header is kept in `result.metadata["job_id"]`. It is
+  the only handle ScrapeDrive support can trace a job by.
 - Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
-  residential proxy + 5 for a screenshot. Validation (422), rate-limit/backlog (429),
-  and insufficient-credit (402) rejections are never charged and are recorded as 0
-  units. Responses never report a billed amount, so every ScrapeDrive cost carries
-  `estimated` provenance.
+  residential proxy + 5 for a screenshot. Rejections are never charged and are
+  recorded as 0 units: bad key (401), insufficient credits (402), validation (422),
+  and rate-limit/backlog (429). Responses never report a billed amount, so every
+  ScrapeDrive cost carries `estimated` provenance.
 - Official contract: the live spec at `https://api.scrapedrive.com:8443/api/v1/spec`
 
 ### Scrape.do

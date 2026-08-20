@@ -92,6 +92,29 @@ class TestParams:
         assert len(result.screenshot) > 100
 
 
+class TestSpecFields:
+    async def test_markdown_output(self, provider):
+        result = await provider.scrape(
+            ScrapeRequest(url="https://www.iana.org/help/example-domains", output_format="markdown")
+        )
+        assert result.success is True
+        assert result.markdown is not None
+        # page_markdown extracts the main content and keeps markdown syntax; the plain
+        # HTML fetch would carry tags instead.
+        assert "# Example Domains" in result.markdown
+        assert "<html" not in result.markdown.lower()
+
+    async def test_job_id_is_returned(self, provider):
+        result = await provider.scrape(ScrapeRequest(url="https://example.com"))
+        assert result.success is True
+        assert result.metadata["job_id"]
+
+    async def test_timeout_below_the_spec_minimum_is_still_accepted(self, provider):
+        # A raw timeout_ms of 5000 is a 422; the adapter clamps it to the 10s minimum.
+        result = await provider.scrape(ScrapeRequest(url="https://example.com", timeout_seconds=5))
+        assert result.status_code == 200
+
+
 class TestErrorHandling:
     async def test_invalid_url(self, provider):
         result = await provider.scrape(

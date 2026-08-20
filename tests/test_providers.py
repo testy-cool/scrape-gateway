@@ -384,7 +384,7 @@ class TestScrapeDrive:
         assert [entry.success for entry in result.attempt_ledger] == [False, False, True]
         assert len(route.calls) == 3
 
-    @pytest.mark.parametrize("status", [402, 422, 429])
+    @pytest.mark.parametrize("status", [401, 402, 422, 429])
     @respx.mock
     async def test_uncharged_rejections_record_zero_cost(self, status):
         respx.get(self.BASE).mock(
@@ -573,6 +573,96 @@ class TestScrapeDrive:
 
         called_params = dict(route.calls[0].request.url.params)
         assert called_params["block_ads"] == "false"
+
+    @respx.mock
+    async def test_block_ads_is_not_sent_without_a_browser(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        await prov.scrape(ScrapeRequest(url=TARGET_URL, block_ads=True))
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["render_js"] == "false"
+        # block_ads and block_resources are browser-only per the spec.
+        assert "block_ads" not in called_params
+        assert "block_resources" not in called_params
+
+    @respx.mock
+    async def test_markdown_output_asks_the_api_to_convert_it(self):
+        markdown = (
+            "# Test\n\nA realistic markdown page with enough content to pass the "
+            "minimum length checks that guard against an empty result."
+        )
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=markdown))
+        prov = ScrapeDriveProvider(api_key=self.API_KEY)
+        result = await prov.scrape(ScrapeRequest(url=TARGET_URL, output_format="markdown"))
+
+        assert route.calls[0].request.url.params["result_type"] == "page_markdown"
+        assert result.success is True
+        # A successful sync scrape replays the target's text/html content-type even for
+        # markdown, so the asked-for format is the only thing that can label the body.
+        assert result.markdown == markdown
+        assert result.html == markdown
+
+    @respx.mock
+    async def test_html_output_leaves_markdown_empty(self):
+        respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.html == GOOD_HTML
+        assert result.markdown is None
+
+    @respx.mock
+    async def test_a_failed_markdown_scrape_reports_no_markdown(self):
+        respx.get(self.BASE).mock(return_value=httpx.Response(403, text="Forbidden"))
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, output_format="markdown")
+        )
+
+        assert result.success is False
+        assert result.markdown is None
+
+    @pytest.mark.parametrize(
+        ("timeout_seconds", "expected"),
+        [
+            (45, "45000"),
+            (5, "10000"),  # below the spec minimum
+            (300, "120000"),  # above the sync ceiling
+        ],
+    )
+    @respx.mock
+    async def test_timeout_ms_is_sent_within_the_spec_bounds(self, timeout_seconds, expected):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=timeout_seconds)
+        )
+
+        assert route.calls[0].request.url.params["timeout_ms"] == expected
+
+    @respx.mock
+    async def test_job_id_is_recorded_for_support(self):
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200, text=GOOD_HTML, headers={"x-sdrive-job-id": "01M0FQRX2ZEDD9QPAM2BW0099Y"}
+            )
+        )
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.metadata["job_id"] == "01M0FQRX2ZEDD9QPAM2BW0099Y"
+
+    @respx.mock
+    async def test_base_url_is_configurable(self):
+        base = "https://sync.scrapedrive.test/api/v1/scrape"
+        route = respx.get(base).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await ScrapeDriveProvider(api_key=self.API_KEY, base_url=base).scrape(
+            ScrapeRequest(url=TARGET_URL)
+        )
+
+        assert result.success is True
+        assert len(route.calls) == 1
 
 
 # ---------- ScrapeDoProvider ----------
