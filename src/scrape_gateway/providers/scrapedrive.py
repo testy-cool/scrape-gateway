@@ -27,6 +27,12 @@ SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
 # longer carries scrape_tier; it only ever sees those concrete fields.
 TIER_ORDER = ["standard", "advanced", "hyperdrive"]
 
+# ScrapeDrive's own progressive escalation, opt-in via SCRAPEDRIVE_AUTO. It replaces
+# the whole ladder with one call: the job starts at its cheapest compatible setting,
+# advances only after failure, and is charged once for the configuration that
+# succeeded. Internal failed attempts are not charged again.
+AUTO_TIER = "auto"
+
 # Additive credit model from the live spec: a fixed price reserved before the job
 # runs. base 5 + JS 5 + residential 5 + screenshot 5.
 BASE_COST = 5.0
@@ -59,6 +65,8 @@ def _tier_shape(request: ScrapeRequest, tier: str) -> tuple[bool, bool, bool]:
     - advanced: residential (with proxy_country when the caller supplied one).
     - hyperdrive: residential browser — render_js always on, networkidle wait, full
       resources.
+    - auto: ScrapeDrive picks the proxy, so nothing here asks for residential; the
+      caller's own render_js and screenshot still act as the floor it starts from.
     - screenshot: the spec forces render_js on and resource blocking off.
     """
     residential = tier in {"advanced", "hyperdrive"}
@@ -79,6 +87,8 @@ def _shape_cost(residential: bool, render_js: bool, screenshot: bool) -> float:
 
 
 def _tier_cost(request: ScrapeRequest, tier: str) -> float:
+    if tier == AUTO_TIER:
+        return _auto_max_credits(request)
     residential, render_js, screenshot = _tier_shape(request, tier)
     return _shape_cost(residential, render_js, screenshot)
 
@@ -88,6 +98,41 @@ def _remaining_cost(request: ScrapeRequest) -> float | None:
     if isinstance(raw, bool) or not isinstance(raw, (int, float)):
         return None
     return float(raw)
+
+
+def _auto_floor_cost(request: ScrapeRequest) -> float:
+    """The cheapest configuration an Auto job is allowed to start from.
+
+    Auto starts cheap and escalates, but it cannot go below what the caller demanded:
+    asking for JavaScript or a screenshot already rules the datacenter HTML fetch out,
+    and a max_credits under that floor is rejected as unsatisfiable.
+    """
+    wants_browser = bool(request.render_js or request.screenshot)
+    return _shape_cost(False, wants_browser, bool(request.screenshot))
+
+
+def _auto_ceiling_cost(request: ScrapeRequest) -> float:
+    """The most an Auto job may reach — the same shape the manual ladder tops out at."""
+    return _shape_cost(True, True, bool(request.screenshot))
+
+
+def _auto_max_credits(request: ScrapeRequest) -> float:
+    """Resolve the ``max_credits`` ceiling to reserve for an Auto job.
+
+    This doubles as the cost estimate, because max_credits is exactly the bound on what
+    the job can charge. A remaining budget below the floor returns the floor, so the
+    caller's affordability check refuses the provider instead of sending a request the
+    API would reject anyway.
+    """
+    floor = _auto_floor_cost(request)
+    ceiling = _auto_ceiling_cost(request)
+    remaining = _remaining_cost(request)
+    if remaining is None:
+        return ceiling
+    # max_credits is an integer, so a fractional remainder rounds down rather than
+    # reserving a credit the budget does not cover.
+    affordable = float(int(min(ceiling, remaining)))
+    return max(affordable, floor)
 
 
 def _timeout_ms(request: ScrapeRequest) -> int:
@@ -113,6 +158,10 @@ def _start_tier(request: ScrapeRequest) -> str:
     return "standard"
 
 
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
@@ -123,11 +172,28 @@ class ScrapeDriveProvider(ProviderAdapter):
     capabilities = frozenset({"html", "markdown", "country", "render_js", "premium", "screenshot"})
     required_configuration = (("api_key", "SCRAPEDRIVE_API_KEY"),)
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        auto: bool | None = None,
+    ) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
         self.base_url = base_url or os.getenv("SCRAPEDRIVE_BASE_URL") or SYNC_BASE
+        self.auto = _env_flag("SCRAPEDRIVE_AUTO") if auto is None else auto
+
+    def _uses_auto(self, request: ScrapeRequest) -> bool:
+        """Whether this request may be handed to ScrapeDrive's own escalation.
+
+        Auto refuses every caller-supplied routing field, so a request that names a
+        country has to stay on the manual ladder: proxy_country is only accepted in
+        standard mode on a residential pool.
+        """
+        return bool(self.auto) and not request.country
 
     def estimated_cost_units(self, request: ScrapeRequest) -> float:
+        if self._uses_auto(request):
+            return _auto_max_credits(request)
         return _tier_cost(request, _start_tier(request))
 
     def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:
@@ -140,9 +206,13 @@ class ScrapeDriveProvider(ProviderAdapter):
             "result_type": ("page_markdown" if request.output_format == "markdown" else "html"),
             "timeout_ms": str(_timeout_ms(request)),
         }
-        params["proxy_pool"] = "residential" if residential else "datacenter"
-        if residential and request.country:
-            params["proxy_country"] = request.country.upper()
+        if tier == AUTO_TIER:
+            params["auto"] = "true"
+            params["max_credits"] = str(int(_auto_max_credits(request)))
+        else:
+            params["proxy_pool"] = "residential" if residential else "datacenter"
+            if residential and request.country:
+                params["proxy_country"] = request.country.upper()
         if render_js:
             # block_ads and block_resources are browser-only; the spec says they do
             # nothing on an HTML fetch, so they are only sent when one is running.
@@ -174,8 +244,11 @@ class ScrapeDriveProvider(ProviderAdapter):
                 failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
 
-        start = _start_tier(request)
-        tiers = TIER_ORDER[TIER_ORDER.index(start) :]
+        if self._uses_auto(request):
+            tiers = [AUTO_TIER]
+        else:
+            start = _start_tier(request)
+            tiers = TIER_ORDER[TIER_ORDER.index(start) :]
         attempted_tiers: list[str] = []
         ledger: list[AttemptLedgerEntry] = []
         provider_start = time.perf_counter()
@@ -406,6 +479,7 @@ class ScrapeDriveProvider(ProviderAdapter):
                     "job_id": response.headers.get("x-sdrive-job-id"),
                     "screenshot_url": screenshot_url,
                     "screenshot_bytes": len(screenshot or b""),
+                    **({"max_credits": int(shape_cost)} if tier == AUTO_TIER else {}),
                     **({"raw_json": data} if isinstance(data, dict) else {}),
                 },
             )

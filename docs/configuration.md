@@ -105,7 +105,9 @@ the ceiling is not started; an exact fit is allowed.
 
 ScrapeDrive enforces the remaining allowance against each profile's additive cost —
 base 5 plus 5 for JavaScript rendering, 5 for a residential proxy, and 5 for a
-screenshot — and Scrapfly clips its ASP `cost_budget` to the remaining allowance. If the
+screenshot. With `SCRAPEDRIVE_AUTO=true` it instead sends the allowance as the job's
+own `max_credits` ceiling, so one call cannot spend past it. Scrapfly clips its ASP
+`cost_budget` to the remaining allowance. If the
 ceiling stops routing, Python callers receive `FailureReason.BUDGET_EXCEEDED` plus
 `result.metadata["budget_stop"]`. The CLI prints the spent/maximum/next-attempt values,
 and the telemetry report uses diagnosis `budget_exceeded`, so a budget stop is distinct

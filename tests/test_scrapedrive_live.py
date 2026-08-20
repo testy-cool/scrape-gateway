@@ -115,6 +115,32 @@ class TestSpecFields:
         assert result.status_code == 200
 
 
+class TestAutoMode:
+    @pytest.fixture
+    def auto_provider(self):
+        return ScrapeDriveProvider(api_key=API_KEY, auto=True)
+
+    async def test_auto_job_runs_once(self, auto_provider):
+        result = await auto_provider.scrape(ScrapeRequest(url="https://example.com"))
+        assert result.success is True
+        assert result.route == "scrapedrive:auto"
+        assert len(result.attempt_ledger) == 1
+        assert "Example Domain" in (result.html or "")
+
+    async def test_auto_honours_a_tight_budget(self, auto_provider):
+        result = await auto_provider.scrape(
+            ScrapeRequest(url="https://example.com", metadata={"_remaining_cost_units": 5})
+        )
+        assert result.success is True
+        assert result.metadata["max_credits"] == 5
+
+    async def test_a_country_request_falls_back_to_the_ladder(self, auto_provider):
+        # Auto rejects proxy_country outright, so this must not be sent as an Auto job.
+        result = await auto_provider.scrape(ScrapeRequest(url="https://example.com", country="US"))
+        assert result.success is True
+        assert result.route == "scrapedrive:advanced"
+
+
 class TestErrorHandling:
     async def test_invalid_url(self, provider):
         result = await provider.scrape(

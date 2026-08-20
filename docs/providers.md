@@ -65,6 +65,29 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
   ScrapeDrive cost carries `estimated` provenance.
 - Official contract: the live spec at `https://api.scrapedrive.com:8443/api/v1/spec`
 
+#### Auto mode
+
+Set `SCRAPEDRIVE_AUTO=true` to hand escalation to ScrapeDrive instead of running the
+ladder here. One call carries `auto=true` and a `max_credits` ceiling; the job starts
+at its cheapest compatible configuration, advances only after failure, and is charged
+once for whatever configuration succeeded. Internal failed attempts are not charged
+again.
+
+The saving is the worst case. The ladder pays for every rung it climbs — 5 + 10 + 15 =
+30 credits to reach a residential browser. An Auto job reaching the same place
+reserves 15 and charges what worked.
+
+- `max_credits` is the residential-browser ceiling (15, or 20 with a screenshot),
+  clipped down to whatever the cost budget has left and rounded down to a whole
+  credit. Below the job's own floor the provider refuses before spending anything.
+- Auto rejects every caller-supplied routing field, so a request naming a `country`
+  stays on the manual ladder — `proxy_country` is only accepted in standard mode.
+- `render_js` and `screenshot` still apply as the floor Auto starts from, and the
+  output-shaping fields are sent unchanged.
+- The route is reported as `scrapedrive:auto` and the reserved ceiling is kept in
+  `result.metadata["max_credits"]`. Cost is still `estimated`: the reservation is an
+  upper bound, and nothing in the response says what was actually charged.
+
 ### Scrape.do
 
 - Endpoint: `https://api.scrape.do/`

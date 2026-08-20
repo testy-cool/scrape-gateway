@@ -212,6 +212,12 @@ Bad-key (401), insufficient-credit (402), validation (422), and rate-limit/backl
 (429) rejections are never charged and are recorded as 0 units; all ScrapeDrive cost is
 `estimated` provenance because responses do not report a billed amount.
 
+Setting `SCRAPEDRIVE_AUTO=true` replaces that ladder with ScrapeDrive's own escalation:
+one call with a `max_credits` ceiling, charged once for the configuration that
+succeeded rather than for every rung climbed, which takes the worst case from 30 credits
+to 15. A request naming a `country` still uses the ladder, because Auto refuses
+caller-supplied proxy routing.
+
 Domain memory records which provider and profile combinations failed, but it is not a
 one-way door — credential failures are excluded, blocks older than 120 days decay, and
 skips are isolated per request profile, so a single bad afternoon does not permanently

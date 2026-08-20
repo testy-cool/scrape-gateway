@@ -730,6 +730,126 @@ class TestScrapeDrive:
         assert len(route.calls) == 1
 
 
+class TestScrapeDriveAuto:
+    """ScrapeDrive's own progressive escalation, opt-in via SCRAPEDRIVE_AUTO."""
+
+    API_KEY = "sd_test_key_123"
+    BASE = "https://sync.scrapedrive.com/api/v1/scrape"
+
+    def provider(self):
+        return ScrapeDriveProvider(api_key=self.API_KEY, auto=True)
+
+    def test_off_unless_the_environment_asks_for_it(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("SCRAPEDRIVE_AUTO", raising=False)
+        assert ScrapeDriveProvider(api_key=self.API_KEY).auto is False
+        monkeypatch.setenv("SCRAPEDRIVE_AUTO", "true")
+        assert ScrapeDriveProvider(api_key=self.API_KEY).auto is True
+
+    @respx.mock
+    async def test_one_call_replaces_the_whole_ladder(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await self.provider().scrape(ScrapeRequest(url=TARGET_URL))
+
+        assert len(route.calls) == 1
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["auto"] == "true"
+        # The ceiling is the residential browser the manual ladder tops out at, but it
+        # is reserved once instead of being paid for at every rung.
+        assert called_params["max_credits"] == "15"
+        for routing_field in ("proxy_pool", "proxy_country", "session_number", "custom_proxy"):
+            assert routing_field not in called_params
+        assert result.route == "scrapedrive:auto"
+        assert result.metadata["max_credits"] == 15
+
+    @respx.mock
+    async def test_a_failure_is_not_retried_by_the_ladder(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(403, text="Forbidden"))
+        result = await self.provider().scrape(ScrapeRequest(url=TARGET_URL))
+
+        assert result.success is False
+        assert len(route.calls) == 1
+        assert [entry.route for entry in result.attempt_ledger] == ["scrapedrive:auto"]
+        assert result.run_cost_units == 15
+
+    @respx.mock
+    async def test_a_country_request_stays_on_the_manual_ladder(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await self.provider().scrape(ScrapeRequest(url=TARGET_URL, country="us"))
+
+        called_params = dict(route.calls[0].request.url.params)
+        # Auto refuses proxy_country, so a geo-targeted request cannot use it.
+        assert "auto" not in called_params
+        assert called_params["proxy_country"] == "US"
+        assert result.route == "scrapedrive:advanced"
+
+    @respx.mock
+    async def test_max_credits_is_clipped_to_the_remaining_budget(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await self.provider().scrape(
+            ScrapeRequest(url=TARGET_URL, metadata={"_remaining_cost_units": 12.5})
+        )
+
+        # max_credits is an integer, so a fractional remainder rounds down.
+        assert route.calls[0].request.url.params["max_credits"] == "12"
+        assert result.run_cost_units == 12
+
+    @respx.mock
+    async def test_a_budget_below_the_floor_stops_before_the_call(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        result = await self.provider().scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                screenshot=True,
+                metadata={"_remaining_cost_units": 10},
+            )
+        )
+
+        # A screenshot floors the job at 15 credits, so 10 cannot buy the cheapest
+        # configuration Auto is allowed to start from.
+        assert len(route.calls) == 0
+        assert result.failure_reason is FailureReason.BUDGET_EXCEEDED
+        assert result.metadata["budget_stop"]["next_attempt_cost_units"] == 15
+
+    @pytest.mark.parametrize(
+        ("scrape_request", "expected"),
+        [
+            (ScrapeRequest(TARGET_URL), 15),
+            (ScrapeRequest(TARGET_URL, render_js=True), 15),
+            (ScrapeRequest(TARGET_URL, screenshot=True), 20),
+            (ScrapeRequest(TARGET_URL, metadata={"_remaining_cost_units": 8}), 8),
+            # A screenshot floors the job at 15, so a remainder of 8 reports the floor
+            # and the caller refuses the provider rather than sending a doomed request.
+            (ScrapeRequest(TARGET_URL, screenshot=True, metadata={"_remaining_cost_units": 8}), 15),
+        ],
+    )
+    def test_estimate_is_the_ceiling_it_will_reserve(self, scrape_request, expected):
+        assert (
+            ScrapeDriveProvider(api_key=self.API_KEY, auto=True).estimated_cost_units(
+                scrape_request
+            )
+            == expected
+        )
+
+    @respx.mock
+    async def test_the_caller_shape_still_reaches_the_wire(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await self.provider().scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                render_js=True,
+                wait_selector="#product",
+                mobile=True,
+                output_format="markdown",
+            )
+        )
+
+        called_params = dict(route.calls[0].request.url.params)
+        assert called_params["render_js"] == "true"
+        assert called_params["wait_for"] == "#product"
+        assert called_params["device_type"] == "mobile"
+        assert called_params["result_type"] == "page_markdown"
+
+
 # ---------- ScrapeDoProvider ----------
 
 
