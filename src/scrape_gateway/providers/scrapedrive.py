@@ -16,6 +16,7 @@ from ..provider import (
     REMAINING_COST_METADATA_KEY,
     SPENT_COST_METADATA_KEY,
     ProviderAdapter,
+    caller_headers,
 )
 
 # Spec: https://api.scrapedrive.com:8443/api/v1/spec (v1.1). The sync host blocks
@@ -50,30 +51,6 @@ SCREENSHOT_COST = 5.0
 # never charged: bad credentials (401), insufficient credits (402), validation (422),
 # rate limit / async backlog (429).
 UNCHARGED_STATUS_CODES = frozenset({401, 402, 422, 429})
-
-# The browser identity ScrapeDrive builds for itself. Ours must not be forwarded
-# on top of it: the values are joined rather than replaced, so the target sees
-# both. Referer is here because the router synthesises one into every request;
-# a referer the caller actually chose arrives as its own field instead.
-FINGERPRINT_HEADERS = frozenset(
-    {
-        "user-agent",
-        "accept",
-        "accept-encoding",
-        "accept-language",
-        "cache-control",
-        "priority",
-        "referer",
-        "sec-ch-ua",
-        "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
-        "sec-fetch-dest",
-        "sec-fetch-mode",
-        "sec-fetch-site",
-        "sec-fetch-user",
-        "upgrade-insecure-requests",
-    }
-)
 
 # The spec's own bounds. wait_ms is rejected above 30s, and timeout_ms is rejected
 # below 10s or above the sync ceiling of 120s, so both are clamped rather than
@@ -179,6 +156,23 @@ def _auto_max_credits(request: ScrapeRequest) -> float:
     return max(affordable, floor)
 
 
+def _was_charged(status_code: int | None, job_id: str | None) -> bool:
+    """Whether ScrapeDrive billed for this response.
+
+    A job id means a job was created and run, so it is billable whatever the
+    target answered. That distinction only started to matter with
+    transparent_mode: the reply now carries the target's own status, and a site
+    that rate-limits us returns 429 exactly as ScrapeDrive does when it refuses
+    one of our requests. Keying off the status alone would book a real charge as
+    free every time a scraped API rate-limited us. A rejection that never
+    reserved a job carries no job id — verified: a 422 comes back without the
+    header, a transparent-mode 403 with it.
+    """
+    if job_id:
+        return True
+    return status_code not in UNCHARGED_STATUS_CODES
+
+
 def _timeout_ms(request: ScrapeRequest, ceiling: int = TIMEOUT_MS_MAX) -> int:
     """Give the job the same deadline the HTTP client is holding it to.
 
@@ -214,11 +208,7 @@ def _forwarded_headers(request: ScrapeRequest) -> dict[str, str]:
     sending nothing, and it would have fired on every request. Confirmed against
     a header echo service on 2026-08-20.
     """
-    headers = {
-        f"sdrive-{name}": value
-        for name, value in request.headers.items()
-        if name.lower() not in FINGERPRINT_HEADERS
-    }
+    headers = {f"sdrive-{name}": value for name, value in caller_headers(request.headers).items()}
     # referer is its own field on the request, so a value here is the caller's
     # own and not the one the router synthesised into the headers dict. None
     # means "let the provider decide" and "" means "send none".
@@ -315,7 +305,9 @@ class ScrapeDriveProvider(ProviderAdapter):
             if request.wait_selector:
                 fields["wait_for"] = request.wait_selector
             if request.extra_wait_ms:
-                fields["wait_ms"] = min(request.extra_wait_ms, WAIT_MS_MAX)
+                # The spec's floor is 0 and a negative value is a 422, which
+                # would cost the whole attempt to learn.
+                fields["wait_ms"] = max(0, min(request.extra_wait_ms, WAIT_MS_MAX))
         if screenshot:
             fields["screenshot"] = True
         if _forwarded_headers(request):
@@ -440,9 +432,11 @@ class ScrapeDriveProvider(ProviderAdapter):
                         ledger_cost = result.cost_units
                         provenance: Literal["exact", "estimated"] = "exact"
                     else:
-                        charged = (
-                            result.metadata.get("charged") is not False
-                            and result.status_code not in UNCHARGED_STATUS_CODES
+                        # The attempt already resolved this against the job id;
+                        # re-deriving it from the status here would reintroduce
+                        # the target-versus-gateway confusion.
+                        charged = result.metadata.get(
+                            "charged", result.status_code not in UNCHARGED_STATUS_CODES
                         )
                         ledger_cost = tier_cost if charged else 0.0
                         provenance = "estimated"
@@ -727,6 +721,7 @@ class ScrapeDriveProvider(ProviderAdapter):
                     else None
                 )
 
+            job_id = response.headers.get("x-sdrive-job-id")
             screenshot_url = response.headers.get("x-sdrive-screenshot-url") or (
                 data.get("screenshot_url") if isinstance(data, dict) else None
             )
@@ -750,7 +745,7 @@ class ScrapeDriveProvider(ProviderAdapter):
             )
             if request.screenshot and not screenshot and failure is None:
                 failure = FailureReason.PROVIDER_ERROR
-            charged = response.status_code not in UNCHARGED_STATUS_CODES
+            charged = _was_charged(response.status_code, job_id)
             return ScrapeResult(
                 url=request.url,
                 provider=self.name,
@@ -769,7 +764,7 @@ class ScrapeDriveProvider(ProviderAdapter):
                     "charged": charged,
                     "cost_provenance": "estimated",
                     # The only handle ScrapeDrive support can trace a job by.
-                    "job_id": response.headers.get("x-sdrive-job-id"),
+                    "job_id": job_id,
                     "screenshot_url": screenshot_url,
                     "screenshot_bytes": len(screenshot or b""),
                     **({"max_credits": int(shape_cost)} if tier == AUTO_TIER else {}),

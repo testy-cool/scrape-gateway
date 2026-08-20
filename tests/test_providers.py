@@ -384,11 +384,39 @@ class TestScrapeDrive:
         assert [entry.success for entry in result.attempt_ledger] == [False, False, True]
         assert len(route.calls) == 3
 
+    @respx.mock
+    async def test_a_rate_limited_target_is_still_a_charged_job(self):
+        # transparent_mode replays the target's own status, and a site that rate
+        # limits us answers 429 exactly as ScrapeDrive does when it refuses one
+        # of our requests. The job id is what separates them: a job ran, so it
+        # was billed. Without this the charge is booked as free.
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                429,
+                text="<html><body>Slow down</body></html>",
+                headers={"x-sdrive-job-id": "01JOB"},
+            )
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scrapedrive:hyperdrive"})
+        )
+
+        assert result.success is False
+        assert result.metadata["charged"] is True
+        assert result.run_cost_units == 15
+
     @pytest.mark.parametrize("status", [401, 402, 422, 429])
     @respx.mock
     async def test_uncharged_rejections_record_zero_cost(self, status):
+        # A gateway rejection never reserved a job, so it carries no job id —
+        # that absence is what makes it free.
         respx.get(self.BASE).mock(
-            return_value=httpx.Response(status, text='{"detail": "rejected"}')
+            return_value=httpx.Response(
+                status,
+                text='{"detail": "rejected"}',
+                headers={"content-type": "application/json"},
+            )
         )
 
         result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
@@ -638,6 +666,17 @@ class TestScrapeDrive:
 
         called_params = dict(route.calls[0].request.url.params)
         assert called_params["block_ads"] == "false"
+
+    @respx.mock
+    async def test_a_negative_extra_wait_never_reaches_the_api(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        # The spec floors wait_ms at 0; a negative value is a 422 that would cost
+        # the whole attempt to discover.
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, render_js=True, extra_wait_ms=-500)
+        )
+
+        assert route.calls[0].request.url.params["wait_ms"] == "0"
 
     @respx.mock
     async def test_block_ads_is_not_sent_without_a_browser(self):
@@ -1221,6 +1260,31 @@ class TestScrapeDriveAuto:
         assert called_params["wait_for"] == "#product"
         assert called_params["device_type"] == "mobile"
         assert called_params["result_type"] == "page_markdown"
+
+
+class TestFirecrawlHeaders:
+    @respx.mock
+    async def test_the_router_identity_is_not_handed_to_firecrawl(self):
+        from scrape_gateway.providers.firecrawl import FirecrawlProvider
+
+        route = respx.post("https://api.firecrawl.dev/v2/scrape").mock(
+            return_value=httpx.Response(
+                200, json={"success": True, "data": {"html": GOOD_HTML, "markdown": "# hi"}}
+            )
+        )
+        await FirecrawlProvider(api_key="fc-test").scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                headers={"User-Agent": "Mozilla/5.0 Chrome/131.0.0.0", "X-Account-Id": "42"},
+            )
+        )
+
+        import json as jsonlib
+
+        payload = jsonlib.loads(route.calls[0].request.content)
+        # Firecrawl builds its own fingerprint, and its stealth proxy depends on
+        # it. Only what a caller could have meant goes across.
+        assert payload["headers"] == {"X-Account-Id": "42"}
 
 
 # ---------- ScrapeDoProvider ----------

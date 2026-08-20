@@ -11,6 +11,41 @@ MAX_COST_METADATA_KEY = "_max_cost_per_url"
 SPENT_COST_METADATA_KEY = "_spent_cost_units"
 
 
+# The router fills every request with a generated browser identity before any
+# adapter runs, and no caller code path sets headers at all, so `request.headers`
+# is in practice always these and only these. An adapter that hands them to a
+# remote scraping API is overriding that API's own fingerprint with a fabricated
+# one it never agreed to — and ScrapeDrive was observed joining rather than
+# replacing, so the target saw two user agents on one line. Forward what a caller
+# could actually mean, never these.
+ROUTER_BROWSER_HEADERS = frozenset(
+    {
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "cache-control",
+        "priority",
+        "referer",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "sec-fetch-dest",
+        "sec-fetch-mode",
+        "sec-fetch-site",
+        "sec-fetch-user",
+        "upgrade-insecure-requests",
+        "user-agent",
+    }
+)
+
+
+def caller_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Only the headers a caller could have meant, never the router's identity."""
+    return {
+        name: value for name, value in headers.items() if name.lower() not in ROUTER_BROWSER_HEADERS
+    }
+
+
 class ProviderAdapter(ABC):
     name: str
     cost_rank: int = 100

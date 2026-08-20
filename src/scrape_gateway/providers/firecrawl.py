@@ -8,7 +8,7 @@ import httpx
 
 from ..errors import classify_provider_failure
 from ..models import FailureReason, ScrapeRequest, ScrapeResult
-from ..provider import ProviderAdapter
+from ..provider import ProviderAdapter, caller_headers
 
 
 class FirecrawlProvider(ProviderAdapter):
@@ -54,8 +54,11 @@ class FirecrawlProvider(ProviderAdapter):
             payload["location"] = {"country": request.country.upper()}
         if request.extra_wait_ms:
             payload["waitFor"] = request.extra_wait_ms
-        if request.headers:
-            payload["headers"] = request.headers
+        # Not request.headers: that is the router's generated browser identity,
+        # and handing it to Firecrawl overrides the fingerprint its own stealth
+        # proxy is built around with a fabricated one.
+        if forwarded := caller_headers(request.headers):
+            payload["headers"] = forwarded
         if request.premium:
             payload["proxy"] = "stealth"
 
