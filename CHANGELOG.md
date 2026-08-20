@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-08-20
+
+### Added
+- ScrapeDrive Auto mode, opt-in via `SCRAPEDRIVE_AUTO=true`. One call carries
+  `auto=true` and a `max_credits` ceiling, and ScrapeDrive runs its own progressive
+  escalation and charges once for the configuration that succeeded, instead of the
+  gateway paying for every rung of standard → advanced → hyperdrive. That takes the
+  worst case from 30 credits to 15. The ceiling is clipped to the remaining cost
+  budget and rounded down to a whole credit; below the job's own floor the provider
+  refuses before spending. A request naming a `country` stays on the manual ladder,
+  because Auto rejects every caller-supplied proxy routing field. The route reads
+  `scrapedrive:auto` and the reservation lands in `result.metadata["max_credits"]`.
+- `output_format: markdown` now reaches ScrapeDrive as `result_type=page_markdown`,
+  so the advertised markdown capability returns markdown rather than page source.
+- ScrapeDrive results carry the `x-sdrive-job-id` header in `result.metadata["job_id"]`.
+- `SCRAPEDRIVE_BASE_URL` is honoured. `.env.example` had advertised it while the
+  adapter hardcoded the host.
+
+### Fixed
+- A ScrapeDrive screenshot no longer fails because the file has not finished
+  uploading. The signed URL is returned before the object store has written the key,
+  and the resulting 403 failed the attempt and escalated the whole ladder — 55 credits
+  for an image that was readable a second later. The download now retries three times,
+  a second apart.
+- ScrapeDrive requests carry `timeout_ms` matching the caller's own deadline, clamped
+  into the spec's 10 000–120 000 window. Without it a job ran to the server's 120s
+  ceiling and kept being charged after the client had given up.
+- `block_ads` is no longer sent on a plain HTML fetch, where the spec says it has no
+  effect.
+- HTTP 401 from ScrapeDrive is recorded as an uncharged rejection, alongside 402, 422
+  and 429. Nothing runs on a bad key.
+
 ## [0.27.2] - 2026-08-13
 
 ### Added
