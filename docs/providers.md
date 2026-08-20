@@ -78,6 +78,16 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
   cost carries `estimated` provenance; an async job does, so that path reports `exact`.
 - Official contract: the live spec at `https://api.scrapedrive.com:8443/api/v1/spec`
 
+Spec fields the adapter deliberately does not send, so the list is explicit rather than
+an oversight:
+
+| field | why not |
+|---|---|
+| `screenshot_fullpage`, `screenshot_selector` | `ScrapeRequest.screenshot` is a single boolean. Supporting these means new fields on the shared request model, which every provider would have to answer for. |
+| `custom_proxy` | Routing a paid ScrapeDrive job through our own `SCRAPE_PROXY_URL` pays for its proxy pool and then bypasses it, and it cannot be combined with `proxy_country`. A cheaper provider is the right answer for that. |
+| `session_number` | `sgw` has no sticky-session concept to map onto. |
+| `webhook_url`, `custom_id` | Fire-and-forget delivery. Every `sgw` call returns its own result, including the async path, which polls rather than being called back. |
+
 #### Async mode
 
 A request whose `timeout_seconds` exceeds the 120s sync ceiling is submitted to
