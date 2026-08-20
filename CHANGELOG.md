@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.2] - 2026-08-20
+
+### Fixed
+- ScrapeDrive no longer receives a second browser identity on top of its own. The
+  header forwarding added in 0.29.0 forwarded everything in `request.headers`, but the
+  router fills that dict with a generated User-Agent, Accept, Sec-Fetch-* set and a
+  synthesised Referer before any adapter runs. ScrapeDrive joins rather than replaces,
+  so the target saw one `User-Agent` line containing two user agents — ours claiming
+  Chrome 131, theirs Chrome 140 — while `Sec-Ch-Ua` described only theirs. Only headers
+  ScrapeDrive cannot invent are forwarded now; a referer the caller chose still travels,
+  because that arrives as its own request field rather than from the headers dict.
+  `forward_sdrive_headers` is only sent when something survives the filter, and the
+  sync-host warning names the headers it drops instead of counting router defaults.
+
 ## [0.29.1] - 2026-08-20
 
 ### Fixed
