@@ -693,7 +693,7 @@ class TestScrapeDrive:
         [
             (45, "45000"),
             (5, "10000"),  # below the spec minimum
-            (300, "120000"),  # above the sync ceiling
+            (120, "120000"),  # exactly the sync ceiling; past it the job goes async
         ],
     )
     @respx.mock
@@ -728,6 +728,173 @@ class TestScrapeDrive:
 
         assert result.success is True
         assert len(route.calls) == 1
+
+
+class TestScrapeDriveAsync:
+    """Anything past the 120s sync ceiling has to go to the async host."""
+
+    API_KEY = "sd_test_key_123"
+    SUBMIT = "https://api.scrapedrive.com:8443/api/v1/scrape/async"
+    JOB = "https://api.scrapedrive.com:8443/api/v1/job/01JOB"
+    LONG = 300.0
+
+    def _envelope(self):
+        return httpx.Response(202, json={"id": "01JOB", "status": "queued", "status_url": self.JOB})
+
+    def _finished(self, **overrides):
+        response = {
+            "status_code": 200,
+            "final_url": TARGET_URL,
+            "headers": {"content-type": "text/html"},
+            "body": GOOD_HTML,
+            "credits": 5,
+        }
+        response.update(overrides)
+        return httpx.Response(
+            200, json={"id": "01JOB", "status": "completed", "response": response}
+        )
+
+    @respx.mock
+    async def test_a_long_job_is_submitted_and_polled(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("scrape_gateway.providers.scrapedrive.POLL_INTERVAL_SECONDS", 0)
+        submit = respx.post(self.SUBMIT).mock(return_value=self._envelope())
+        poll = respx.get(self.JOB).mock(
+            side_effect=[
+                # Real in-flight words seen from the API: queued, processing,
+                # active. None of them is worth an allow-list — the absence of a
+                # response is what says the job is still going.
+                httpx.Response(200, json={"id": "01JOB", "status": "queued"}),
+                httpx.Response(200, json={"id": "01JOB", "status": "active"}),
+                self._finished(),
+            ]
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG)
+        )
+
+        assert result.success is True
+        assert result.html == GOOD_HTML
+        assert len(submit.calls) == 1
+        assert len(poll.calls) == 3
+        assert result.metadata["mode"] == "async"
+
+    @respx.mock
+    async def test_a_short_job_never_touches_the_async_host(self):
+        sync = respx.get("https://sync.scrapedrive.com/api/v1/scrape").mock(
+            return_value=httpx.Response(200, text=GOOD_HTML)
+        )
+        submit = respx.post(self.SUBMIT).mock(return_value=self._envelope())
+
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=45)
+        )
+
+        assert len(sync.calls) == 1
+        assert len(submit.calls) == 0
+
+    @respx.mock
+    async def test_the_job_is_sent_as_json_with_native_types(self):
+        submit = respx.post(self.SUBMIT).mock(return_value=self._envelope())
+        respx.get(self.JOB).mock(return_value=self._finished())
+
+        await ScrapeDriveProvider(api_key=self.API_KEY, auto=True).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG, render_js=True)
+        )
+
+        import json as jsonlib
+
+        body = jsonlib.loads(submit.calls[0].request.content)
+        # The async host rejects an Auto job whose max_credits arrives as a query
+        # string, so these have to be real JSON types, not "true"/"15".
+        assert body["auto"] is True
+        assert body["max_credits"] == 15
+        assert body["render_js"] is True
+        # Async raises the ceiling from 120s to the spec's 130s maximum.
+        assert body["timeout_ms"] == 130000
+
+    @respx.mock
+    async def test_reported_credits_are_billed_exactly(self):
+        respx.post(self.SUBMIT).mock(return_value=self._envelope())
+        respx.get(self.JOB).mock(return_value=self._finished(credits=15))
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG, screenshot=False)
+        )
+
+        # A finished job states its price, so this is the one ScrapeDrive path
+        # that does not have to guess.
+        assert result.metadata["cost_provenance"] == "exact"
+        assert result.attempt_ledger[-1].cost_provenance == "exact"
+        assert result.attempt_ledger[-1].cost_units == 15
+        assert result.run_cost_units == 15
+
+    @respx.mock
+    async def test_an_unreachable_target_is_a_failure_despite_completed(self):
+        respx.post(self.SUBMIT).mock(return_value=self._envelope())
+        respx.get(self.JOB).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "01JOB",
+                    # The job completed. The scrape did not.
+                    "status": "completed",
+                    "response": {
+                        "status_code": 0,
+                        "final_url": TARGET_URL,
+                        "headers": {},
+                        "body": "",
+                        "credits": 0,
+                    },
+                    "reason": "The URL could not be reached.",
+                },
+            )
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG)
+        )
+
+        assert result.success is False
+        assert "could not be reached" in (result.error or "")
+        # Nothing was charged, and the job said so.
+        assert result.run_cost_units == 0
+        assert result.attempt_ledger[-1].cost_provenance == "exact"
+
+    @respx.mock
+    async def test_an_async_screenshot_comes_from_the_replayed_headers(self):
+        screenshot_url = "https://assets.scrapedrive.test/job.jpg"
+        respx.post(self.SUBMIT).mock(return_value=self._envelope())
+        respx.get(self.JOB).mock(
+            return_value=self._finished(
+                credits=15,
+                headers={"content-type": "text/html", "x-sdrive-screenshot-url": screenshot_url},
+            )
+        )
+        image = b"\x89PNG\r\n\x1a\nvisual-evidence"
+        respx.get(screenshot_url).mock(
+            return_value=httpx.Response(200, content=image, headers={"content-type": "image/png"})
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG, screenshot=True)
+        )
+
+        assert result.success is True
+        assert result.screenshot == image
+
+    @respx.mock
+    async def test_a_refused_submit_costs_nothing(self):
+        respx.post(self.SUBMIT).mock(
+            return_value=httpx.Response(422, json={"error": "Validation failed"})
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=self.LONG)
+        )
+
+        assert result.success is False
+        assert result.run_cost_units == 0
 
 
 class TestScrapeDriveAuto:

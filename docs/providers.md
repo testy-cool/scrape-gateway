@@ -61,9 +61,33 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
 - Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
   residential proxy + 5 for a screenshot. Rejections are never charged and are
   recorded as 0 units: bad key (401), insufficient credits (402), validation (422),
-  and rate-limit/backlog (429). Responses never report a billed amount, so every
-  ScrapeDrive cost carries `estimated` provenance.
+  and rate-limit/backlog (429). A sync response never reports a billed amount, so its
+  cost carries `estimated` provenance; an async job does, so that path reports `exact`.
 - Official contract: the live spec at `https://api.scrapedrive.com:8443/api/v1/spec`
+
+#### Async mode
+
+A request whose `timeout_seconds` exceeds the 120s sync ceiling is submitted to
+`https://api.scrapedrive.com:8443/api/v1/scrape/async` and polled instead. Sync cannot
+be held open longer than that ceiling, so a longer deadline would otherwise have the
+job killed at 120s no matter what the caller waited for — and a browser job on a hard
+site regularly needs more.
+
+- The submit is always a POST with a JSON body. Sent as a query string, the async host
+  rejects an Auto job with a 500 saying `max_credits` must be positive, even when a
+  positive `max_credits` is right there in the query. As a JSON number it is accepted.
+- `timeout_ms` gets the async ceiling of 130 000 rather than the sync 120 000.
+- The job's `response.credits` is the amount actually charged, so this is the only
+  ScrapeDrive path whose cost is a bill rather than a forecast. It is reported with
+  `exact` provenance and used verbatim in the attempt ledger.
+- **`status` says nothing about success.** A job whose target was never reached still
+  reports `"completed"`; the failure shows as `response.status_code: 0` with an empty
+  body, `credits: 0`, and a top-level `reason`. Polling stops when a `response` payload
+  appears, not when a status word looks final — `queued`, `processing` and `active`
+  have all been seen on a job still running, so any list of in-flight words is a guess
+  that returns an empty result the first time a new one appears.
+- A screenshot URL arrives in the job's replayed `response.headers` as
+  `x-sdrive-screenshot-url`.
 
 #### Auto mode
 

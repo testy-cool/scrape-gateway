@@ -212,6 +212,10 @@ Bad-key (401), insufficient-credit (402), validation (422), and rate-limit/backl
 (429) rejections are never charged and are recorded as 0 units; all ScrapeDrive cost is
 `estimated` provenance because responses do not report a billed amount.
 
+A ScrapeDrive request whose timeout exceeds 120s is submitted as an async job and
+polled, because the sync connection cannot be held past that ceiling. An async job
+reports the credits it was charged, so its cost is `exact` rather than `estimated`.
+
 Setting `SCRAPEDRIVE_AUTO=true` replaces that ladder with ScrapeDrive's own escalation:
 one call with a `max_credits` ceiling, charged once for the configuration that
 succeeded rather than for every rung climbed, which takes the worst case from 30 credits

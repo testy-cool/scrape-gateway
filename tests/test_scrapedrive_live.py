@@ -28,6 +28,11 @@ def provider():
     return ScrapeDriveProvider(api_key=API_KEY)
 
 
+@pytest.fixture
+def provider_auto():
+    return ScrapeDriveProvider(api_key=API_KEY, auto=True)
+
+
 class TestStandardTier:
     async def test_simple_page(self, provider):
         result = await provider.scrape(ScrapeRequest(url="https://example.com"))
@@ -116,29 +121,60 @@ class TestSpecFields:
 
 
 class TestAutoMode:
-    @pytest.fixture
-    def auto_provider(self):
-        return ScrapeDriveProvider(api_key=API_KEY, auto=True)
-
-    async def test_auto_job_runs_once(self, auto_provider):
-        result = await auto_provider.scrape(ScrapeRequest(url="https://example.com"))
+    async def test_auto_job_runs_once(self, provider_auto):
+        result = await provider_auto.scrape(ScrapeRequest(url="https://example.com"))
         assert result.success is True
         assert result.route == "scrapedrive:auto"
         assert len(result.attempt_ledger) == 1
         assert "Example Domain" in (result.html or "")
 
-    async def test_auto_honours_a_tight_budget(self, auto_provider):
-        result = await auto_provider.scrape(
+    async def test_auto_honours_a_tight_budget(self, provider_auto):
+        result = await provider_auto.scrape(
             ScrapeRequest(url="https://example.com", metadata={"_remaining_cost_units": 5})
         )
         assert result.success is True
         assert result.metadata["max_credits"] == 5
 
-    async def test_a_country_request_falls_back_to_the_ladder(self, auto_provider):
+    async def test_a_country_request_falls_back_to_the_ladder(self, provider_auto):
         # Auto rejects proxy_country outright, so this must not be sent as an Auto job.
-        result = await auto_provider.scrape(ScrapeRequest(url="https://example.com", country="US"))
+        result = await provider_auto.scrape(ScrapeRequest(url="https://example.com", country="US"))
         assert result.success is True
         assert result.route == "scrapedrive:advanced"
+
+
+class TestAsyncMode:
+    """A timeout past the sync ceiling has to go to the async host."""
+
+    async def test_a_long_timeout_runs_as_a_job(self, provider):
+        result = await provider.scrape(
+            ScrapeRequest(url="https://example.com", timeout_seconds=200)
+        )
+        assert result.success is True
+        assert result.metadata["mode"] == "async"
+        assert "Example Domain" in (result.html or "")
+        # The finished job states its own price, unlike every sync response.
+        assert result.metadata["cost_provenance"] == "exact"
+        assert result.cost_units == 5
+
+    async def test_an_unreachable_target_is_reported_as_a_failure(self, provider):
+        # The job still reports status "completed"; only the inner status_code of
+        # 0 and the reason say it never reached anything.
+        result = await provider.scrape(
+            ScrapeRequest(
+                url="https://this-domain-does-not-exist-xyz123.invalid", timeout_seconds=200
+            )
+        )
+        assert result.success is False
+        assert result.cost_units == 0
+        assert result.error
+
+    async def test_an_auto_job_survives_the_json_body(self, provider_auto):
+        # Sent as a query string this is a 500 saying max_credits must be positive.
+        result = await provider_auto.scrape(
+            ScrapeRequest(url="https://example.com", timeout_seconds=200)
+        )
+        assert result.success is True
+        assert result.route == "scrapedrive:auto"
 
 
 class TestErrorHandling:

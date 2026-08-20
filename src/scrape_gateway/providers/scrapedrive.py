@@ -4,6 +4,7 @@ import asyncio
 import os
 import sys
 import time
+from typing import Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -20,6 +21,11 @@ from ..provider import (
 # Spec: https://api.scrapedrive.com:8443/api/v1/spec (v1.1). The sync host blocks
 # until the scrape finishes; the async host is not used here.
 SYNC_BASE = "https://sync.scrapedrive.com/api/v1/scrape"
+
+# The async host takes a job and hands back an id to poll. It is the only way to
+# run anything past the 120s sync ceiling, which a browser job on a hard site
+# regularly needs.
+ASYNC_BASE = "https://api.scrapedrive.com:8443/api/v1/scrape/async"
 
 # Public SGW tier vocabulary, kept as backward-compatible internal profiles. Each
 # profile translates to explicit current spec fields (proxy_pool, render_js,
@@ -51,6 +57,20 @@ UNCHARGED_STATUS_CODES = frozenset({401, 402, 422, 429})
 WAIT_MS_MAX = 30_000
 TIMEOUT_MS_MIN = 10_000
 TIMEOUT_MS_MAX = 120_000
+ASYNC_TIMEOUT_MS_MAX = 130_000
+
+# How long each submit or poll call may take. Not the job's deadline — that is
+# the caller's timeout, enforced around the whole ladder.
+JOB_HTTP_TIMEOUT_SECONDS = 30.0
+POLL_INTERVAL_SECONDS = 2.0
+
+# The status word cannot be used to decide a job is finished. "queued",
+# "processing" and "active" have all been seen on a job still running, so any
+# allow-list of in-flight words is a guess that ends in an empty result the
+# moment a fourth one appears — which is exactly how this was found. The result
+# payload is the dependable marker, and these are the words that mean a job
+# ended without ever producing one.
+FAILED_STATUSES = frozenset({"failed", "error", "cancelled", "canceled", "expired", "timeout"})
 
 # A screenshot URL is handed back before the object store has the file, so the first
 # download can 403 on a key that does not exist yet.
@@ -135,13 +155,23 @@ def _auto_max_credits(request: ScrapeRequest) -> float:
     return max(affordable, floor)
 
 
-def _timeout_ms(request: ScrapeRequest) -> int:
+def _timeout_ms(request: ScrapeRequest, ceiling: int = TIMEOUT_MS_MAX) -> int:
     """Give the job the same deadline the HTTP client is holding it to.
 
     Without this the server keeps working — and charging — on a job the client has
-    already hung up on, because its own default runs to the 120s sync ceiling.
+    already hung up on, because its own default runs to the mode's ceiling.
     """
-    return max(TIMEOUT_MS_MIN, min(TIMEOUT_MS_MAX, int(request.timeout_seconds * 1000)))
+    return max(TIMEOUT_MS_MIN, min(ceiling, int(request.timeout_seconds * 1000)))
+
+
+def _uses_async(request: ScrapeRequest) -> bool:
+    """Whether this request has to go to the async host.
+
+    Sync cannot be held open past 120s, so a caller asking for longer would have
+    its job killed at the ceiling no matter what it waited for. The spec's own
+    advice is to use async for those.
+    """
+    return request.timeout_seconds * 1000 > TIMEOUT_MS_MAX
 
 
 def _start_tier(request: ScrapeRequest) -> str:
@@ -177,9 +207,11 @@ class ScrapeDriveProvider(ProviderAdapter):
         api_key: str | None = None,
         base_url: str | None = None,
         auto: bool | None = None,
+        async_url: str | None = None,
     ) -> None:
         self.api_key = api_key or os.getenv("SCRAPEDRIVE_API_KEY")
         self.base_url = base_url or os.getenv("SCRAPEDRIVE_BASE_URL") or SYNC_BASE
+        self.async_url = async_url or os.getenv("SCRAPEDRIVE_ASYNC_URL") or ASYNC_BASE
         self.auto = _env_flag("SCRAPEDRIVE_AUTO") if auto is None else auto
 
     def _uses_auto(self, request: ScrapeRequest) -> bool:
@@ -196,43 +228,61 @@ class ScrapeDriveProvider(ProviderAdapter):
             return _auto_max_credits(request)
         return _tier_cost(request, _start_tier(request))
 
-    def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:
+    def _job_fields(self, request: ScrapeRequest, tier: str) -> dict[str, object]:
+        """The job description, in native types, before it is encoded for a mode."""
         residential, render_js, screenshot = _tier_shape(request, tier)
-        params: dict[str, str] = {
-            "api_key": self.api_key,
+        ceiling = ASYNC_TIMEOUT_MS_MAX if _uses_async(request) else TIMEOUT_MS_MAX
+        fields: dict[str, object] = {
             "url": request.url,
-            "render_js": "true" if render_js else "false",
+            "render_js": render_js,
             "device_type": "mobile" if request.mobile else "desktop",
             "result_type": ("page_markdown" if request.output_format == "markdown" else "html"),
-            "timeout_ms": str(_timeout_ms(request)),
+            "timeout_ms": _timeout_ms(request, ceiling),
         }
         if tier == AUTO_TIER:
-            params["auto"] = "true"
-            params["max_credits"] = str(int(_auto_max_credits(request)))
+            fields["auto"] = True
+            fields["max_credits"] = int(_auto_max_credits(request))
         else:
-            params["proxy_pool"] = "residential" if residential else "datacenter"
+            fields["proxy_pool"] = "residential" if residential else "datacenter"
             if residential and request.country:
-                params["proxy_country"] = request.country.upper()
+                fields["proxy_country"] = request.country.upper()
         if render_js:
             # block_ads and block_resources are browser-only; the spec says they do
             # nothing on an HTML fetch, so they are only sent when one is running.
             # The spec defaults block_ads to true; sgw defaults it to false, so send
             # the caller's intent explicitly rather than inheriting the API default.
-            params["block_ads"] = "true" if request.block_ads else "false"
+            fields["block_ads"] = bool(request.block_ads)
             if tier == "hyperdrive":
-                params["wait_browser"] = "networkidle"
+                fields["wait_browser"] = "networkidle"
             elif request.wait_event:
-                params["wait_browser"] = request.wait_event
+                fields["wait_browser"] = request.wait_event
             # Screenshot forces block_resources off per the spec; hyperdrive wants the
             # full-resource capture shape. Otherwise keep the fast blocked fetch.
-            params["block_resources"] = "false" if (screenshot or tier == "hyperdrive") else "true"
+            fields["block_resources"] = not (screenshot or tier == "hyperdrive")
             if request.wait_selector:
-                params["wait_for"] = request.wait_selector
+                fields["wait_for"] = request.wait_selector
             if request.extra_wait_ms:
-                params["wait_ms"] = str(min(request.extra_wait_ms, WAIT_MS_MAX))
+                fields["wait_ms"] = min(request.extra_wait_ms, WAIT_MS_MAX)
         if screenshot:
-            params["screenshot"] = "true"
+            fields["screenshot"] = True
+        return fields
+
+    def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:
+        """Query-string encoding, for the sync host."""
+        params: dict[str, str] = {"api_key": self.api_key}
+        for name, value in self._job_fields(request, tier).items():
+            params[name] = ("true" if value else "false") if isinstance(value, bool) else str(value)
         return params
+
+    def _build_payload(self, request: ScrapeRequest, tier: str) -> dict[str, object]:
+        """JSON-body encoding, for the async host.
+
+        The async host rejects an Auto job whose max_credits arrives as a query
+        string — same value, same spelling, a 500 saying it needs a positive
+        max_credits. Sent as a JSON number in the body it is accepted, so async
+        submits are always POSTs.
+        """
+        return {"api_key": self.api_key, **self._job_fields(request, tier)}
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeResult:
         if error := self.availability_error():
@@ -303,17 +353,25 @@ class ScrapeDriveProvider(ProviderAdapter):
                     active_started = time.perf_counter()
                     result = await self._attempt(request, tier)
                     attempt_latency_ms = int((time.perf_counter() - active_started) * 1000)
-                    # Rejected requests are never charged; everything else costs the
-                    # full profile shape, estimated because responses never report the
-                    # actual reserved credits.
-                    charged = result.status_code not in UNCHARGED_STATUS_CODES
-                    ledger_cost = 0.0 if not charged else tier_cost
+                    # An async job states the credits it was charged, so that figure
+                    # is a bill. A sync response never does, so a rejected request
+                    # costs nothing and everything else costs the full profile shape.
+                    if result.metadata.get("cost_provenance") == "exact":
+                        ledger_cost = result.cost_units
+                        provenance: Literal["exact", "estimated"] = "exact"
+                    else:
+                        charged = (
+                            result.metadata.get("charged") is not False
+                            and result.status_code not in UNCHARGED_STATUS_CODES
+                        )
+                        ledger_cost = tier_cost if charged else 0.0
+                        provenance = "estimated"
                     ledger.append(
                         AttemptLedgerEntry(
                             provider=self.name,
                             route=f"scrapedrive:{tier}",
                             cost_units=ledger_cost,
-                            cost_provenance="estimated",
+                            cost_provenance=provenance,
                             success=result.success,
                             latency_ms=(
                                 result.latency_ms
@@ -409,6 +467,155 @@ class ScrapeDriveProvider(ProviderAdapter):
         return None, last_error
 
     async def _attempt(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
+        if _uses_async(request):
+            return await self._attempt_async(request, tier)
+        return await self._attempt_sync(request, tier)
+
+    async def _attempt_async(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
+        """Submit the job, poll until it settles, and report what it really cost.
+
+        Unlike sync, the finished job states the credits it was charged, so this
+        path reports exact cost rather than the shape estimate.
+        """
+        shape_cost = _tier_cost(request, tier)
+        start = time.perf_counter()
+
+        def failed(error: str, reason: FailureReason, status: int | None = None) -> ScrapeResult:
+            return ScrapeResult(
+                url=request.url,
+                provider=self.name,
+                success=False,
+                status_code=status,
+                error=error,
+                failure_reason=reason,
+                cost_units=0.0,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                route=f"scrapedrive:{tier}",
+                metadata={"tier": tier, "mode": "async", "charged": False},
+            )
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=JOB_HTTP_TIMEOUT_SECONDS, follow_redirects=True
+            ) as client:
+                submit = await client.post(self.async_url, json=self._build_payload(request, tier))
+                if not submit.is_success:
+                    return failed(
+                        f"ScrapeDrive refused the async job: HTTP {submit.status_code} "
+                        f"{submit.text.strip()[:200]}",
+                        classify_provider_failure(submit.status_code, submit.text)
+                        or FailureReason.PROVIDER_ERROR,
+                        submit.status_code,
+                    )
+                envelope = submit.json()
+                # The submit response calls it "id"; the spec's prose calls it
+                # job_id. Read both rather than trusting either.
+                job_id = envelope.get("id") or envelope.get("job_id")
+                status_url = envelope.get("status_url")
+                if not status_url and job_id:
+                    status_url = f"{self.async_url.rsplit('/scrape/async', 1)[0]}/job/{job_id}"
+                if not status_url:
+                    return failed(
+                        "ScrapeDrive accepted the async job but returned no way to poll it",
+                        FailureReason.PROVIDER_ERROR,
+                        submit.status_code,
+                    )
+
+                while True:
+                    poll = await client.get(status_url)
+                    if not poll.is_success:
+                        return failed(
+                            f"Polling the ScrapeDrive job failed: HTTP {poll.status_code}",
+                            FailureReason.PROVIDER_ERROR,
+                            poll.status_code,
+                        )
+                    job = poll.json()
+                    if job.get("response") or str(job.get("status", "")).lower() in FAILED_STATUSES:
+                        break
+                    await asyncio.sleep(POLL_INTERVAL_SECONDS)
+        except httpx.TimeoutException as exc:
+            return failed(str(exc), FailureReason.TIMEOUT)
+        except Exception as exc:  # noqa: BLE001
+            return failed(str(exc), FailureReason.PROVIDER_ERROR)
+
+        return await self._async_outcome(request, tier, job, job_id, shape_cost, start)
+
+    async def _async_outcome(
+        self,
+        request: ScrapeRequest,
+        tier: str,
+        job: dict,
+        job_id: str | None,
+        shape_cost: float,
+        start: float,
+    ) -> ScrapeResult:
+        """Turn a settled job into a result.
+
+        `status` is "completed" even for a scrape that never reached the target,
+        so it says nothing about success. The signal is inside `response`: a
+        status_code of 0 with an empty body and a `reason` at the top level.
+        """
+        payload = job.get("response") or {}
+        body = payload.get("body") or ""
+        target_status = payload.get("status_code") or None
+        reason = (job.get("reason") or "").strip()
+        credits = payload.get("credits")
+        exact_cost = isinstance(credits, (int, float)) and not isinstance(credits, bool)
+        headers = {
+            str(name).lower(): value for name, value in (payload.get("headers") or {}).items()
+        }
+        markdown = body if request.output_format == "markdown" and target_status else None
+
+        screenshot = None
+        screenshot_error = None
+        if request.screenshot:
+            screenshot_url = headers.get("x-sdrive-screenshot-url") or payload.get("screenshot_url")
+            if not screenshot_url:
+                screenshot_error = "Screenshot was requested but no downloadable URL was returned"
+            else:
+                screenshot, screenshot_error = await self._download_screenshot(
+                    screenshot_url, JOB_HTTP_TIMEOUT_SECONDS
+                )
+
+        if not target_status:
+            if not reason:
+                reason = (
+                    f"ScrapeDrive job {job_id} ended as "
+                    f"{job.get('status') or 'unknown'} without a result"
+                )
+            failure = FailureReason.PROXY_ERROR
+        else:
+            failure = classify_provider_failure(target_status, body)
+        if request.screenshot and not screenshot and failure is None:
+            failure = FailureReason.PROVIDER_ERROR
+
+        return ScrapeResult(
+            url=request.url,
+            provider=self.name,
+            success=bool(target_status) and failure is None and not screenshot_error,
+            status_code=target_status,
+            html=body or None,
+            markdown=markdown,
+            screenshot=screenshot,
+            failure_reason=failure,
+            error=screenshot_error or reason or None,
+            cost_units=float(credits) if exact_cost else shape_cost,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            route=f"scrapedrive:{tier}",
+            metadata={
+                "tier": tier,
+                "mode": "async",
+                "charged": bool(credits) if exact_cost else True,
+                # The finished job states its own price, so this is a bill and
+                # not a forecast — the only ScrapeDrive path where that is true.
+                "cost_provenance": "exact" if exact_cost else "estimated",
+                "job_id": job_id,
+                "final_url": payload.get("final_url"),
+                "screenshot_bytes": len(screenshot or b""),
+            },
+        )
+
+    async def _attempt_sync(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
         params = self._build_params(request, tier)
         shape_cost = _tier_cost(request, tier)
         timeout = request.timeout_seconds
