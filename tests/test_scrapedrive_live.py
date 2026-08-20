@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from scrape_gateway.config import _load_dotenv
-from scrape_gateway.models import ScrapeRequest
+from scrape_gateway.models import FailureReason, ScrapeRequest
 from scrape_gateway.providers.scrapedrive import ScrapeDriveProvider
 
 _load_dotenv()
@@ -200,6 +200,28 @@ class TestHeaderForwarding:
             ScrapeRequest(url="https://example.com", headers={"X-Sgw-Probe": "dropped"})
         )
         assert "does not forward sdrive- headers" in capsys.readouterr().err
+
+
+class TestBlockedTargets:
+    async def test_a_block_is_reported_as_a_block_not_a_server_error(self, provider):
+        # Without transparent_mode this is ScrapeDrive's own HTTP 500 JSON error,
+        # which the classifier reads as http_5xx — the provider blamed for the
+        # target's anti-bot. g2.com is behind DataDome and refuses a plain fetch.
+        result = await provider.scrape(
+            ScrapeRequest(
+                url="https://www.g2.com/products/notion/reviews",
+                metadata={"start_tier": "scrapedrive:standard"},
+                timeout_seconds=60,
+            )
+        )
+        assert result.success is False
+        # The first attempt is the one that reached g2 and was refused. Later tiers
+        # can still end as a genuine ScrapeDrive 500: the spec keeps its JSON error
+        # for failures with no target response at all, such as an internal timeout,
+        # and transparent_mode has nothing to substitute in those.
+        first = result.attempt_ledger[0]
+        assert first.status_code == 403
+        assert first.failure_reason is FailureReason.HTTP_403
 
 
 class TestErrorHandling:

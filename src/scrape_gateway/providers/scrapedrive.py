@@ -283,6 +283,15 @@ class ScrapeDriveProvider(ProviderAdapter):
             fields["screenshot"] = True
         if request.headers or request.referer:
             fields["forward_sdrive_headers"] = True
+        if not _uses_async(request):
+            # Without this a blocked page comes back as ScrapeDrive's own JSON error
+            # with HTTP 500, so every block is diagnosed as "the provider broke".
+            # With it the target's real status and body arrive — a 403 and the
+            # challenge page — which is what the classifier, the block-signature
+            # table and the evidence feed all need. The cost is ScrapeDrive's
+            # friendly `reason` string, which the body replaces. Sync only: the
+            # spec restricts it to that mode.
+            fields["transparent_mode"] = True
         return fields
 
     def _build_params(self, request: ScrapeRequest, tier: str) -> dict[str, str]:

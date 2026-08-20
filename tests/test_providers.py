@@ -706,6 +706,62 @@ class TestScrapeDrive:
         assert route.calls[0].request.url.params["timeout_ms"] == expected
 
     @respx.mock
+    async def test_a_block_arrives_as_the_target_saw_it(self):
+        route = respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                403, text="<html><body>Please enable JS</body></html>", request=None
+            )
+        )
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, metadata={"start_tier": "scrapedrive:hyperdrive"})
+        )
+
+        # transparent_mode is what turns ScrapeDrive's own 500 JSON error into the
+        # target's real 403 and challenge page, so a block reads as a block
+        # instead of as provider breakage.
+        assert route.calls[0].request.url.params["transparent_mode"] == "true"
+        assert result.status_code == 403
+        assert result.failure_reason is FailureReason.HTTP_403
+
+    @respx.mock
+    async def test_transparent_mode_is_not_sent_on_an_async_job(self):
+        submit = respx.post("https://api.scrapedrive.com:8443/api/v1/scrape/async").mock(
+            return_value=httpx.Response(
+                202,
+                json={
+                    "id": "01JOB",
+                    "status": "queued",
+                    "status_url": "https://api.scrapedrive.com:8443/api/v1/job/01JOB",
+                },
+            )
+        )
+        respx.get("https://api.scrapedrive.com:8443/api/v1/job/01JOB").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "01JOB",
+                    "status": "completed",
+                    "response": {
+                        "status_code": 200,
+                        "final_url": TARGET_URL,
+                        "headers": {},
+                        "body": GOOD_HTML,
+                        "credits": 5,
+                    },
+                },
+            )
+        )
+
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, timeout_seconds=300)
+        )
+
+        import json as jsonlib
+
+        # The spec restricts it to sync mode.
+        assert "transparent_mode" not in jsonlib.loads(submit.calls[0].request.content)
+
+    @respx.mock
     async def test_job_id_is_recorded_for_support(self):
         respx.get(self.BASE).mock(
             return_value=httpx.Response(

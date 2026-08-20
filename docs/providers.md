@@ -64,6 +64,13 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
   "send none" and is not forwarded. **The sync host accepts the parameter and ignores
   it** — verified 2026-08-20, the header never reaches the target — so a sync scrape
   with caller headers logs a warning saying so. The async host does forward them.
+- `transparent_mode` is on for every sync scrape. Without it a blocked page comes back
+  as ScrapeDrive's own HTTP 500 JSON error, so a block is diagnosed as provider
+  breakage — verified on a DataDome-protected page, which returns 500 plus
+  `{"reason": "Target site is protected by anti-bot measures"}` without it and the real
+  403 challenge page with it. The trade is that friendly `reason` string, which the
+  page body replaces. Failures with no target response at all, such as an internal
+  timeout, stay JSON errors either way, so a later tier can still report 500.
 - Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
   residential proxy + 5 for a screenshot. Rejections are never charged and are
   recorded as 0 units: bad key (401), insufficient credits (402), validation (422),

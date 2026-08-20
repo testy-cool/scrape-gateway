@@ -8,6 +8,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.29.0] - 2026-08-20
 
 ### Added
+- A blocked ScrapeDrive scrape is now diagnosed as a block. `transparent_mode` is sent
+  on every sync request, so the target's real status and body arrive instead of
+  ScrapeDrive's HTTP 500 JSON error. On a DataDome-protected page that is the
+  difference between `http_5xx` — the provider blamed for the target's anti-bot — and
+  `http_403` with the challenge page kept as evidence for the block-signature table and
+  the ScrapingEvals feed.
 - ScrapeDrive async mode. A request whose `timeout_seconds` exceeds the 120s sync
   ceiling is submitted to the async host and polled instead of being killed at the
   ceiling — the case a browser job on a hard site regularly needs. The submit is a
