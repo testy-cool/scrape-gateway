@@ -467,6 +467,71 @@ class TestScrapeDrive:
         assert len(screenshot_route.calls) == 1
 
     @respx.mock
+    async def test_retries_a_screenshot_that_has_not_landed_yet(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        import json
+
+        monkeypatch.setattr(
+            "scrape_gateway.providers.scrapedrive.SCREENSHOT_RETRY_DELAY_SECONDS", 0
+        )
+        screenshot_url = "https://assets.scrapedrive.test/run-late.png"
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200,
+                text=json.dumps({"html": GOOD_HTML, "screenshot_url": screenshot_url}),
+                headers={"content-type": "application/json"},
+            )
+        )
+        screenshot = b"\x89PNG\r\n\x1a\nvisual-evidence"
+        # The object store answers 403 for a key it has not finished writing.
+        screenshot_route = respx.get(screenshot_url).mock(
+            side_effect=[
+                httpx.Response(403, text="<Error/>", headers={"content-type": "application/xml"}),
+                httpx.Response(200, content=screenshot, headers={"content-type": "image/png"}),
+            ]
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(url=TARGET_URL, screenshot=True)
+        )
+
+        assert result.success is True
+        assert result.screenshot == screenshot
+        assert len(screenshot_route.calls) == 2
+
+    @respx.mock
+    async def test_gives_up_on_a_screenshot_that_never_lands(self, monkeypatch: pytest.MonkeyPatch):
+        import json
+
+        monkeypatch.setattr(
+            "scrape_gateway.providers.scrapedrive.SCREENSHOT_RETRY_DELAY_SECONDS", 0
+        )
+        screenshot_url = "https://assets.scrapedrive.test/run-missing.png"
+        respx.get(self.BASE).mock(
+            return_value=httpx.Response(
+                200,
+                text=json.dumps({"html": GOOD_HTML, "screenshot_url": screenshot_url}),
+                headers={"content-type": "application/json"},
+            )
+        )
+        screenshot_route = respx.get(screenshot_url).mock(
+            return_value=httpx.Response(
+                403, text="<Error/>", headers={"content-type": "application/xml"}
+            )
+        )
+
+        result = await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL, screenshot=True, metadata={"start_tier": "scrapedrive:hyperdrive"}
+            )
+        )
+
+        assert result.success is False
+        assert "403" in (result.error or "")
+        assert len(screenshot_route.calls) == 3
+
+    @respx.mock
     async def test_rejects_success_without_requested_screenshot_evidence(self):
         import json
 

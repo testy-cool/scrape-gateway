@@ -55,6 +55,9 @@ Each provider has its own API conventions. The adapter layer translates `sgw`'s 
   says they do nothing on an HTML fetch.
 - The `x-sdrive-job-id` response header is kept in `result.metadata["job_id"]`. It is
   the only handle ScrapeDrive support can trace a job by.
+- A screenshot URL is returned before the object store has finished writing the file,
+  so the download is retried three times a second apart. Without the retry the first
+  403 fails the attempt and escalates the entire ladder.
 - Cost is additive and reserved per job: base 5 + 5 for JavaScript + 5 for a
   residential proxy + 5 for a screenshot. Rejections are never charged and are
   recorded as 0 units: bad key (401), insufficient credits (402), validation (422),

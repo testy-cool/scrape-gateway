@@ -46,6 +46,11 @@ WAIT_MS_MAX = 30_000
 TIMEOUT_MS_MIN = 10_000
 TIMEOUT_MS_MAX = 120_000
 
+# A screenshot URL is handed back before the object store has the file, so the first
+# download can 403 on a key that does not exist yet.
+SCREENSHOT_DOWNLOAD_ATTEMPTS = 3
+SCREENSHOT_RETRY_DELAY_SECONDS = 1.0
+
 
 def _tier_shape(request: ScrapeRequest, tier: str) -> tuple[bool, bool, bool]:
     """Return ``(residential, render_js, screenshot)`` for a tier's actual request shape.
@@ -299,6 +304,37 @@ class ScrapeDriveProvider(ProviderAdapter):
                 attempt_ledger=ledger,
             )
 
+    async def _download_screenshot(
+        self, screenshot_url: str, timeout_seconds: float
+    ) -> tuple[bytes | None, str | None]:
+        """Fetch the capture the job pointed at, retrying while it is still landing.
+
+        The URL comes back before the object store has finished writing it, and the
+        bucket answers 403 for a key that is not there yet. Without the retry that
+        reads as a failed screenshot, which fails the attempt and escalates the whole
+        ladder — 55 credits spent on an image that was readable a second later.
+        """
+        last_error: str | None = None
+        for attempt in range(SCREENSHOT_DOWNLOAD_ATTEMPTS):
+            if attempt:
+                await asyncio.sleep(SCREENSHOT_RETRY_DELAY_SECONDS)
+            async with httpx.AsyncClient(
+                timeout=timeout_seconds, follow_redirects=True
+            ) as screenshot_client:
+                response = await screenshot_client.get(screenshot_url)
+            content_type = response.headers.get("content-type", "")
+            if (
+                response.is_success
+                and response.content
+                and content_type.lower().startswith("image/")
+            ):
+                return response.content, None
+            last_error = (
+                "Screenshot download failed with HTTP "
+                f"{response.status_code} ({content_type or 'unknown type'})"
+            )
+        return None, last_error
+
     async def _attempt(self, request: ScrapeRequest, tier: str) -> ScrapeResult:
         params = self._build_params(request, tier)
         shape_cost = _tier_cost(request, tier)
@@ -338,23 +374,9 @@ class ScrapeDriveProvider(ProviderAdapter):
                         "Screenshot was requested but no downloadable URL was returned"
                     )
                 else:
-                    async with httpx.AsyncClient(
-                        timeout=request.timeout_seconds, follow_redirects=True
-                    ) as screenshot_client:
-                        screenshot_response = await screenshot_client.get(screenshot_url)
-                    screenshot_content_type = screenshot_response.headers.get("content-type", "")
-                    if (
-                        screenshot_response.is_success
-                        and screenshot_response.content
-                        and screenshot_content_type.lower().startswith("image/")
-                    ):
-                        screenshot = screenshot_response.content
-                    else:
-                        screenshot_error = (
-                            "Screenshot download failed with HTTP "
-                            f"{screenshot_response.status_code} "
-                            f"({screenshot_content_type or 'unknown type'})"
-                        )
+                    screenshot, screenshot_error = await self._download_screenshot(
+                        screenshot_url, request.timeout_seconds
+                    )
 
             failure = classify_provider_failure(
                 response.status_code,
