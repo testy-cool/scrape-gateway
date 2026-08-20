@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.3] - 2026-08-20
+
+### Fixed
+- A ScrapeDrive job whose target rate-limited us is no longer recorded as free. With
+  `transparent_mode` on, the reply carries the target's own status, and a site
+  answering 429 looked identical to ScrapeDrive refusing one of our requests — so a
+  job that ran and was billed was booked at zero, under-reporting spend and weakening
+  the cost ceiling. Charged-ness now keys off the `x-sdrive-job-id` header: a job id
+  means a job ran and was billed whatever the target answered, and the uncharged
+  status list only applies when no job was ever reserved.
+- Firecrawl no longer receives the router's generated browser identity in its scrape
+  payload, which overrode the fingerprint its own stealth proxy is built around. The
+  same filter ScrapeDrive uses now lives in `provider.py` and both adapters share it.
+- A negative `extra_wait_ms` is clamped to the spec's floor of 0 instead of being sent
+  as a `wait_ms` the API rejects with 422.
+- The README version badge, stuck on 0.27.0 for three releases.
+
 ## [0.29.2] - 2026-08-20
 
 ### Fixed
