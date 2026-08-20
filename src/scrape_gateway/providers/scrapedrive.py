@@ -51,6 +51,30 @@ SCREENSHOT_COST = 5.0
 # rate limit / async backlog (429).
 UNCHARGED_STATUS_CODES = frozenset({401, 402, 422, 429})
 
+# The browser identity ScrapeDrive builds for itself. Ours must not be forwarded
+# on top of it: the values are joined rather than replaced, so the target sees
+# both. Referer is here because the router synthesises one into every request;
+# a referer the caller actually chose arrives as its own field instead.
+FINGERPRINT_HEADERS = frozenset(
+    {
+        "user-agent",
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "cache-control",
+        "priority",
+        "referer",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "sec-fetch-dest",
+        "sec-fetch-mode",
+        "sec-fetch-site",
+        "sec-fetch-user",
+        "upgrade-insecure-requests",
+    }
+)
+
 # The spec's own bounds. wait_ms is rejected above 30s, and timeout_ms is rejected
 # below 10s or above the sync ceiling of 120s, so both are clamped rather than
 # forwarded verbatim into a 422 that costs a whole attempt.
@@ -177,15 +201,28 @@ def _uses_async(request: ScrapeRequest) -> bool:
 def _forwarded_headers(request: ScrapeRequest) -> dict[str, str]:
     """Caller headers, renamed to the prefix ScrapeDrive forwards to the target.
 
-    Anything sent as `sdrive-X` arrives at the target as `X`. Without this the
-    adapter accepted a headers dict and silently dropped it, which is worse than
-    refusing it.
+    Anything sent as `sdrive-X` arrives at the target as `X`, so this carries the
+    things ScrapeDrive cannot invent — authorization, cookies, custom fields.
+    Without it the adapter accepted a headers dict and silently dropped it.
+
+    It deliberately does not carry the browser identity. The router fills every
+    request with a generated User-Agent, Accept, Sec-Fetch-* set before any
+    adapter sees it, and forwarding those does not replace ScrapeDrive's own —
+    the two values are joined into one header. A target then receives two user
+    agents on a single line, one claiming Chrome 131 and one Chrome 140, while
+    Sec-Ch-Ua describes only the second. That is a louder bot signal than
+    sending nothing, and it would have fired on every request. Confirmed against
+    a header echo service on 2026-08-20.
     """
-    headers = {f"sdrive-{name}": value for name, value in request.headers.items()}
-    # referer is its own field on the request: None means "let the provider
-    # decide", and an empty string means "send none", so only a real value is
-    # forwarded. A header the caller set explicitly still wins.
-    if request.referer and not any(name.lower() == "sdrive-referer" for name in headers):
+    headers = {
+        f"sdrive-{name}": value
+        for name, value in request.headers.items()
+        if name.lower() not in FINGERPRINT_HEADERS
+    }
+    # referer is its own field on the request, so a value here is the caller's
+    # own and not the one the router synthesised into the headers dict. None
+    # means "let the provider decide" and "" means "send none".
+    if request.referer:
         headers["sdrive-Referer"] = request.referer
     return headers
 
@@ -281,7 +318,10 @@ class ScrapeDriveProvider(ProviderAdapter):
                 fields["wait_ms"] = min(request.extra_wait_ms, WAIT_MS_MAX)
         if screenshot:
             fields["screenshot"] = True
-        if request.headers or request.referer:
+        if _forwarded_headers(request):
+            # Only when something survives the fingerprint filter. Asking for
+            # forwarding with nothing to forward advertises an intent the request
+            # does not have.
             fields["forward_sdrive_headers"] = True
         if not _uses_async(request):
             # Without this a blocked page comes back as ScrapeDrive's own JSON error
@@ -321,16 +361,18 @@ class ScrapeDriveProvider(ProviderAdapter):
                 failure_reason=FailureReason.PROVIDER_UNAVAILABLE,
             )
 
-        if (request.headers or request.referer) and not _uses_async(request):
+        dropped = _forwarded_headers(request) if not _uses_async(request) else {}
+        if dropped:
             # Verified 2026-08-20: the async host strips the sdrive- prefix and
             # passes the header on, the sync host silently does not. Both are sent
             # either way, so this stops being a caveat the day sync catches up —
             # but until then a dropped Authorization header must not be silent.
             _log(
                 f"    [{self.name}] the sync host does not forward sdrive- headers, so "
-                f"{len(request.headers) + bool(request.referer)} caller header(s) will not "
-                f"reach the target; a timeout above {TIMEOUT_MS_MAX // 1000}s routes the job "
-                f"to the async host, which does forward them"
+                f"{len(dropped)} caller header(s) will not reach the target "
+                f"({', '.join(sorted(name[len('sdrive-') :] for name in dropped))}); "
+                f"a timeout above {TIMEOUT_MS_MAX // 1000}s routes the job to the async "
+                f"host, which does forward them"
             )
         if self._uses_auto(request):
             tiers = [AUTO_TIER]

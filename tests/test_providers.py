@@ -972,8 +972,59 @@ class TestScrapeDriveHeaders:
         assert sent.url.params["forward_sdrive_headers"] == "true"
 
     @respx.mock
-    async def test_a_referer_travels_as_a_header(self):
+    async def test_the_browser_identity_is_never_forwarded(self):
         route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        # This is what the router hands every adapter: a generated browser
+        # identity, not anything a caller chose.
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                headers={
+                    "User-Agent": "Mozilla/5.0 Chrome/131.0.0.0",
+                    "Accept": "text/html",
+                    "Accept-Language": "en-US",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Cache-Control": "max-age=0",
+                    "Priority": "u=0, i",
+                    "Referer": "https://www.google.com/",
+                },
+            )
+        )
+
+        sent = route.calls[0].request
+        # Forwarding these does not replace ScrapeDrive's own values, it appends
+        # to them: the target would receive two user agents joined on one line,
+        # one claiming Chrome 131 and one Chrome 140, while Sec-Ch-Ua describes
+        # only the second. Nothing here is worth that.
+        assert not [name for name in sent.headers if name.lower().startswith("sdrive-")]
+        assert "forward_sdrive_headers" not in sent.url.params
+
+    @respx.mock
+    async def test_a_real_header_survives_alongside_the_browser_identity(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
+            ScrapeRequest(
+                url=TARGET_URL,
+                headers={
+                    "User-Agent": "Mozilla/5.0 Chrome/131.0.0.0",
+                    "Referer": "https://www.google.com/",
+                    "X-Account-Id": "42",
+                },
+            )
+        )
+
+        sent = route.calls[0].request
+        assert sent.headers["sdrive-X-Account-Id"] == "42"
+        assert "sdrive-User-Agent" not in sent.headers
+        assert "sdrive-Referer" not in sent.headers
+
+    @respx.mock
+    async def test_a_referer_the_caller_chose_travels_as_a_header(self):
+        route = respx.get(self.BASE).mock(return_value=httpx.Response(200, text=GOOD_HTML))
+        # The request field is the caller's own choice. A Referer sitting in the
+        # headers dict is the one the router synthesised, and is filtered out.
         await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
             ScrapeRequest(url=TARGET_URL, referer="https://news.example/story")
         )
@@ -986,6 +1037,7 @@ class TestScrapeDriveHeaders:
         await ScrapeDriveProvider(api_key=self.API_KEY).scrape(
             ScrapeRequest(url=TARGET_URL, headers={"Authorization": "Bearer token"})
         )
+        # Named, so the line is actionable rather than a count.
 
         # The sync host accepts forward_sdrive_headers and ignores it. Losing an
         # Authorization header without a word is how a caller ends up debugging
