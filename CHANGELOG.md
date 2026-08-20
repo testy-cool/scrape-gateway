@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-08-20
+
+### Added
+- ScrapeDrive async mode. A request whose `timeout_seconds` exceeds the 120s sync
+  ceiling is submitted to the async host and polled instead of being killed at the
+  ceiling — the case a browser job on a hard site regularly needs. The submit is a
+  POST with a JSON body, because the async host rejects an Auto job whose
+  `max_credits` arrives as a query string with a 500 saying it needs a positive
+  `max_credits`. `SCRAPEDRIVE_ASYNC_URL` overrides the host.
+- ScrapeDrive async jobs report `exact` cost. A finished job states the credits it was
+  charged, so that figure is used verbatim in the attempt ledger instead of the shape
+  estimate. Sync still estimates, because a sync response never says what it cost.
+- ScrapeDrive now forwards caller headers. `request.headers` go out as `sdrive-<name>`
+  with `forward_sdrive_headers=true`, and `referer` rides along as `sdrive-Referer`
+  unless the caller set it. They were previously accepted and silently dropped.
+
+### Fixed
+- A ScrapeDrive async job is no longer reported as finished before it starts. Polling
+  waits for the result payload rather than matching the job's status against a list of
+  in-flight words — `queued`, `processing` and `active` have all been observed, and an
+  unlisted word made the adapter return an empty result and charge the whole ladder.
+- An async job whose target was never reached is reported as a failure. The job still
+  says `status: completed`; the failure only shows as `response.status_code: 0` with a
+  top-level `reason`.
+
+### Known issues
+- The ScrapeDrive **sync** host accepts `forward_sdrive_headers` and does not honour
+  it: the header never reaches the target. The async host, given identical input, does.
+  A sync scrape carrying caller headers logs a warning saying so. Verified 2026-08-20
+  against a header echo service over GET, over POST, and with the prefix capitalised.
+
 ## [0.28.0] - 2026-08-20
 
 ### Added
