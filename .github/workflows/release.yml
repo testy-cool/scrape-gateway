@@ -258,3 +258,30 @@ jobs:
             --title "$TAG" \
             --notes-file release-notes.md \
             release-dist/* image-provenance/image-provenance.json
+
+  deploy:
+    name: deploy production
+    needs: [validate, image, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    steps:
+      - name: Check out deployment logic
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Deploy the released immutable digest
+        env:
+          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          PRODUCTION_SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT }}
+          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          PRODUCTION_DEPLOY_DIR: ${{ secrets.PRODUCTION_DEPLOY_DIR }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: scripts/run_remote_deploy.sh "$DIGEST" "$VERSION"

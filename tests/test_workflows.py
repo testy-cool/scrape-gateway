@@ -35,3 +35,12 @@ def test_ci_exposes_stable_required_check_names() -> None:
     assert "name: quality (${{ matrix.python-version }})" in workflow
     assert "name: package" in workflow
     assert "name: container" in workflow
+
+
+def test_production_workflows_share_a_non_cancelling_deployment_lock() -> None:
+    release = _workflow("release.yml")
+    rollback = _workflow("rollback.yml")
+    assert "group: production-deployment" in release
+    assert "group: production-deployment" in rollback
+    assert "cancel-in-progress: false" in release
+    assert "cancel-in-progress: false" in rollback
