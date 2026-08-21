@@ -1,0 +1,260 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing project version to validate; blank uses pyproject.toml
+        required: false
+        type: string
+      dry_run:
+        description: Build and verify without publishing
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  validate:
+    name: validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Resolve and validate release identity
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          tag=${REQUESTED_TAG:-v$version}
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          python scripts/release_guard.py \
+            --tag "$tag" --revision "$GITHUB_SHA" --main-ref origin/main --json
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+      - name: Require protected main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          strict=$(gh api "repos/$GITHUB_REPOSITORY/branches/main/protection" --jq '.required_status_checks.strict')
+          test "$strict" = true
+      - name: Require green CI on the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/verify_required_checks.py \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA"
+      - name: Refuse an existing GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $TAG already exists; publish a new version" >&2
+            exit 1
+          fi
+
+  artifacts:
+    name: release artifacts
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the validated revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+      - name: Install development dependencies
+        run: uv sync --all-extras
+      - name: Build the wheel and source distribution once
+        run: uv build --out-dir release-dist
+      - name: Install-test the exact release artifacts
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: scripts/verify_package_artifacts.sh release-dist "$VERSION"
+      - name: Write checksums and provenance
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          (cd release-dist && sha256sum ./*.whl ./*.tar.gz | sort -k2 >SHA256SUMS)
+          python scripts/write_release_provenance.py \
+            --dist release-dist \
+            --tag "$TAG" \
+            --revision "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --output release-dist/provenance.json
+      - name: Upload verified release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-artifacts
+          path: release-dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  image:
+    name: release image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.digest.outputs.value }}
+    steps:
+      - name: Check out the validated revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Refuse existing release image tags
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "image tag $IMAGE:$VERSION already exists; publish a new version" >&2
+            exit 1
+          fi
+          if docker buildx imagetools inspect "$IMAGE:sha-$GITHUB_SHA" >/dev/null 2>&1; then
+            echo "image tag $IMAGE:sha-$GITHUB_SHA already exists; publish a new version" >&2
+            exit 1
+          fi
+      - name: Build and optionally publish the release image
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name == 'workflow_dispatch' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ needs.validate.outputs.version }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Verify dry-run image labels
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          test "$(docker image inspect "$IMAGE:$VERSION" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "$VERSION"
+          test "$(docker image inspect "$IMAGE:$VERSION" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
+      - name: Verify published immutable digest
+        if: github.event_name == 'push'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" >/dev/null
+      - name: Resolve immutable image digest
+        id: digest
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          digest=$BUILD_DIGEST
+          if [ -z "$digest" ]; then
+            digest=$(docker image inspect "$IMAGE:$VERSION" --format '{{.Id}}')
+          fi
+          echo "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          echo "value=$digest" >>"$GITHUB_OUTPUT"
+      - name: Write image provenance
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          DIGEST: ${{ steps.digest.outputs.value }}
+        run: |
+          mkdir image-provenance
+          python scripts/write_release_provenance.py \
+            --dist image-provenance \
+            --tag "$TAG" \
+            --revision "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --image-digest "$DIGEST" \
+            --output image-provenance/image-provenance.json
+      - name: Upload image provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image-provenance
+          path: image-provenance/image-provenance.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish GitHub Release
+    if: github.event_name == 'push'
+    needs: [validate, artifacts, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified package artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-artifacts
+          path: release-dist
+      - name: Download image provenance
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: image-provenance
+          path: image-provenance
+      - name: Create the immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          printf 'GHCR image: `%s@%s`\n' "$IMAGE" "$DIGEST" >release-notes.md
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            release-dist/* image-provenance/image-provenance.json

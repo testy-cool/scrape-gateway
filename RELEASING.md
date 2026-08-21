@@ -31,6 +31,16 @@ and source distribution once, installs those exact files in clean environments, 
 `SHA256SUMS` and provenance, creates the GitHub Release, and publishes the corresponding GHCR
 image by immutable digest.
 
+Before creating a real tag, exercise the same validation, artifact installation, and image build
+without publication from GitHub Actions:
+
+```bash
+gh workflow run release.yml --ref main -f dry_run=true -f tag=vX.Y.Z
+```
+
+The supplied tag must match the current `pyproject.toml` version. Dispatch runs never write a
+GitHub Release or GHCR tag; only a newly pushed matching tag can enter the publish job.
+
 ## Verification and recovery
 
 After publication, verify the GitHub Release assets and checksums, package-install smoke, GHCR
