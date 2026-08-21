@@ -178,6 +178,7 @@ reserves 15 and charges what worked.
   identity is removed so it does not override ScrapingAnt's own fingerprint.
 - Official contract: [ScrapingAnt request format](https://docs.scrapingant.com/request-response-format)
   and [credit costs](https://docs.scrapingant.com/credits-cost)
+- Machine-readable contract: `src/scrape_gateway/provider_contracts/v1/scrapingant.json`
 
 ### Jina Reader
 

@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "provider": "scrapingant",
+  "display_name": "ScrapingAnt",
+  "official_docs": [
+    "https://docs.scrapingant.com/request-response-format",
+    "https://docs.scrapingant.com/custom-headers",
+    "https://docs.scrapingant.com/credits-cost"
+  ],
+  "endpoint": {"method": "GET", "url": "https://api.scrapingant.com/v2/general"},
+  "auth": {
+    "environment": ["SCRAPINGANT_API_KEY"],
+    "transport": {"kind": "query", "name": "x-api-key"},
+    "secret_fields": ["x-api-key"]
+  },
+  "routes": {
+    "http_datacenter": {
+      "input": {"render_js": false, "premium": false},
+      "query": {"browser": "false", "proxy_type": "datacenter"},
+      "estimated_cost": {"units": 1, "unit": "credits"}
+    },
+    "browser_datacenter": {
+      "input": {"render_js": true, "premium": false},
+      "query": {"browser": "true", "proxy_type": "datacenter"},
+      "estimated_cost": {"units": 10, "unit": "credits"}
+    },
+    "http_residential": {
+      "input": {"render_js": false, "premium": true},
+      "query": {"browser": "false", "proxy_type": "residential"},
+      "estimated_cost": {"units": 25, "unit": "credits"}
+    },
+    "browser_residential": {
+      "input": {"render_js": true, "premium": true},
+      "query": {"browser": "true", "proxy_type": "residential"},
+      "estimated_cost": {"units": 125, "unit": "credits"}
+    }
+  },
+  "request_mappings": {
+    "country": {"query": "proxy_country", "transform": "uppercase"},
+    "timeout_seconds": {"query": "timeout", "minimum": 5, "maximum": 60, "rounding": "ceil"},
+    "wait_selector": {"query": "wait_for_selector", "requires": "browser=true"},
+    "caller_headers": {"prefix": "ant-", "exclude_browser_identity": true}
+  },
+  "response": {
+    "body": "html",
+    "provider_status": {"source": "http_status"},
+    "target_status": {"source": "header", "name": "Ant-page-status-code"},
+    "target_headers": {"source": "prefixed_headers", "prefix": "Ant-Original-Header-"},
+    "cost": {
+      "source": "header",
+      "name": "Ant-credits-cost",
+      "unit": "credits",
+      "provenance_when_valid": "exact",
+      "fallback": "route_estimate"
+    }
+  },
+  "provider_errors": {
+    "409": "rate_limited",
+    "401": "provider_unavailable",
+    "timeout": "timeout",
+    "other_non_success": "provider_error"
+  }
+}

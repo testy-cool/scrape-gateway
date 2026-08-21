@@ -27,6 +27,13 @@ Before editing, obtain current official documentation for:
 Never infer costs or provider model IDs. Keep the real key only in ignored `.env`; add
 an empty variable to `.env.example`.
 
+Record those facts once in
+`src/scrape_gateway/provider_contracts/v1/<name>.json`, validated by the adjacent
+`schema.json`. This file is the source of truth for provider wire semantics; adapters
+and prose remain handwritten and are tested against it. SEV vendors a pinned snapshot
+of contracts it consumes, so changing a contract does not create a runtime dependency
+between the two tools.
+
 ## Complete surface map
 
 Touch these files in one pass; do not rediscover the list by broad searching:
@@ -43,6 +50,8 @@ Touch these files in one pass; do not rediscover the list by broad searching:
 | `docs/providers.md` | Capability row plus exact wire/cost contract |
 | `docs/configuration.md` | Credential variable |
 | `docs/SKILL.md` | Provider table/count/country summary |
+| `src/scrape_gateway/provider_contracts/v1/<name>.json` | Versioned provider wire contract |
+| `tests/test_provider_contracts.py` | Schema and adapter/contract parity |
 
 Only advertise capabilities that the adapter actually maps. The README matrix test
 checks the declared capability set against the table.

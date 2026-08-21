@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/testy-cool/scrape-gateway/provider-contract-v1.schema.json",
+  "title": "Scrape Gateway provider wire contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider", "display_name", "official_docs", "endpoint", "auth", "routes", "request_mappings", "response", "provider_errors"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "provider": {"type": "string", "pattern": "^[a-z][a-z0-9_-]+$"},
+    "display_name": {"type": "string", "minLength": 1},
+    "official_docs": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uri"}},
+    "endpoint": {
+      "type": "object", "additionalProperties": false, "required": ["method", "url"],
+      "properties": {"method": {"enum": ["GET", "POST"]}, "url": {"type": "string", "format": "uri"}}
+    },
+    "auth": {
+      "type": "object", "additionalProperties": false, "required": ["environment", "transport", "secret_fields"],
+      "properties": {
+        "environment": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"}},
+        "transport": {
+          "type": "object", "additionalProperties": false, "required": ["kind", "name"],
+          "properties": {"kind": {"enum": ["query", "header", "basic"]}, "name": {"type": "string"}}
+        },
+        "secret_fields": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "routes": {
+      "type": "object", "minProperties": 1,
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["input", "query", "estimated_cost"],
+        "properties": {
+          "input": {"type": "object"},
+          "query": {"type": "object"},
+          "estimated_cost": {
+            "type": "object", "additionalProperties": false, "required": ["units", "unit"],
+            "properties": {"units": {"type": "number", "minimum": 0}, "unit": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "request_mappings": {"type": "object"},
+    "response": {
+      "type": "object", "additionalProperties": false, "required": ["body", "provider_status", "target_status", "target_headers", "cost"],
+      "properties": {
+        "body": {"enum": ["html", "markdown", "json"]},
+        "provider_status": {"type": "object"},
+        "target_status": {"type": "object"},
+        "target_headers": {"type": "object"},
+        "cost": {"type": "object"}
+      }
+    },
+    "provider_errors": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}
