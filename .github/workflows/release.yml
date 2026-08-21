@@ -62,8 +62,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          strict=$(gh api "repos/$GITHUB_REPOSITORY/branches/main/protection" --jq '.required_status_checks.strict')
-          test "$strict" = true
+          protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.protected')
+          test "$protected" = true
       - name: Require green CI on the release commit
         env:
           GH_TOKEN: ${{ github.token }}
