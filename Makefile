@@ -1,11 +1,11 @@
 UV ?= uv
 
-.PHONY: check lint format-check fmt test contract-check smoke install package-check image-check live-check
+.PHONY: check lint format-check fmt test contract-check docs-check smoke install package-check image-check live-check
 
 install:
 	$(UV) sync --all-extras
 
-check: format-check lint contract-check test smoke
+check: format-check lint contract-check docs-check test smoke
 
 lint:
 	$(UV) run ruff check .
@@ -20,6 +20,9 @@ fmt:
 contract-check:
 	$(UV) run python scripts/validate_provider_contracts.py
 	$(UV) run pytest -q tests/test_provider_contracts.py
+
+docs-check:
+	$(UV) run python scripts/check_docs_links.py
 
 test:
 	$(UV) run pytest -q -m "not live"

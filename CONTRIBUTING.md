@@ -60,9 +60,18 @@ Provider wire facts belong in the versioned machine-readable contract, not only 
 - Normal work may land directly on `main`; risky or long-running work should use a pull request.
 - Do not amend or retag published work, and never force-push `main`.
 
-CI is expected to pass for Python 3.11, 3.12, and 3.13. Repository administrators should require
-all documented CI checks on `main`, require the branch to be current before merge, block force
-pushes and deletion, and require review for workflow-file changes.
+CI is expected to pass these stable required checks:
+
+- `quality (3.11)`
+- `quality (3.12)`
+- `quality (3.13)`
+- `package`
+- `container`
+
+Repository administrators should require all five on `main`, require the branch to be current
+before merge, block force pushes and deletion, and require review for workflow-file changes. The
+repository cannot encode those GitHub settings itself; verify them separately from the tracked
+workflow.
 
 ## Source, package, install, and live proof
 
