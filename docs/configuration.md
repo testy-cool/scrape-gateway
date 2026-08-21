@@ -10,6 +10,7 @@ SCRAPE_DO_TOKEN=your_token_here
 SCRAPINGBEE_API_KEY=your_key_here
 SCRAPERAPI_API_KEY=your_key_here
 SCRAPFLY_API_KEY=your_key_here
+SCRAPINGANT_API_KEY=your_key_here
 FIRECRAWL_API_KEY=your_key_here
 JINA_API_KEY=your_optional_key_here
 ZENROWS_API_KEY=your_key_here

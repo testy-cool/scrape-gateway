@@ -101,7 +101,7 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-Fifteen built-in providers plus the bundled Browserless extension. Cost ranks provide
+Sixteen built-in providers plus the bundled Browserless extension. Cost ranks provide
 the cold-start order; sufficiently supported domain history replaces it with observed
 total spend per success.
 
@@ -118,6 +118,7 @@ total spend per success.
 | `firecrawl` | Yes | Yes | Yes | Yes | Yes | Paid · rank 26 |
 | `scrape_do` | Yes | No | No | Yes | Yes (automatic) | Paid · rank 30 |
 | `scrapfly` | Yes | No | No | Yes | Yes (ASP) | Paid · rank 32 |
+| `scrapingant` | Yes | No | No | Yes | Yes (residential proxy) | Paid · rank 33 |
 | `zenrows` | Yes | No | No | Yes | Yes | Paid · rank 34 |
 | `scrapingbee` | Yes | No | No | Yes | Yes (premium proxy) | Paid · rank 35 |
 | `scraperapi` | Yes | Yes | No | Yes | Yes (retry/bypass) | Paid · rank 40 |

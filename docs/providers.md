@@ -1,6 +1,6 @@
 # Providers
 
-15 built-in, 5 usable without a paid credential. The router tries lower cost ranks first,
+16 built-in, 5 usable without a paid credential. The router tries lower cost ranks first,
 then escalates to paid services.
 
 | Provider | Cost Rank | Free | JS | Geo | Anti-bot | Notes |
@@ -15,6 +15,7 @@ then escalates to paid services.
 | `firecrawl` | 26 | no | yes | yes | stealth proxy | Native HTML, Markdown, and screenshots |
 | `scrape_do` | 30 | no | yes | yes | residential proxies | |
 | `scrapfly` | 32 | no | yes | yes | ASP | Per-call cost budget |
+| `scrapingant` | 33 | no | yes | yes | residential proxies | Exact credit-cost header |
 | `zenrows` | 34 | no | yes | yes | premium proxies | Manual Universal Scraper API options |
 | `scrapingbee` | 35 | no | yes | yes | premium proxies | |
 | `scraperapi` | 40 | no | yes | yes | premium proxies | Supports screenshots |
@@ -159,6 +160,21 @@ reserves 15 and charges what worked.
 - `premium` → `premium=true`
 - `country` → `country_code`
 - `screenshot` → `screenshot=true`
+
+### ScrapingAnt
+
+- Endpoint: `GET https://api.scrapingant.com/v2/general`
+- Auth: `SCRAPINGANT_API_KEY` as the `x-api-key` query parameter
+- `render_js` → `browser=true`; plain HTML explicitly sends `browser=false`
+- `premium` → `proxy_type=residential`; the default route uses `datacenter`
+- `country` → uppercase `proxy_country`; `wait_selector` → `wait_for_selector`
+- The target's `Ant-page-status-code` drives validation rather than the API's own status
+- The exact `Ant-credits-cost` response header becomes the attempt-ledger cost; documented
+  request shapes cost 1 credit plain, 10 browser, 25 residential, or 125 for both
+- Caller-supplied headers use the documented `ant-` prefix. The router's generated browser
+  identity is removed so it does not override ScrapingAnt's own fingerprint.
+- Official contract: [ScrapingAnt request format](https://docs.scrapingant.com/request-response-format)
+  and [credit costs](https://docs.scrapingant.com/credits-cost)
 
 ### Jina Reader
 

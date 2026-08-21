@@ -2610,6 +2610,7 @@ PROVIDER_API_KEYS: dict[str, tuple[str, str]] = {
     "scrape_do": ("SCRAPE_DO_TOKEN", "https://scrape.do"),
     "scrapingbee": ("SCRAPINGBEE_API_KEY", "https://scrapingbee.com"),
     "scraperapi": ("SCRAPERAPI_API_KEY", "https://scraperapi.com"),
+    "scrapingant": ("SCRAPINGANT_API_KEY", "https://scrapingant.com"),
 }
 
 

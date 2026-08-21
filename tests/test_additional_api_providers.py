@@ -12,6 +12,7 @@ from scrape_gateway.providers.firecrawl import FirecrawlProvider
 from scrape_gateway.providers.jina_reader import JinaReaderProvider
 from scrape_gateway.providers.oxylabs import OxylabsProvider
 from scrape_gateway.providers.scrapfly import ScrapflyProvider
+from scrape_gateway.providers.scrapingant import ScrapingAntProvider
 from scrape_gateway.providers.spider_cloud import SpiderCloudProvider
 from scrape_gateway.providers.zenrows import ZenRowsProvider
 
@@ -78,6 +79,22 @@ MARKDOWN = (
             10,
         ),
         (ScrapflyProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (ScrapingAntProvider(api_key="key"), ScrapeRequest(TARGET), 1),
+        (
+            ScrapingAntProvider(api_key="key"),
+            ScrapeRequest(TARGET, render_js=True),
+            10,
+        ),
+        (
+            ScrapingAntProvider(api_key="key"),
+            ScrapeRequest(TARGET, premium=True),
+            25,
+        ),
+        (
+            ScrapingAntProvider(api_key="key"),
+            ScrapeRequest(TARGET, render_js=True, premium=True),
+            125,
+        ),
         (
             ScrapflyProvider(api_key="key", cost_budget=25),
             ScrapeRequest(
@@ -99,6 +116,7 @@ def test_additional_provider_cost_estimates_match_billed_request_shape(
     "provider,environment",
     [
         (ScrapflyProvider, ["SCRAPFLY_API_KEY"]),
+        (ScrapingAntProvider, ["SCRAPINGANT_API_KEY"]),
         (FirecrawlProvider, ["FIRECRAWL_API_KEY"]),
         (ZenRowsProvider, ["ZENROWS_API_KEY"]),
         (OxylabsProvider, ["OXYLABS_USERNAME", "OXYLABS_PASSWORD"]),
@@ -117,6 +135,82 @@ async def test_paid_api_providers_fail_cleanly_without_credentials(
     assert result.success is False
     assert "Missing" in (result.error or "")
     assert result.failure_reason is FailureReason.PROVIDER_UNAVAILABLE
+
+
+@respx.mock
+async def test_scrapingant_maps_request_and_records_reported_cost() -> None:
+    route = respx.get("https://api.scrapingant.com/v2/general").mock(
+        return_value=httpx.Response(
+            200,
+            text=HTML,
+            headers={"ant-page-status-code": "200", "ant-credits-cost": "125"},
+        )
+    )
+
+    result = await ScrapingAntProvider(api_key="ant-key").scrape(
+        ScrapeRequest(
+            TARGET,
+            country="de",
+            render_js=True,
+            premium=True,
+            wait_selector="#products",
+            timeout_seconds=70,
+            referer="https://search.example/",
+            headers={"X-Customer": "yes", "User-Agent": "router-generated"},
+        )
+    )
+
+    assert result.success is True
+    assert result.html == HTML
+    assert result.status_code == 200
+    assert result.route == "scrapingant:residential"
+    assert result.cost_units == 125
+    assert result.attempt_ledger[0].cost_provenance == "exact"
+    params = route.calls[0].request.url.params
+    assert params["x-api-key"] == "ant-key"
+    assert params["url"] == TARGET
+    assert params["browser"] == "true"
+    assert params["proxy_type"] == "residential"
+    assert params["proxy_country"] == "DE"
+    assert params["wait_for_selector"] == "#products"
+    assert params["timeout"] == "60"
+    assert route.calls[0].request.headers["ant-x-customer"] == "yes"
+    assert route.calls[0].request.headers["ant-referer"] == "https://search.example/"
+    assert "ant-user-agent" not in route.calls[0].request.headers
+
+
+@respx.mock
+async def test_scrapingant_uses_target_status_for_validation() -> None:
+    respx.get("https://api.scrapingant.com/v2/general").mock(
+        return_value=httpx.Response(
+            200,
+            text="<html><body>Access denied by the target website with enough detail.</body></html>",
+            headers={"ant-page-status-code": "403", "ant-credits-cost": "10"},
+        )
+    )
+
+    result = await ScrapingAntProvider(api_key="ant-key").scrape(
+        ScrapeRequest(TARGET, render_js=True)
+    )
+
+    assert result.success is False
+    assert result.status_code == 403
+    assert result.failure_reason is FailureReason.HTTP_403
+    assert result.metadata["provider_status_code"] == 200
+
+
+@respx.mock
+async def test_scrapingant_maps_api_rate_limit_to_http_429() -> None:
+    respx.get("https://api.scrapingant.com/v2/general").mock(
+        return_value=httpx.Response(409, text="Concurrent request limit reached")
+    )
+
+    result = await ScrapingAntProvider(api_key="ant-key").scrape(ScrapeRequest(TARGET))
+
+    assert result.success is False
+    assert result.status_code == 409
+    assert result.failure_reason is FailureReason.HTTP_429
+    assert result.attempt_ledger[0].cost_provenance == "estimated"
 
 
 @respx.mock

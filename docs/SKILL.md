@@ -28,7 +28,7 @@ wreq and curl_cffi (free anti-detect HTTP) are included as required dependencies
 
 ## Providers
 
-15 built-in, all discovered via entry points. Extensions use the same mechanism.
+16 built-in, all discovered via entry points. Extensions use the same mechanism.
 
 | Provider | Cost Rank | Free | JS | Screenshot | Anti-bot |
 |---|---|---|---|---|---|
@@ -42,15 +42,17 @@ wreq and curl_cffi (free anti-detect HTTP) are included as required dependencies
 | `firecrawl` | 26 | no | yes | yes | premium |
 | `scrape_do` | 30 | no | yes | no | premium |
 | `scrapfly` | 32 | no | yes | no | premium |
+| `scrapingant` | 33 | no | yes | no | premium |
 | `zenrows` | 34 | no | yes | no | premium |
 | `scrapingbee` | 35 | no | yes | no | premium |
 | `scraperapi` | 40 | no | yes | yes | premium |
 | `oxylabs` | 45 | no | yes | yes | premium |
 | `brightdata` | 50 | no | yes | yes | premium |
 
-The five free providers declare `is_free = True`; the other ten implement
-`estimated_cost_units`. Eight declare `country`: `scrapedrive`, `firecrawl`,
-`scrape_do`, `scrapfly`, `zenrows`, `scrapingbee`, `scraperapi`, `oxylabs`.
+The five free providers declare `is_free = True`; the other eleven implement
+`estimated_cost_units`. Nine declare `country`: `scrapedrive`, `firecrawl`,
+`scrape_do`, `scrapfly`, `scrapingant`, `zenrows`, `scrapingbee`, `scraperapi`,
+`oxylabs`.
 
 Router tries cheapest first, then switches to observed cost once a provider has 5
 attempts and 2 successes on the same request profile. Domain memory **skips providers
