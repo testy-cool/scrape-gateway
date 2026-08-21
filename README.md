@@ -8,12 +8,16 @@
   <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
 </p>
 
-One command, fifteen built-in providers. Cold domains start with free and low-cost
+One command, sixteen built-in providers. Cold domains start with free and low-cost
 providers; repeat visits use the attempt ledger to minimize total spend per successful
 page without forgetting the price of failed attempts.
 
 For sites with known requirements, domain recipes can pin an ordered route, request
 settings, validation rules, failure phrases, and cache freshness without changing code.
+
+Contributing from a fresh clone? Start with [CONTRIBUTING.md](CONTRIBUTING.md). Release and
+production procedures are defined in [RELEASING.md](RELEASING.md) and
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Quick start
 
@@ -209,3 +213,6 @@ More: [docs/python-api.md](docs/python-api.md)
 - [Extensions](docs/extensions.md) — writing custom providers
 - [Python API](docs/python-api.md) — using sgw as a library
 - [Providers](docs/providers.md) — provider details and API mapping
+- [Contributing](CONTRIBUTING.md) — safe checks and context-free development workflow
+- [Releasing](RELEASING.md) — immutable tags, packages, and GHCR images
+- [Deployment](DEPLOYMENT.md) — production image and rollback contract
