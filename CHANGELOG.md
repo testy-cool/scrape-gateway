@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-08-21
+
+### Added
+- ScrapingAnt is now a built-in provider for plain HTML, browser rendering, country
+  targeting, and residential proxies. Its target-page status header drives validation,
+  and its reported credit cost is recorded exactly in the attempt ledger. Configure it
+  with `SCRAPINGANT_API_KEY`; `sgw setup` also recognizes the provider.
+
 ## [0.29.3] - 2026-08-20
 
 ### Fixed
