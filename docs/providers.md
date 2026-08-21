@@ -3,6 +3,9 @@
 16 built-in, 5 usable without a paid credential. The router tries lower cost ranks first,
 then escalates to paid services.
 
+Adding another built-in provider? Follow the
+[one-pass provider workflow](references/adding-built-in-provider.md).
+
 | Provider | Cost Rank | Free | JS | Geo | Anti-bot | Notes |
 |---|---|---|---|---|---|---|
 | `raw_http` | 0 | yes | no | no | none | Plain HTTP GET via httpx |

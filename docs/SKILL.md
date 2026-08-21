@@ -314,7 +314,13 @@ private operator notes, not in this repo.
 
 ## Writing Extensions
 
-Drop a `.py` file in `~/.config/scrape-gateway/providers/`:
+For a new built-in provider, read
+[references/adding-built-in-provider.md](references/adding-built-in-provider.md) first.
+It is the one-pass surface map for the adapter, discovery, setup, cost ledger, docs,
+tests, release, installed CLI, and the separate `sev` integration boundary.
+
+Use an extension for optional heavyweight dependencies or independently shipped
+providers. Drop a `.py` file in `~/.config/scrape-gateway/providers/`:
 
 ```python
 from scrape_gateway import ProviderAdapter, ScrapeRequest, ScrapeResult, FailureReason
