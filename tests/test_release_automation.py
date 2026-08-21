@@ -64,7 +64,7 @@ def test_release_workflow_has_a_non_publishing_dispatch_path() -> None:
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "workflow_dispatch:" in workflow
     assert "dry_run:" in workflow
-    assert 'branches/main" --jq \'.protected\'' in workflow
+    assert "branches/main\" --jq '.protected'" in workflow
     assert "branches/main/protection" not in workflow
     assert "if: github.event_name == 'push'" in workflow
     assert "push: ${{ github.event_name == 'push' }}" in workflow
