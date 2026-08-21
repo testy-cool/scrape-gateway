@@ -24,17 +24,29 @@ extension suites under `extensions/**`.
 
 ## Safe verification
 
-The ordinary gate must not use provider credentials or make paid provider calls:
+The ordinary gate is offline and must not use provider credentials or make provider calls:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run pytest -q -m "not live"
+make check
 ```
 
 Tests marked `live` access external services. Run them only when the task explicitly authorizes
 network/provider activity. Never infer that credentials in `.env` grant permission to spend
 credits.
+
+Package and container verification are separate because they may download build dependencies or
+base images, but they never call scraping providers:
+
+```bash
+make package-check
+make image-check
+```
+
+The only repository target that runs external scraping tests is guarded explicitly:
+
+```bash
+ALLOW_LIVE=1 make live-check
+```
 
 For a built-in provider, follow the complete surface map in
 [`docs/references/adding-built-in-provider.md`](docs/references/adding-built-in-provider.md).

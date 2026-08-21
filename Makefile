@@ -1,21 +1,38 @@
-.PHONY: check lint fmt test smoke install
+UV ?= uv
+
+.PHONY: check lint format-check fmt test contract-check smoke install package-check image-check live-check
 
 install:
-	pip install -e ".[dev]"
+	$(UV) sync --all-extras
 
-check: lint test smoke
+check: format-check lint contract-check test smoke
 
 lint:
-	ruff check .
-	ruff format --check .
+	$(UV) run ruff check .
+
+format-check:
+	$(UV) run ruff format --check .
 
 fmt:
-	ruff check --fix .
-	ruff format .
+	$(UV) run ruff check --fix .
+	$(UV) run ruff format .
+
+contract-check:
+	$(UV) run pytest -q tests/test_provider_contracts.py
 
 test:
-	pytest -q
+	$(UV) run pytest -q -m "not live"
 
 smoke:
-	scrape-gateway --help
-	python examples/basic.py
+	$(UV) run sgw --help >/dev/null
+
+package-check:
+	UV=$(UV) scripts/package-check.sh
+
+image-check:
+	scripts/image-check.sh
+
+live-check:
+	@test "$${ALLOW_LIVE:-}" = 1 || { echo "set ALLOW_LIVE=1 to authorize external/provider calls" >&2; exit 2; }
+	$(UV) run pytest -q -m live
+	$(UV) run python examples/basic.py

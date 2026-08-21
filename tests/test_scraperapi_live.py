@@ -20,7 +20,10 @@ from scrape_gateway.providers.scraperapi import ScraperApiProvider
 _load_dotenv()
 API_KEY = os.getenv("SCRAPERAPI_API_KEY")
 
-pytestmark = pytest.mark.skipif(not API_KEY, reason="SCRAPERAPI_API_KEY not set")
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(not API_KEY, reason="SCRAPERAPI_API_KEY not set"),
+]
 
 
 @pytest.fixture
