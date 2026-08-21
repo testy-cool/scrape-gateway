@@ -8,7 +8,7 @@
   <img src="docs/terminal.svg" alt="sgw demo — free providers fail, paid provider succeeds, next time it remembers" width="720">
 </p>
 
-One command, sixteen built-in providers. Cold domains start with free and low-cost
+One command, 16 built-in providers. Cold domains start with free and low-cost
 providers; repeat visits use the attempt ledger to minimize total spend per successful
 page without forgetting the price of failed attempts.
 
@@ -105,7 +105,7 @@ Full usage and examples: [docs/commands.md](docs/commands.md)
 
 ## Providers
 
-Sixteen built-in providers plus the bundled Browserless extension. Cost ranks provide
+16 built-in providers plus the bundled Browserless extension. Cost ranks provide
 the cold-start order; sufficiently supported domain history replaces it with observed
 total spend per success.
 

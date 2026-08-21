@@ -18,6 +18,7 @@ fmt:
 	$(UV) run ruff format .
 
 contract-check:
+	$(UV) run python scripts/validate_provider_contracts.py
 	$(UV) run pytest -q tests/test_provider_contracts.py
 
 test:

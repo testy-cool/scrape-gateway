@@ -320,7 +320,8 @@ It is the one-pass surface map for the adapter, discovery, setup, cost ledger, d
 tests, release, installed CLI, and the separate `sev` integration boundary.
 Provider wire facts live in versioned JSON under
 `src/scrape_gateway/provider_contracts/`; SEV consumes pinned snapshots rather than
-depending on this package at runtime.
+depending on this package at runtime. The canonical cross-repository ownership and parity flow is
+in [references/sev-engine-integration.md](references/sev-engine-integration.md).
 
 Use an extension for optional heavyweight dependencies or independently shipped
 providers. Drop a `.py` file in `~/.config/scrape-gateway/providers/`:

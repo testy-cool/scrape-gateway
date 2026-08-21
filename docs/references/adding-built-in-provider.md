@@ -9,7 +9,8 @@ ship independently.
 An `sgw` provider and a ScrapingEvals (`sev`) engine are separate integrations. Adding
 an adapter here does not create a row in `sev`, copy credentials to its host, or change
 its Web UI. If the request names both products, finish and verify each repository
-separately.
+separately. Follow the [SEV engine handoff](sev-engine-integration.md) for repository
+ownership, contract pinning, parity checks, and the separate passive-feed boundary.
 
 ## Establish the wire contract once
 
@@ -32,7 +33,8 @@ Record those facts once in
 `schema.json`. This file is the source of truth for provider wire semantics; adapters
 and prose remain handwritten and are tested against it. SEV vendors a pinned snapshot
 of contracts it consumes, so changing a contract does not create a runtime dependency
-between the two tools.
+between the two tools. Copy `src/scrape_gateway/provider_contracts/v1/template.json` and
+run `make contract-check`; the validator discovers every contract automatically.
 
 ## Complete surface map
 

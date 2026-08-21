@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "provider": "replace_me",
+  "display_name": "Replace Me",
+  "official_docs": ["https://example.com/provider-api-docs"],
+  "endpoint": {"method": "GET", "url": "https://api.example.com/scrape"},
+  "auth": {
+    "environment": ["REPLACE_ME_API_KEY"],
+    "transport": {"kind": "header", "name": "Authorization"},
+    "secret_fields": ["Authorization"]
+  },
+  "routes": {
+    "html": {
+      "input": {"render_js": false},
+      "query": {"render": false},
+      "estimated_cost": {"units": 1, "unit": "credits"}
+    }
+  },
+  "request_mappings": {},
+  "response": {
+    "body": "html",
+    "provider_status": {"source": "http_status"},
+    "target_status": {"source": "header", "name": "replace-me"},
+    "target_headers": {"source": "none"},
+    "cost": {"source": "estimate", "unit": "credits", "fallback": "route_estimate"}
+  },
+  "provider_errors": {
+    "401": "provider_unavailable",
+    "429": "rate_limited",
+    "timeout": "timeout",
+    "other_non_success": "provider_error"
+  }
+}
